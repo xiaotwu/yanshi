@@ -1,0 +1,20 @@
+{
+  "name": "yanshi",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "desktop:dev": "pnpm --filter @yanshi/desktop tauri dev",
+    "desktop:web": "pnpm --filter @yanshi/desktop dev",
+    "runtime:dev": "uv run --project runtime/python yanshi-runtime",
+    "runtime:test": "uv run --project runtime/python pytest",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "tauri": "pnpm --filter @yanshi/desktop tauri"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

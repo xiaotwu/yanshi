@@ -1,0 +1,54 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]: Yanshi
+    - navigation [ref=e7]:
+      - button "New Task" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+        - generic [ref=e12]: New Task
+      - button "Search" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e17]: Search
+      - button "Projects" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e29]: Projects
+      - button "Runs" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - generic [ref=e33]: Runs
+      - button "Workshop" [ref=e34] [cursor=pointer]:
+        - img [ref=e35]
+        - generic [ref=e38]: Workshop
+      - button "Settings" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e43]: Settings
+      - button "Developer" [ref=e44] [cursor=pointer]:
+        - img [ref=e45]
+        - generic [ref=e49]: Developer
+  - main [ref=e50]:
+    - generic [ref=e52]:
+      - heading "How can Yanshi help you today?" [level=1] [ref=e53]
+      - generic [ref=e54]:
+        - button "+" [ref=e55] [cursor=pointer]:
+          - generic [ref=e56]: +
+        - textbox "Ask Yanshi to do anything..." [ref=e57]
+        - generic "Permission" [ref=e58]:
+          - img [ref=e59]
+          - combobox [ref=e61]:
+            - option "Default" [selected]
+            - option "Auto-review"
+            - option "Full access"
+          - img [ref=e62]
+        - button "Run" [disabled] [ref=e64]:
+          - img [ref=e65]
+      - paragraph [ref=e68]: Failed to fetch
+      - generic [ref=e69]:
+        - button "Organize files" [ref=e70] [cursor=pointer]
+        - button "Research a topic" [ref=e71] [cursor=pointer]
+        - button "Summarize webpage" [ref=e72] [cursor=pointer]
+        - button "Use computer" [ref=e73] [cursor=pointer]
+        - button "Create report" [ref=e74] [cursor=pointer]
+        - button "Plan my day" [ref=e75] [cursor=pointer]
+  - complementary [ref=e76]:
+    - generic [ref=e82]:
+      - strong [ref=e83]: Live Office
+      - generic [ref=e84]: 0 active
+      - generic [ref=e85]: 0 approvals

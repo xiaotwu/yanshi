@@ -1,0 +1,98 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]: Yanshi
+    - navigation [ref=e7]:
+      - button "New Task" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+        - generic [ref=e12]: New Task
+      - button "Search" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e17]: Search
+      - button "Projects" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e29]: Projects
+      - button "Runs" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - generic [ref=e33]: Runs
+      - button "Workshop" [ref=e34] [cursor=pointer]:
+        - img [ref=e35]
+        - generic [ref=e38]: Workshop
+      - button "Settings" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e43]: Settings
+      - button "Artifacts" [ref=e200] [cursor=pointer]:
+        - img [ref=e201]
+        - generic [ref=e206]: Artifacts
+  - main [ref=e44]:
+    - generic [ref=e207]:
+      - generic [ref=e208]:
+        - heading "Runs" [level=2] [ref=e209]
+        - article [ref=e210]:
+          - strong [ref=e211]: List workspace files
+          - generic [ref=e212]: completed
+      - generic [ref=e213]:
+        - generic [ref=e215]:
+          - heading "List workspace files" [level=2] [ref=e216]
+          - generic [ref=e217]: completed
+        - group [ref=e218]:
+          - generic "Plan created · 3 steps" [ref=e219] [cursor=pointer]
+          - list [ref=e220]:
+            - listitem [ref=e221]: Check workspace boundary
+            - listitem [ref=e222]: Scan project workspace
+            - listitem [ref=e223]: Save file scan artifact
+        - generic [ref=e224]:
+          - article [ref=e225]:
+            - generic [ref=e226]: run.created
+            - paragraph [ref=e227]: List workspace files
+          - article [ref=e228]:
+            - generic [ref=e229]: action.created
+            - paragraph [ref=e230]: "{\"actionId\":\"act_9e4c69f51f8a4fb098\",\"type\":\"PlanAction\",\"riskLevel\":\"low\"}"
+          - article [ref=e231]:
+            - generic [ref=e232]: action.completed
+            - paragraph [ref=e233]: "{\"actionId\":\"act_9e4c69f51f8a4fb098\"}"
+          - article [ref=e234]:
+            - generic [ref=e235]: run.started
+            - paragraph [ref=e236]: List workspace files
+          - article [ref=e237]:
+            - generic [ref=e238]: agent.task.assigned
+            - paragraph [ref=e239]: List workspace files
+          - article [ref=e240]:
+            - generic [ref=e241]: plan.created
+            - paragraph [ref=e242]: Check workspace boundary · Scan project workspace · Save file scan artifact
+          - article [ref=e243]:
+            - generic [ref=e244]: action.created
+            - paragraph [ref=e245]: "{\"actionId\":\"act_44a7d11b944640598b\",\"type\":\"FileAction\",\"riskLevel\":\"low\"}"
+          - article [ref=e246]:
+            - generic [ref=e247]: action.completed
+            - paragraph [ref=e248]: "{\"actionId\":\"act_44a7d11b944640598b\"}"
+          - article [ref=e249]:
+            - generic [ref=e250]: observation.created
+            - paragraph [ref=e251]: File Agent scanned 1 items.
+          - article [ref=e252]:
+            - generic [ref=e253]: artifact.created
+            - paragraph [ref=e254]: File Agent scanned 1 items.
+          - article [ref=e255]:
+            - generic [ref=e256]: run.completed
+            - paragraph [ref=e257]: File Agent scanned 1 items.
+  - complementary [ref=e83]:
+    - generic [ref=e84]:
+      - generic [ref=e86]:
+        - generic [ref=e90]:
+          - strong [ref=e91]: Manager
+          - generic [ref=e92]: done
+        - generic [ref=e94]:
+          - strong [ref=e95]: Browser
+          - generic [ref=e96]: idle
+        - generic [ref=e98]:
+          - strong [ref=e99]: Computer
+          - generic [ref=e100]: idle
+        - generic [ref=e102]:
+          - strong [ref=e103]: File
+          - generic [ref=e104]: working
+        - generic [ref=e106]:
+          - strong [ref=e107]: Reviewer
+          - generic [ref=e108]: idle
+      - generic [ref=e109]:
+        - strong [ref=e110]: List workspace files
+        - generic [ref=e111]: 1 active
+        - generic [ref=e112]: 0 approvals

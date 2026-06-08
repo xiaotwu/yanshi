@@ -1,0 +1,101 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]: Yanshi
+    - navigation [ref=e7]:
+      - button "New Task" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+        - generic [ref=e12]: New Task
+      - button "Search" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e17]: Search
+      - button "Projects" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e29]: Projects
+      - button "Runs" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - generic [ref=e33]: Runs
+      - button "Workshop" [ref=e34] [cursor=pointer]:
+        - img [ref=e35]
+        - generic [ref=e38]: Workshop
+      - button "Settings" [active] [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e43]: Settings
+  - main [ref=e44]:
+    - generic [ref=e92]:
+      - heading "Settings" [level=2] [ref=e93]
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading "Runtime" [level=3] [ref=e96]
+          - paragraph [ref=e97]: Runtime is available. Some task execution requires additional configuration.
+        - generic [ref=e98]:
+          - heading "Models" [level=3] [ref=e99]
+          - paragraph [ref=e100]: Provider not configured.
+        - generic [ref=e101]:
+          - heading "Permissions" [level=3] [ref=e102]
+          - paragraph [ref=e103]: Desktop permission status unavailable.
+          - button "Refresh" [ref=e105] [cursor=pointer]
+      - generic [ref=e106]:
+        - heading "Provider" [level=3] [ref=e107]
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - text: Base URL
+            - textbox "Base URL" [ref=e110]: https://api.openai.com/v1
+          - generic [ref=e111]:
+            - text: Model
+            - textbox "Model" [ref=e112]: gpt-4o-mini
+          - generic [ref=e113]:
+            - text: API key
+            - textbox "API key" [ref=e114]:
+              - /placeholder: Not configured
+        - generic [ref=e115]:
+          - button "Save" [ref=e116] [cursor=pointer]
+          - button "Check" [ref=e117] [cursor=pointer]
+      - generic [ref=e118]:
+        - heading "Preferences" [level=3] [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic [ref=e122]: Developer
+            - checkbox "Developer" [ref=e123]
+          - generic [ref=e124]:
+            - generic [ref=e125]: Live Office
+            - checkbox "Live Office" [checked] [ref=e126]
+          - generic [ref=e127]:
+            - generic [ref=e128]: Browser
+            - checkbox "Browser" [checked] [ref=e129]
+          - generic [ref=e130]:
+            - generic [ref=e131]: Computer
+            - checkbox "Computer" [checked] [ref=e132]
+          - generic [ref=e133]:
+            - generic [ref=e134]: Terminal
+            - checkbox "Terminal" [ref=e135]
+          - generic [ref=e136]:
+            - generic [ref=e137]: Notify
+            - checkbox "Notify" [checked] [ref=e138]
+        - generic [ref=e139]:
+          - text: Permission
+          - combobox "Permission" [ref=e140]:
+            - option "Default" [selected]
+            - option "Auto-review"
+            - option "Full access"
+  - complementary [ref=e82]:
+    - generic [ref=e83]:
+      - generic [ref=e85]:
+        - generic [ref=e142]:
+          - strong [ref=e143]: Manager
+          - generic [ref=e144]: idle
+        - generic [ref=e146]:
+          - strong [ref=e147]: Browser
+          - generic [ref=e148]: idle
+        - generic [ref=e150]:
+          - strong [ref=e151]: Computer
+          - generic [ref=e152]: idle
+        - generic [ref=e154]:
+          - strong [ref=e155]: File
+          - generic [ref=e156]: idle
+        - generic [ref=e158]:
+          - strong [ref=e159]: Reviewer
+          - generic [ref=e160]: idle
+      - generic [ref=e88]:
+        - strong [ref=e89]: Live Office
+        - generic [ref=e90]: 0 active
+        - generic [ref=e91]: 0 approvals

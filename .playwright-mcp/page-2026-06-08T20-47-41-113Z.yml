@@ -1,0 +1,91 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]: Yanshi
+    - navigation [ref=e7]:
+      - button "New Task" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+        - generic [ref=e12]: New Task
+      - button "Search" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e17]: Search
+      - button "Projects" [active] [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - generic [ref=e29]: Projects
+      - button "Runs" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - generic [ref=e33]: Runs
+      - button "Workshop" [ref=e34] [cursor=pointer]:
+        - img [ref=e35]
+        - generic [ref=e38]: Workshop
+      - button "Settings" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e43]: Settings
+      - button "Artifacts" [ref=e92] [cursor=pointer]:
+        - img [ref=e93]
+        - generic [ref=e98]: Artifacts
+  - main [ref=e44]:
+    - generic [ref=e99]:
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - heading "Projects" [level=2] [ref=e102]
+          - generic [ref=e103]: "1"
+        - generic [ref=e104]:
+          - textbox "Project name" [ref=e105]
+          - textbox "Description" [ref=e106]
+          - button "Create" [disabled] [ref=e107]:
+            - img [ref=e108]
+            - text: Create
+        - paragraph [ref=e109]: Failed to fetch
+        - button "Codex Visual Project 1" [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - generic [ref=e114]: Codex Visual Project
+          - generic [ref=e115]: "1"
+      - generic [ref=e116]:
+        - generic [ref=e117]:
+          - generic [ref=e118]:
+            - heading "Codex Visual Project" [level=2] [ref=e119]
+            - generic [ref=e120]: 1 runs
+          - generic [ref=e121]:
+            - button "Save" [ref=e122] [cursor=pointer]:
+              - img [ref=e123]
+            - button "Delete" [ref=e126] [cursor=pointer]:
+              - img [ref=e127]
+        - generic [ref=e130]:
+          - generic [ref=e131]:
+            - text: Name
+            - textbox "Name" [ref=e132]: Codex Visual Project
+          - generic [ref=e133]:
+            - text: Description
+            - textbox "Description" [ref=e134]: Created through the UI visual check
+        - generic [ref=e135]:
+          - term [ref=e136]: Workspace
+          - definition [ref=e137]: /tmp/yanshi-codex-runtime/workspaces/proj_effa5c8aacce402389
+          - term [ref=e138]: Agents
+          - definition [ref=e139]: team_proj_effa5c8aacce402389
+          - term [ref=e140]: Office
+          - definition [ref=e141]: office_proj_effa5c8aacce402389
+        - article [ref=e143]:
+          - generic [ref=e144]: completed
+          - paragraph [ref=e145]: List workspace files
+  - complementary [ref=e82]:
+    - generic [ref=e83]:
+      - generic [ref=e85]:
+        - generic [ref=e147]:
+          - strong [ref=e148]: Manager
+          - generic [ref=e149]: done
+        - generic [ref=e151]:
+          - strong [ref=e152]: Browser
+          - generic [ref=e153]: idle
+        - generic [ref=e155]:
+          - strong [ref=e156]: Computer
+          - generic [ref=e157]: idle
+        - generic [ref=e159]:
+          - strong [ref=e160]: File
+          - generic [ref=e161]: done
+        - generic [ref=e163]:
+          - strong [ref=e164]: Reviewer
+          - generic [ref=e165]: idle
+      - generic [ref=e88]:
+        - strong [ref=e89]: List workspace files
+        - generic [ref=e90]: 0 active
+        - generic [ref=e91]: 0 approvals

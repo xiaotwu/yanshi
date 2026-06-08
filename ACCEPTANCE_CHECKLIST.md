@@ -1,0 +1,66 @@
+# Acceptance Checklist
+
+- [x] App builds.
+- [x] Runtime can start alongside desktop app.
+- [x] REST API works.
+- [x] WebSocket event stream works.
+- [x] SQLite persistence works.
+- [x] LangGraph checkpointing works.
+- [x] Agent run creation works.
+- [x] Action / Observation model works.
+- [x] Approval flow pauses and resumes in runtime tests.
+- [x] File tool uses real workspace sandbox.
+- [x] Browser tool has a real not-configured state.
+- [x] Browser tool has a Playwright execution path with action/observation/artifact records.
+- [x] Browser tool is manually verified with installed Playwright Chromium.
+- [x] Browser summarization uses a configured provider after real page capture.
+- [x] Computer Use has real macOS permission probes and a bridge-missing state.
+- [x] Computer Use can capture the screen through a real macOS command and persist a PNG artifact when permission is granted.
+- [x] Tauri exposes real macOS click/type/shortcut/open-app bridge commands.
+- [x] Runtime Computer Tool calls a configured bridge for click/type/shortcut/open-app and reports missing bridge honestly.
+- [x] Terminal / Docker sandbox shows a real Docker-required/readiness state.
+- [x] Terminal Tool executes read-only workspace commands safely.
+- [x] Docker-backed sandbox path uses Docker CLI with workspace bind mount, no network, resource limits, timeout, and log artifacts.
+- [x] Terminal Tool supports approved mutating commands in an isolated Docker sandbox path.
+- [x] Real OpenAI-compatible provider client works in runtime tests.
+- [x] Provider settings persist without returning API keys.
+- [x] App settings persist real state.
+- [x] Projects work for CRUD, project-scoped runs, and project-scoped workspaces.
+- [x] New Task page works.
+- [x] Composer can create a real runtime run.
+- [x] Composer can create project-scoped runs.
+- [x] Runs and Run Details work for implemented run data.
+- [x] Workshop validation rejects unsafe packs.
+- [x] Workshop upload filenames are basename-sanitized.
+- [x] Workshop validation rejects zip bombs, oversized uploads, oversized members, too many files, unsafe paths, executables, and symlinks.
+- [x] Workshop imports valid packs after validation.
+- [x] Workshop enables/disables installed packs with persisted state.
+- [x] Live Office consumes real events.
+- [x] Live Office is lazy-loaded and can be default closed.
+- [x] Live Office auto-opens on real run start when enabled.
+- [x] Live Office can be closed during a run.
+- [x] Live Office has Full Office View, queue bubbles, and a pop-out always-on-top window path.
+- [x] Settings normal mode is concise and backed by runtime status.
+- [x] Developer Mode exposes real runtime state/events.
+- [x] Developer Mode persists Docker image/resource limit settings.
+- [x] Tauri CSP is tightened.
+- [x] Build/release docs document setup-required runtime packaging status.
+- [x] Build passes.
+- [x] Tauri release build passes and produces `.app` and `.dmg`.
+- [x] Tests pass for implemented suites.
+- [ ] App has been manually launched as the packaged `.app`.
+- [x] Manager performs provider-backed structured planning for general provider tasks.
+- [x] Agent queues are persisted and project/agent filterable.
+- [x] Manager executes queued multi-agent plans with several live tool agents in one run.
+- [ ] Packaged runtime injects a concrete Computer bridge transport URL for runtime control actions.
+- [ ] Computer Use click/type/shortcut/open-app actions have been manually verified in the packaged app with macOS Accessibility permission.
+- [ ] Docker-backed sandbox has been manually smoked to successful command completion with the configured image available.
+- [ ] Workshop exports valid packs.
+- [ ] Menubar/tray works fully in manual packaged-app verification.
+- [x] Notifications are wired for runtime events.
+- [ ] Notifications are manually verified on macOS.
+- [ ] Global shortcuts are manually verified in the desktop app.
+- [ ] Light / Dark UI works.
+- [ ] Standalone Python runtime sidecar is bundled and verified from a clean machine.
+- [ ] Provider API keys are stored through Keychain or an `apiKeyRef` design.
+- [ ] No user-facing incomplete core flow remains.
