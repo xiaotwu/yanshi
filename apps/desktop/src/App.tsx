@@ -477,7 +477,7 @@ function ProjectsView() {
   );
 }
 
-type ProjectTab = "overview" | "runs" | "files" | "artifacts" | "automations" | "activity" | "settings";
+type ProjectTab = "overview" | "runs" | "files" | "artifacts" | "automations" | "office" | "activity" | "settings";
 
 function ProjectWorkspace({
   project,
@@ -511,6 +511,7 @@ function ProjectWorkspace({
     { id: "files", label: "Files" },
     { id: "artifacts", label: "Artifacts" },
     { id: "automations", label: "Automations" },
+    { id: "office", label: "Live Office" },
     { id: "activity", label: "Activity" },
     { id: "settings", label: "Settings" },
   ];
@@ -568,6 +569,8 @@ function ProjectWorkspace({
       {tab === "files" && <ProjectFiles projectId={project.id} />}
 
       {tab === "automations" && <AutomationsPanel projectId={project.id} />}
+
+      {tab === "office" && <ProjectOffice projectId={project.id} />}
 
       {tab === "artifacts" && (
         <div className="event-feed">
@@ -737,6 +740,58 @@ function AutomationRow({ automation, onChanged }: { automation: import("@yanshi/
       <button className="ghost-button danger-text" disabled={busy} title="Delete" onClick={() => void act(() => runtimeApi.deleteAutomation(automation.id))}>
         <X size={15} />
       </button>
+    </div>
+  );
+}
+
+function ProjectOffice({ projectId }: { projectId: string }) {
+  const { liveAgents } = useRuntimeStore();
+  const [office, setOffice] = useState<import("@yanshi/shared").LiveOfficeStateSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    runtimeApi
+      .liveOffice(projectId)
+      .then((state) => !cancelled && setOffice(state))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const update = async (patch: Partial<import("@yanshi/shared").LiveOfficeStateSummary>) => {
+    const next = await runtimeApi.updateLiveOffice(projectId, patch);
+    setOffice(next);
+  };
+
+  if (!office) return <p className="muted">Loading office…</p>;
+
+  return (
+    <div className="content-stack" style={{ padding: 0 }}>
+      <div className="office-editor-grid">
+        <label className="setting-row">
+          <span>Behavior</span>
+          <select value={office.behaviorMode} onChange={(event) => void update({ behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode })}>
+            {BEHAVIOR_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="setting-row">
+          <span>Camera</span>
+          <select value={office.cameraMode} onChange={(event) => void update({ cameraMode: event.target.value as import("@yanshi/shared").CameraMode })}>
+            <option value="rear">Rear</option>
+            <option value="iso">Isometric</option>
+          </select>
+        </label>
+      </div>
+      <div className="office-canvas" style={{ height: 320 }}>
+        <Suspense fallback={<div className="scene-loading">Loading office</div>}>
+          <LiveOfficeScene agents={liveAgents} compact cameraMode={office.cameraMode} stationLayout={office.stationLayout} />
+        </Suspense>
+      </div>
     </div>
   );
 }
@@ -924,31 +979,53 @@ function ApprovalsView() {
   );
 }
 
-function WorkshopView() {
-  const [result, setResult] = useState<string>("No pack selected.");
-  const { workshopPacks, importWorkshopPack, setWorkshopPackEnabled, loading, error } = useRuntimeStore();
+type WorkshopTab = "installed" | "agents" | "office" | "export";
 
+function WorkshopView() {
+  const [tab, setTab] = useState<WorkshopTab>("installed");
+  const tabs: Array<{ id: WorkshopTab; label: string }> = [
+    { id: "installed", label: "Installed" },
+    { id: "agents", label: "Agent Editor" },
+    { id: "office", label: "Office Editor" },
+    { id: "export", label: "Create / Export" },
+  ];
+  return (
+    <section className="content-stack">
+      <h2>Workshop</h2>
+      <div className="project-tabs">
+        {tabs.map((item) => (
+          <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {tab === "installed" && <WorkshopInstalled />}
+      {tab === "agents" && <AgentEditor />}
+      {tab === "office" && <OfficeEditor />}
+      {tab === "export" && <WorkshopExport />}
+    </section>
+  );
+}
+
+function WorkshopInstalled() {
+  const [result, setResult] = useState<string>("");
+  const { workshopPacks, importWorkshopPack, setWorkshopPackEnabled, loading, error } = useRuntimeStore();
   const importPack = async (file: File | undefined) => {
     if (!file) return;
     await importWorkshopPack(file);
     setResult(`Imported ${file.name}.`);
   };
-
   return (
-    <section className="content-stack">
-      <h2>Workshop</h2>
+    <>
       <label className="drop-zone">
         <Archive size={22} />
-        <span>{loading ? "Importing..." : "Import pack"}</span>
+        <span>{loading ? "Importing…" : "Import pack"}</span>
         <input type="file" accept=".zip" onChange={(event) => void importPack(event.target.files?.[0])} />
       </label>
-      <p className={error ? "inline-error" : "muted"}>{error ?? result}</p>
+      {(error || result) && <p className={error ? "inline-error" : "muted"}>{error ?? result}</p>}
       <div className="event-feed">
         {workshopPacks.length === 0 ? (
-          <article className="event-card">
-            <span>installed</span>
-            <p>No packs installed.</p>
-          </article>
+          <p className="transcript-empty">No packs installed.</p>
         ) : (
           workshopPacks.map((pack) => (
             <article key={pack.id} className="workshop-pack-row">
@@ -971,7 +1048,221 @@ function WorkshopView() {
           ))
         )}
       </div>
-    </section>
+    </>
+  );
+}
+
+const STATION_OPTIONS = ["manager", "browser", "computer", "file", "reviewer", "terminal"];
+const BEHAVIOR_OPTIONS: import("@yanshi/shared").BehaviorMode[] = ["professional", "balanced", "playful"];
+
+function AgentEditor() {
+  const { agentProfiles, saveAgentProfile, createAgentProfile, deleteAgentProfile, loadAgentProfiles } = useRuntimeStore();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (agentProfiles.length === 0) void loadAgentProfiles();
+  }, [agentProfiles.length, loadAgentProfiles]);
+
+  const selected = agentProfiles.find((p) => p.id === selectedId) ?? agentProfiles[0] ?? null;
+  const [draft, setDraft] = useState(selected);
+  useEffect(() => setDraft(selected), [selected?.id]);
+
+  if (agentProfiles.length === 0 || !draft) return <p className="muted">Loading agents…</p>;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await saveAgentProfile(draft.id, {
+        name: draft.name,
+        station: draft.station,
+        behaviorMode: draft.behaviorMode,
+        accent: draft.accent,
+        taskPriority: draft.taskPriority,
+        personality: draft.personality,
+        prompt: draft.prompt,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="agent-editor">
+      <div className="agent-pick">
+        {agentProfiles.map((profile) => (
+          <button key={profile.id} className={profile.id === draft.id ? "active" : ""} onClick={() => setSelectedId(profile.id)}>
+            <span className="agent-dot" style={{ background: profile.accent }} />
+            {profile.name}
+          </button>
+        ))}
+        <button
+          onClick={() =>
+            void createAgentProfile({ name: "New Agent", station: "manager", behaviorMode: "balanced", accent: "#7a6f86" })
+          }
+        >
+          <Plus size={14} /> New
+        </button>
+      </div>
+      <div className="agent-fields">
+        <label>
+          Name
+          <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+        </label>
+        <label>
+          Station
+          <select value={draft.station} onChange={(event) => setDraft({ ...draft, station: event.target.value })}>
+            {STATION_OPTIONS.map((station) => (
+              <option key={station} value={station}>
+                {station}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Behavior
+          <select value={draft.behaviorMode} onChange={(event) => setDraft({ ...draft, behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode })}>
+            {BEHAVIOR_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Accent
+          <input type="color" value={draft.accent} onChange={(event) => setDraft({ ...draft, accent: event.target.value })} />
+        </label>
+        <label>
+          Task priority ({draft.taskPriority})
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={draft.taskPriority}
+            onChange={(event) => setDraft({ ...draft, taskPriority: Number(event.target.value) })}
+          />
+        </label>
+        <label>
+          Personality
+          <input value={draft.personality} onChange={(event) => setDraft({ ...draft, personality: event.target.value })} />
+        </label>
+        <label>
+          Prompt
+          <textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} />
+        </label>
+        <div className="settings-actions">
+          <button onClick={() => void save()} disabled={busy}>
+            Save
+          </button>
+          {draft.id.startsWith("agent_") === false && (
+            <button className="danger-text" onClick={() => void deleteAgentProfile(draft.id)} disabled={busy}>
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfficeEditor() {
+  const { officeState, saveOfficeState, loadOfficeState } = useRuntimeStore();
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!officeState) void loadOfficeState(null);
+  }, [officeState, loadOfficeState]);
+
+  if (!officeState) return <p className="muted">Loading office…</p>;
+
+  const setLayout = (station: string, axis: 0 | 1, value: number) => {
+    const current = officeState.stationLayout[station] ?? [0, 0];
+    const next = [...current];
+    next[axis] = value;
+    void saveOfficeState(null, { stationLayout: { ...officeState.stationLayout, [station]: next } });
+  };
+
+  return (
+    <div className="office-editor">
+      <div className="office-editor-grid">
+        <label className="setting-row">
+          <span>Behavior</span>
+          <select value={officeState.behaviorMode} onChange={(event) => { setBusy(true); void saveOfficeState(null, { behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode }).finally(() => setBusy(false)); }}>
+            {BEHAVIOR_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="setting-row">
+          <span>Camera</span>
+          <select value={officeState.cameraMode} onChange={(event) => void saveOfficeState(null, { cameraMode: event.target.value as import("@yanshi/shared").CameraMode })}>
+            <option value="rear">Rear</option>
+            <option value="iso">Isometric</option>
+          </select>
+        </label>
+      </div>
+      <h3 style={{ marginTop: 16 }}>Station layout</h3>
+      <div className="layout-grid">
+        {STATION_OPTIONS.map((station) => {
+          const pos = officeState.stationLayout[station] ?? [];
+          return (
+            <Fragment key={station}>
+              <span style={{ textTransform: "capitalize" }}>{station}</span>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="x"
+                defaultValue={pos[0] ?? ""}
+                onBlur={(event) => event.target.value !== "" && setLayout(station, 0, Number(event.target.value))}
+              />
+              <input
+                type="number"
+                step="0.1"
+                placeholder="z"
+                defaultValue={pos[1] ?? ""}
+                onBlur={(event) => event.target.value !== "" && setLayout(station, 1, Number(event.target.value))}
+              />
+            </Fragment>
+          );
+        })}
+      </div>
+      {busy && <p className="muted">Saving…</p>}
+    </div>
+  );
+}
+
+function WorkshopExport() {
+  const [status, setStatus] = useState<string | null>(null);
+  const download = async () => {
+    setStatus("Exporting…");
+    try {
+      const response = await fetch(runtimeApi.exportPackUrl());
+      if (!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "yanshi-team.zip";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setStatus("Exported yanshi-team.zip");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Export failed.");
+    }
+  };
+  return (
+    <div className="content-stack" style={{ padding: 0 }}>
+      <p className="muted">Export your agent team and office theme as a pack. The file re-imports under Installed.</p>
+      <div className="settings-actions">
+        <button onClick={() => void download()}>Export pack</button>
+      </div>
+      {status && <p className="muted">{status}</p>}
+    </div>
   );
 }
 
@@ -1369,7 +1660,7 @@ function LiveOfficePanel({
   onClose: () => void;
   onFull: () => void;
 }) {
-  const { liveAgents, approvals, runs } = useRuntimeStore();
+  const { liveAgents, approvals, runs, officeState } = useRuntimeStore();
   const run = runs.find((item) => item.id === activeRunId);
   return (
     <section className={full ? "live-office full" : "live-office"}>
@@ -1391,7 +1682,12 @@ function LiveOfficePanel({
       </div>
       <div className="office-canvas">
         <Suspense fallback={<div className="scene-loading">Loading office</div>}>
-          <LiveOfficeScene agents={liveAgents} compact={!full} />
+          <LiveOfficeScene
+            agents={liveAgents}
+            compact={!full}
+            cameraMode={officeState?.cameraMode ?? "rear"}
+            stationLayout={officeState?.stationLayout ?? {}}
+          />
         </Suspense>
       </div>
       <div className="office-meta">

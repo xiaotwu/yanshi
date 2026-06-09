@@ -122,6 +122,66 @@ class AgentTaskSummary(BaseModel):
     completedAt: str | None = None
 
 
+BehaviorMode = Literal["professional", "balanced", "playful"]
+CameraMode = Literal["rear", "iso"]
+
+
+class AgentProfileSummary(BaseModel):
+    id: str
+    name: str
+    role: str
+    prompt: str = ""
+    personality: str = ""
+    defaultTools: list[str] = Field(default_factory=list)
+    defaultPermissions: list[str] = Field(default_factory=list)
+    accent: str = "#277f71"
+    behaviorMode: BehaviorMode = "balanced"
+    station: str
+    sound: str | None = None
+    motionPack: str = "default"
+    taskPriority: int = 5
+    createdAt: str
+    updatedAt: str
+
+
+class UpdateAgentProfileRequest(BaseModel):
+    name: str | None = None
+    prompt: str | None = None
+    personality: str | None = None
+    accent: str | None = None
+    behaviorMode: BehaviorMode | None = None
+    station: str | None = None
+    taskPriority: int | None = None
+
+
+class CreateAgentProfileRequest(BaseModel):
+    name: str
+    role: str = "custom"
+    station: str = "manager"
+    prompt: str = ""
+    personality: str = ""
+    accent: str = "#277f71"
+    behaviorMode: BehaviorMode = "balanced"
+    taskPriority: int = 5
+
+
+class LiveOfficeStateSummary(BaseModel):
+    id: str
+    projectId: str | None = None
+    theme: str = "warm-light"
+    behaviorMode: BehaviorMode = "balanced"
+    cameraMode: CameraMode = "rear"
+    stationLayout: dict[str, list[float]] = Field(default_factory=dict)
+    updatedAt: str
+
+
+class UpdateLiveOfficeStateRequest(BaseModel):
+    theme: str | None = None
+    behaviorMode: BehaviorMode | None = None
+    cameraMode: CameraMode | None = None
+    stationLayout: dict[str, list[float]] | None = None
+
+
 ScheduleKind = Literal["manual", "interval"]
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
+import json
 import re
 import shutil
 import threading
@@ -11,12 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 import uvicorn
-from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from yanshi_runtime.config import RuntimeSettings, settings_from_env
 from yanshi_runtime.graph import RuntimeGraph
 from yanshi_runtime.models import (
+    AgentProfileSummary,
     AppSettings,
     AppSettingsUpdate,
     ApprovalDecisionRequest,
@@ -24,16 +27,20 @@ from yanshi_runtime.models import (
     AgentTaskSummary,
     ArtifactSummary,
     AutomationSummary,
+    CreateAgentProfileRequest,
     CreateAutomationRequest,
     CreateProjectRequest,
     CreateRunRequest,
+    LiveOfficeStateSummary,
     ProjectSummary,
     ProviderHealth,
     ProviderSettingsPublic,
     ProviderSettingsUpdate,
     RuntimeHealth,
     RuntimeStatus,
+    UpdateAgentProfileRequest,
     UpdateAutomationRequest,
+    UpdateLiveOfficeStateRequest,
     UpdateProjectRequest,
     WorkshopPackEnableRequest,
     WorkshopPackSummary,
@@ -174,6 +181,25 @@ class RuntimeService:
                 self._launch_automation(automation, background_tasks=None)
                 launched += 1
         return launched
+
+    def export_workshop_pack(self, project_id: str | None) -> bytes:
+        """Build a real, re-importable .zip pack from current agent profiles + office theme."""
+        profiles = self.storage.list_agent_profiles()
+        office = self.storage.get_live_office_state(project_id)
+        manifest = {
+            "name": "Yanshi Team Export",
+            "version": "1.0.0",
+            "author": "Yanshi",
+            "contentTypes": ["agents", "themes"],
+            "suggestedPermissions": [],
+        }
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("manifest.json", json.dumps(manifest, indent=2))
+            for profile in profiles:
+                archive.writestr(f"agents/{profile.id}.json", json.dumps(profile.model_dump(), indent=2))
+            archive.writestr("themes/office.json", json.dumps(office.model_dump(), indent=2))
+        return buffer.getvalue()
 
     def decide_approval(self, approval_id: str, decision: str) -> ApprovalSummary:
         approval = self.storage.decide_approval(approval_id, decision)
@@ -497,6 +523,61 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Automation not found.") from exc
         return service.storage.list_automation_runs(automation_id)
+
+    @app.get("/agent-profiles", response_model=list[AgentProfileSummary])
+    def list_agent_profiles(service: RuntimeService = Depends(service_dep)):
+        return service.storage.list_agent_profiles()
+
+    @app.post("/agent-profiles", response_model=AgentProfileSummary)
+    def create_agent_profile(request: CreateAgentProfileRequest, service: RuntimeService = Depends(service_dep)):
+        if not request.name.strip():
+            raise HTTPException(status_code=400, detail="Agent name is required.")
+        profile = service.storage.create_agent_profile(
+            name=request.name.strip(),
+            role=request.role,
+            station=request.station,
+            prompt=request.prompt,
+            personality=request.personality,
+            accent=request.accent,
+            behavior_mode=request.behaviorMode,
+            task_priority=request.taskPriority,
+        )
+        service.storage.append_event("agent.created", agent_id=profile.id, payload=profile.model_dump())
+        return profile
+
+    @app.put("/agent-profiles/{profile_id}", response_model=AgentProfileSummary)
+    def update_agent_profile(profile_id: str, request: UpdateAgentProfileRequest, service: RuntimeService = Depends(service_dep)):
+        try:
+            profile = service.storage.update_agent_profile(profile_id, request.model_dump())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent profile not found.") from exc
+        service.storage.append_event("agent.updated", agent_id=profile.id, payload=profile.model_dump())
+        return profile
+
+    @app.delete("/agent-profiles/{profile_id}", status_code=204)
+    def delete_agent_profile(profile_id: str, service: RuntimeService = Depends(service_dep)):
+        try:
+            service.storage.delete_agent_profile(profile_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent profile not found.") from exc
+        return None
+
+    @app.get("/live-office", response_model=LiveOfficeStateSummary)
+    def get_live_office(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.storage.get_live_office_state(projectId)
+
+    @app.put("/live-office", response_model=LiveOfficeStateSummary)
+    def update_live_office(request: UpdateLiveOfficeStateRequest, projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.storage.upsert_live_office_state(projectId, request.model_dump())
+
+    @app.post("/workshop/export")
+    def export_pack(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        data = service.export_workshop_pack(projectId)
+        return Response(
+            content=data,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=yanshi-team.zip"},
+        )
 
     @app.put("/projects/{project_id}", response_model=ProjectSummary)
     def update_project(project_id: str, request: UpdateProjectRequest, service: RuntimeService = Depends(service_dep)):

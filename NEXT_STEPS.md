@@ -11,9 +11,11 @@
 - [x] Automations (real create/enable-disable/run-history + interval scheduler + Run now).
 - [x] Search (real grouped results) and Artifacts page (real data + Reveal in Finder).
 - [ ] Automation triggers beyond interval (calendar/event-based); composer "Create automation" entry.
-- [ ] Workshop: Create flow, Agent Editor, Office Editor, and pack export (real saved data, no shells).
-- [ ] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, and event-driven life animations.
-- [ ] Data model: AgentProfile / AgentInstance / AgentActor3D / LiveOfficeState tables + migrations.
+- [x] Workshop: Agent Editor, Office Editor, Create + real pack export.
+- [x] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, event-driven life animations.
+- [x] Data model: AgentProfile + LiveOfficeState tables + migrations.
+- [ ] Persist AgentInstance / AgentActor3D (positions/fatigue) instead of deriving live; full drag-drop 3D Office Editor.
+- [ ] Wire AgentProfile prompts/personality into runtime execution (currently configuration surfaced in editor + Live Office).
 - [ ] Split `apps/desktop/src/App.tsx` into `features/*` modules per spec §7.
 - [ ] Search, reasoning levels, composer file upload, and the close-with-active-runs prompt.
 - [ ] Pre-pull or configure the Docker sandbox image, then manually smoke a Docker command run to completion.

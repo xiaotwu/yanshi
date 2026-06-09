@@ -78,6 +78,17 @@
 - Tray/global-shortcut/notification behavior still needs manual packaged-app verification.
 - Live Office office editor is not implemented.
 
+## Agent System + Live Office + Workshop Editors (2026-06-08)
+
+- AgentProfile data model (`agent_profiles`, seeded + editable) and project-scoped LiveOfficeState
+  (`live_office_state`) with endpoints. Workshop pack export is a real, re-importable `.zip`.
+- Live Office behavior system: per-agent status/currentTask/queue/fatigue derived from real
+  `agent.task.*`/`action.*` events; idle agents show life animations from behavior+fatigue+idleness.
+- Live Office 3D: stations + rest/coffee/break/meeting areas, hover cards, queue bubbles, status
+  dots, behavior modes, camera modes (rear/iso), project station layout.
+- Workshop: Installed / Agent Editor / Office Editor / Create+Export tabs (all real, persisted).
+- Project workspace gained a Live Office tab (project-scoped office state + live scene).
+
 ## Automations / Search / Artifacts (2026-06-08, Final Completion Pass)
 
 - Automations: real project-scoped automations (create, enable/disable, Run now, delete, run

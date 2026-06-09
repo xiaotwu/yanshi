@@ -245,12 +245,56 @@ export interface ProjectFilesResult {
   structuredOutput: { root?: string; items?: WorkspaceFile[] };
 }
 
+export type BehaviorMode = "professional" | "balanced" | "playful";
+export type CameraMode = "rear" | "iso";
+
+export type AgentStatus = "idle" | "working" | "waiting_approval" | "blocked" | "failed" | "done";
+export type LifeAction =
+  | "coffee_break"
+  | "stretching"
+  | "nap"
+  | "walking_around"
+  | "playing_phone"
+  | "chatting_with_neighbor";
+
 export interface LiveAgentState {
   id: string;
   name: string;
   role: string;
-  status: "idle" | "working" | "waiting_approval" | "blocked" | "failed" | "done";
+  status: AgentStatus;
   station: string;
   queueCount: number;
   fatigue: number;
+  accent: string;
+  behaviorMode: BehaviorMode;
+  currentTask?: string | null;
+  lifeAction?: LifeAction | null;
+}
+
+export interface AgentProfileSummary {
+  id: string;
+  name: string;
+  role: string;
+  prompt: string;
+  personality: string;
+  defaultTools: string[];
+  defaultPermissions: string[];
+  accent: string;
+  behaviorMode: BehaviorMode;
+  station: string;
+  sound?: string | null;
+  motionPack: string;
+  taskPriority: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveOfficeStateSummary {
+  id: string;
+  projectId?: string | null;
+  theme: string;
+  behaviorMode: BehaviorMode;
+  cameraMode: CameraMode;
+  stationLayout: Record<string, number[]>;
+  updatedAt: string;
 }

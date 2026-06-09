@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import threading
@@ -1279,6 +1280,77 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert body["dockerCpus"] == "2"
     assert body["dockerPidsLimit"] == 256
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
+
+
+def test_agent_profiles_seed_and_update(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    profiles = client.get("/agent-profiles").json()
+    ids = {p["id"] for p in profiles}
+    assert {"agent_manager", "agent_browser", "agent_file", "agent_reviewer"}.issubset(ids)
+    manager = next(p for p in profiles if p["id"] == "agent_manager")
+    assert manager["station"] == "manager"
+    assert manager["accent"].startswith("#")
+
+    updated = client.put("/agent-profiles/agent_file", json={"behaviorMode": "playful", "accent": "#123456", "taskPriority": 8})
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["behaviorMode"] == "playful"
+    assert body["accent"] == "#123456"
+    assert body["taskPriority"] == 8
+    assert client.get("/agent-profiles").json()  # still listable
+    assert next(p for p in client.get("/agent-profiles").json() if p["id"] == "agent_file")["behaviorMode"] == "playful"
+
+
+def test_agent_profile_create_and_delete(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    created = client.post("/agent-profiles", json={"name": "Scout", "station": "browser", "behaviorMode": "playful"})
+    assert created.status_code == 200
+    profile_id = created.json()["id"]
+    assert created.json()["name"] == "Scout"
+    assert client.delete(f"/agent-profiles/{profile_id}").status_code == 204
+    assert all(p["id"] != profile_id for p in client.get("/agent-profiles").json())
+
+
+def test_live_office_state_default_and_upsert(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    project = client.post("/projects", json={"name": "Office"}).json()
+
+    default = client.get("/live-office", params={"projectId": project["id"]}).json()
+    assert default["theme"] == "warm-light"
+    assert default["behaviorMode"] == "balanced"
+
+    updated = client.put(
+        "/live-office",
+        params={"projectId": project["id"]},
+        json={"behaviorMode": "playful", "cameraMode": "iso", "stationLayout": {"file": [1.0, 2.0]}},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["behaviorMode"] == "playful"
+    assert updated.json()["cameraMode"] == "iso"
+    assert updated.json()["stationLayout"]["file"] == [1.0, 2.0]
+    # Persisted and project-scoped.
+    assert client.get("/live-office", params={"projectId": project["id"]}).json()["cameraMode"] == "iso"
+    assert client.get("/live-office").json()["cameraMode"] == "rear"
+
+
+def test_workshop_export_is_reimportable(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    export = client.post("/workshop/export")
+    assert export.status_code == 200
+    assert export.headers["content-type"] == "application/zip"
+
+    pack_bytes = export.content
+    assert pack_bytes[:2] == b"PK"
+    with zipfile.ZipFile(io.BytesIO(pack_bytes)) as archive:
+        names = archive.namelist()
+        assert "manifest.json" in names
+        assert any(name.startswith("agents/") for name in names)
+        assert "themes/office.json" in names
+
+    imported = client.post("/workshop/import", files={"pack": ("yanshi-team.zip", pack_bytes, "application/zip")})
+    assert imported.status_code == 200
+    assert imported.json()["name"] == "Yanshi Team Export"
 
 
 def test_artifacts_endpoint_lists_created_artifacts(tmp_path: Path) -> None:

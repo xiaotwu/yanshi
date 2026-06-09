@@ -1,8 +1,12 @@
 import type {
+  AgentProfileSummary,
   AppSettings,
   ApprovalSummary,
+  BehaviorMode,
   DesktopRuntimeStatus,
+  LifeAction,
   LiveAgentState,
+  LiveOfficeStateSummary,
   MacosPermissionStatus,
   ProjectSummary,
   ProviderHealth,
@@ -32,6 +36,8 @@ interface RuntimeStore {
   activeProjectId: string | null;
   activeRunId: string | null;
   liveAgents: LiveAgentState[];
+  agentProfiles: AgentProfileSummary[];
+  officeState: LiveOfficeStateSummary | null;
   loading: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
@@ -55,35 +61,122 @@ interface RuntimeStore {
   saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<void>;
   checkProviderHealth: () => Promise<void>;
   saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
+  loadAgentProfiles: () => Promise<void>;
+  saveAgentProfile: (id: string, update: Partial<AgentProfileSummary>) => Promise<void>;
+  createAgentProfile: (body: { name: string; station?: string; behaviorMode?: BehaviorMode; accent?: string }) => Promise<void>;
+  deleteAgentProfile: (id: string) => Promise<void>;
+  loadOfficeState: (projectId: string | null) => Promise<void>;
+  saveOfficeState: (projectId: string | null, update: Partial<LiveOfficeStateSummary>) => Promise<void>;
   connectEvents: () => void;
 }
 
-const defaultAgents: LiveAgentState[] = [
-  { id: "agent_manager", name: "Manager", role: "manager", status: "idle", station: "manager", queueCount: 0, fatigue: 0 },
-  { id: "agent_browser", name: "Browser", role: "browser", status: "idle", station: "browser", queueCount: 0, fatigue: 0 },
-  { id: "agent_computer", name: "Computer", role: "computer", status: "idle", station: "computer", queueCount: 0, fatigue: 0 },
-  { id: "agent_file", name: "File", role: "file", status: "idle", station: "file", queueCount: 0, fatigue: 0 },
-  { id: "agent_reviewer", name: "Reviewer", role: "reviewer", status: "idle", station: "reviewer", queueCount: 0, fatigue: 0 },
-  { id: "agent_terminal", name: "Terminal", role: "terminal", status: "idle", station: "terminal", queueCount: 0, fatigue: 0 },
+const FALLBACK_PROFILES: Array<Pick<AgentProfileSummary, "id" | "name" | "role" | "station" | "accent" | "behaviorMode">> = [
+  { id: "agent_manager", name: "Manager", role: "manager", station: "manager", accent: "#277f71", behaviorMode: "balanced" },
+  { id: "agent_browser", name: "Browser", role: "browser", station: "browser", accent: "#3f7fb0", behaviorMode: "balanced" },
+  { id: "agent_computer", name: "Computer", role: "computer", station: "computer", accent: "#9a5b2d", behaviorMode: "balanced" },
+  { id: "agent_file", name: "File", role: "file", station: "file", accent: "#5b8d55", behaviorMode: "balanced" },
+  { id: "agent_reviewer", name: "Reviewer", role: "reviewer", station: "reviewer", accent: "#b65c2f", behaviorMode: "balanced" },
+  { id: "agent_terminal", name: "Terminal", role: "terminal", station: "terminal", accent: "#6a6f86", behaviorMode: "balanced" },
 ];
+
+const LIFE_ACTIONS: LifeAction[] = ["coffee_break", "stretching", "walking_around", "playing_phone", "chatting_with_neighbor", "nap"];
 
 let socket: WebSocket | null = null;
 
-function eventStatus(event: YanshiEvent): LiveAgentState["status"] | null {
-  if (event.type === "agent.task.assigned" || event.type === "action.created") return "working";
-  if (event.type === "agent.task.completed" || event.type === "action.completed") return "done";
-  if (event.type === "agent.task.failed" || event.type === "action.failed") return "failed";
-  if (event.type === "approval.requested") return "waiting_approval";
-  if (event.type === "run.failed") return "failed";
-  if (event.type === "run.completed") return "done";
-  return null;
+interface AgentAccumulator {
+  status: LiveAgentState["status"];
+  queue: number;
+  work: number;
+  task: string | null;
 }
 
-function reduceAgents(agents: LiveAgentState[], event: YanshiEvent): LiveAgentState[] {
-  const status = eventStatus(event);
-  if (!status) return agents;
-  const agentId = event.agentId || (event.type.startsWith("approval.") ? "agent_reviewer" : "agent_manager");
-  return agents.map((agent) => (agent.id === agentId ? { ...agent, status, queueCount: status === "working" ? 1 : 0 } : agent));
+/**
+ * Derive live agent state from real runtime events. Task status, current task, and queue come
+ * straight from `agent.task.*` / `action.*` / `approval.*` events. Fatigue accumulates from how
+ * much real work an agent has done in the recent event window, and life/idle animations are
+ * generated from behavior mode + fatigue + idleness (never faked task progress).
+ */
+function computeAgents(
+  profiles: AgentProfileSummary[],
+  events: Array<{ seq: number; event: YanshiEvent }>,
+  officeBehavior: BehaviorMode,
+): LiveAgentState[] {
+  const base = profiles.length > 0 ? profiles : FALLBACK_PROFILES;
+  const acc = new Map<string, AgentAccumulator>();
+  for (const profile of base) acc.set(profile.id, { status: "idle", queue: 0, work: 0, task: null });
+
+  for (const { event } of events) {
+    const id = event.agentId || (event.type.startsWith("approval.") ? "agent_reviewer" : "agent_manager");
+    const state = acc.get(id);
+    if (!state) continue;
+    const payloadTask = typeof event.payload.task === "string" ? event.payload.task : typeof event.payload.summary === "string" ? event.payload.summary : null;
+    switch (event.type) {
+      case "agent.task.assigned":
+        state.queue += 1;
+        break;
+      case "agent.task.started":
+      case "action.created":
+        state.status = "working";
+        state.work += 1;
+        if (payloadTask) state.task = payloadTask;
+        break;
+      case "agent.task.completed":
+      case "action.completed":
+        state.status = "done";
+        state.queue = Math.max(0, state.queue - 1);
+        break;
+      case "agent.task.failed":
+      case "action.failed":
+        state.status = "failed";
+        state.queue = Math.max(0, state.queue - 1);
+        break;
+      case "approval.requested":
+        state.status = "waiting_approval";
+        break;
+      case "observation.created":
+        if (payloadTask) state.task = payloadTask;
+        break;
+      case "run.completed":
+        if (state.status === "working") state.status = "done";
+        break;
+      case "run.failed":
+        if (state.status === "working") state.status = "failed";
+        break;
+      default:
+        break;
+    }
+  }
+
+  return base.map((profile, index) => {
+    const state = acc.get(profile.id) ?? { status: "idle" as const, queue: 0, work: 0, task: null };
+    const fatigue = Math.min(1, state.work * 0.16);
+    const behaviorMode = profile.behaviorMode ?? officeBehavior;
+    const idle = state.status === "idle" || state.status === "done";
+    return {
+      id: profile.id,
+      name: profile.name,
+      role: profile.role,
+      status: state.status,
+      station: profile.station,
+      queueCount: state.queue,
+      fatigue,
+      accent: profile.accent,
+      behaviorMode,
+      currentTask: state.status === "working" ? state.task : null,
+      lifeAction: idle ? pickLifeAction(profile.id, index, fatigue, behaviorMode) : null,
+    };
+  });
+}
+
+function pickLifeAction(id: string, index: number, fatigue: number, behaviorMode: BehaviorMode): LifeAction | null {
+  if (behaviorMode === "professional" && fatigue < 0.5) return null;
+  if (fatigue > 0.7) return "nap";
+  // A slowly-rotating, deterministic choice so idle workers feel alive without flicker.
+  const bucket = Math.floor(Date.now() / 9000);
+  const liveliness = behaviorMode === "playful" ? 2 : 1;
+  const seed = (bucket + index * 3 + id.length) % LIFE_ACTIONS.length;
+  if (behaviorMode === "professional" && seed % 2 === 0) return null;
+  return LIFE_ACTIONS[(seed * liveliness) % LIFE_ACTIONS.length];
 }
 
 export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
@@ -100,14 +193,16 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   events: [],
   activeProjectId: null,
   activeRunId: null,
-  liveAgents: defaultAgents,
+  liveAgents: computeAgents(FALLBACK_PROFILES as AgentProfileSummary[], [], "balanced"),
+  agentProfiles: [],
+  officeState: null,
   loading: false,
   error: null,
 
   hydrate: async () => {
     set({ loading: true, error: null });
     try {
-      const [status, runs, approvals, providerSettings, appSettings, projects, workshopPacks] = await Promise.all([
+      const [status, runs, approvals, providerSettings, appSettings, projects, workshopPacks, agentProfiles, officeState] = await Promise.all([
         runtimeApi.status(),
         runtimeApi.runs(),
         runtimeApi.approvals(),
@@ -115,6 +210,8 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         runtimeApi.appSettings(),
         runtimeApi.projects(),
         runtimeApi.workshopPacks(),
+        runtimeApi.agentProfiles(),
+        runtimeApi.liveOffice(),
       ]);
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
       const activeProjectId = projects.some((project) => project.id === get().activeProjectId) ? get().activeProjectId : null;
@@ -126,6 +223,9 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         appSettings,
         projects,
         workshopPacks,
+        agentProfiles,
+        officeState,
+        liveAgents: computeAgents(agentProfiles, get().events, officeState.behaviorMode),
         runs,
         approvals,
         activeProjectId,
@@ -300,15 +400,48 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
+  loadAgentProfiles: async () => {
+    const agentProfiles = await runtimeApi.agentProfiles();
+    set((state) => ({ agentProfiles, liveAgents: computeAgents(agentProfiles, state.events, state.officeState?.behaviorMode ?? "balanced") }));
+  },
+
+  saveAgentProfile: async (id, update) => {
+    await runtimeApi.updateAgentProfile(id, update);
+    await get().loadAgentProfiles();
+  },
+
+  createAgentProfile: async (body) => {
+    await runtimeApi.createAgentProfile(body);
+    await get().loadAgentProfiles();
+  },
+
+  deleteAgentProfile: async (id) => {
+    await runtimeApi.deleteAgentProfile(id);
+    await get().loadAgentProfiles();
+  },
+
+  loadOfficeState: async (projectId) => {
+    const officeState = await runtimeApi.liveOffice(projectId);
+    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode) }));
+  },
+
+  saveOfficeState: async (projectId, update) => {
+    const officeState = await runtimeApi.updateLiveOffice(projectId, update);
+    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode) }));
+  },
+
   connectEvents: () => {
     if (socket && socket.readyState !== WebSocket.CLOSED) return;
     socket = new WebSocket(runtimeApi.eventsUrl());
     socket.onmessage = (message) => {
       const payload = JSON.parse(message.data) as { seq: number; event: YanshiEvent };
-      set((state) => ({
-        events: [...state.events.slice(-300), payload],
-        liveAgents: reduceAgents(state.liveAgents, payload.event),
-      }));
+      set((state) => {
+        const events = [...state.events.slice(-300), payload];
+        return {
+          events,
+          liveAgents: computeAgents(state.agentProfiles, events, state.officeState?.behaviorMode ?? "balanced"),
+        };
+      });
       notifyForEvent(payload.event, get().appSettings?.notificationsEnabled ?? true);
       if (
         payload.event.type.startsWith("run.") ||

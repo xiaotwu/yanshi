@@ -540,3 +540,36 @@ Source of truth: docs/Yanshi_Product_Design_Spec.md. Large refactors allowed; no
   office state; Workshop Create/Agent Editor/Office Editor/export; AgentProfile/Instance/Actor3D +
   LiveOfficeState models; reasoning levels; composer file upload; close-with-active-runs prompt;
   codesign/notarization; `features/*` frontend split.
+
+## Phase: Agent system + Live Office behavior + Workshop editors (2026-06-08)
+
+Signature product features, all real (no mocks):
+- Data model: `agent_profiles` table (seeded from defaults: name/role/prompt/personality/tools/
+  accent/behaviorMode/station/taskPriority) + `live_office_state` table (project-scoped, theme/
+  behaviorMode/cameraMode/stationLayout). Models AgentProfileSummary/LiveOfficeStateSummary +
+  Create/Update requests. CREATE IF NOT EXISTS migrations (backward-compatible).
+- Endpoints: GET/POST/PUT/DELETE `/agent-profiles`; GET/PUT `/live-office?projectId=`;
+  POST `/workshop/export` (returns a real, re-importable .zip: manifest + agents/*.json + themes/office.json).
+- Live Office behavior system (store `computeAgents`): derives status/currentTask/queue/fatigue per
+  agent from REAL `agent.task.*` / `action.*` / `approval.*` events; fatigue accumulates from real
+  work; idle agents get life/idle animations generated from behaviorMode + fatigue + idleness
+  (never faked task progress). Profiles supply names/stations/accents/behavior.
+- Live Office 3D rewrite (packages/live-office): stations + rest/coffee/break/meeting areas,
+  hover cards (role/status/current task/queue/fatigue bar), queue bubbles, status dots, behavior-mode
+  liveliness, life animations (coffee/chatting/phone/nap/walking/stretching) with movement to areas,
+  camera modes (rear/iso), project station layout.
+- Workshop rewrite: Installed / Agent Editor / Office Editor / Create+Export tabs. Agent Editor
+  edits+saves AgentProfiles (name/station/behavior/accent/priority/personality/prompt; create/delete).
+  Office Editor edits+saves global office (behavior/camera/station layout). Create+Export downloads
+  a real pack (blob), re-importable under Installed. Project "Live Office" tab edits project-scoped
+  office state and renders the live scene.
+- Tests: +5 (agent profile seed/update, create/delete, live-office default/upsert project-scoped,
+  export re-importable). pytest 64 passed; cargo 10 passed; lint/typecheck/build green;
+  desktop:release rebuilt sidecar (verified /agent-profiles, /live-office, /workshop/export on the
+  bundled binary) and `.app`/`.dmg`.
+- Visual smoke: Live Office mini panel shows agents at stations with live idle actions
+  (Chatting/Coffee/On phone); Agent Editor renders the full per-agent form with accents + Save.
+- No-mock audit: clean.
+- Still deferred (honest): full drag-drop 3D Office Editor (current is a practical numeric layout
+  editor per spec's allowance); reasoning levels; composer file upload; codesign/notarization;
+  `features/*` frontend split.

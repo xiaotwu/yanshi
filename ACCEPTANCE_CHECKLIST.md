@@ -76,7 +76,9 @@
 - [x] Automations implemented (create/enable/disable/Run now/run history/interval trigger + real scheduler), tested.
 - [x] Search is a real grouped search across projects/runs/artifacts/packs (no placeholder).
 - [x] Artifacts page lists real artifacts with metadata; Reveal-in-Finder via Tauri (desktop-only).
-- [ ] Workshop Create / Agent Editor / Office Editor / pack export.
-- [ ] Live Office hover cards, fatigue, behavior modes, stations, and life animations.
-- [ ] Project-scoped Live Office state + AgentProfile/Instance/Actor3D data models.
+- [x] Workshop Agent Editor (edit/save AgentProfiles), Office Editor (theme/behavior/camera/layout), Create + real pack export (re-importable), tested.
+- [x] Live Office hover cards, queue bubbles, fatigue, behavior modes, stations, and life/idle animations — driven by real runtime state.
+- [x] Project-scoped Live Office state (`live_office_state` table + project Live Office tab) and AgentProfile data model (`agent_profiles` table, seeded, editable).
+- [ ] Full drag-and-drop 3D Office Editor (current first version is a numeric station-layout editor per spec allowance).
+- [ ] AgentInstance / AgentActor3D persisted tables (Live Office actor state currently derived live from events).
 - [ ] No user-facing incomplete core flow remains.

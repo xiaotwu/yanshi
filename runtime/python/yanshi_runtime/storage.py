@@ -7,13 +7,16 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+from .agents.profiles import DEFAULT_AGENT_PROFILES
 from .models import (
+    AgentProfileSummary,
     AgentTaskSummary,
     AppSettings,
     AppSettingsUpdate,
     ApprovalSummary,
     ArtifactSummary,
     AutomationSummary,
+    LiveOfficeStateSummary,
     ProjectSummary,
     ProviderSettingsPublic,
     RuntimeEvent,
@@ -202,9 +205,38 @@ class Storage:
               created_at TEXT NOT NULL,
               PRIMARY KEY (automation_id, run_id)
             );
+
+            CREATE TABLE IF NOT EXISTS agent_profiles (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              role TEXT NOT NULL,
+              prompt TEXT NOT NULL DEFAULT '',
+              personality TEXT NOT NULL DEFAULT '',
+              default_tools_json TEXT NOT NULL DEFAULT '[]',
+              default_permissions_json TEXT NOT NULL DEFAULT '[]',
+              accent TEXT NOT NULL DEFAULT '#277f71',
+              behavior_mode TEXT NOT NULL DEFAULT 'balanced',
+              station TEXT NOT NULL,
+              sound TEXT,
+              motion_pack TEXT NOT NULL DEFAULT 'default',
+              task_priority INTEGER NOT NULL DEFAULT 5,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS live_office_state (
+              id TEXT PRIMARY KEY,
+              project_id TEXT UNIQUE,
+              theme TEXT NOT NULL DEFAULT 'warm-light',
+              behavior_mode TEXT NOT NULL DEFAULT 'balanced',
+              camera_mode TEXT NOT NULL DEFAULT 'rear',
+              station_layout_json TEXT NOT NULL DEFAULT '{}',
+              updated_at TEXT NOT NULL
+            );
             """
         )
         self.conn.commit()
+        self._seed_agent_profiles()
 
     def create_project(self, name: str, *, description: str | None = None, workspace_root: Path) -> ProjectSummary:
         now = utc_now()
@@ -833,6 +865,192 @@ class Storage:
             createdAt=row["created_at"],
             updatedAt=row["updated_at"],
             lastRunAt=row["last_run_at"],
+        )
+
+    # --- Agent profiles -------------------------------------------------
+
+    def _seed_agent_profiles(self) -> None:
+        existing = self.conn.execute("SELECT COUNT(*) AS n FROM agent_profiles").fetchone()["n"]
+        if existing:
+            return
+        now = utc_now()
+        for profile in DEFAULT_AGENT_PROFILES:
+            self.conn.execute(
+                """
+                INSERT INTO agent_profiles (
+                  id, name, role, prompt, personality, default_tools_json, default_permissions_json,
+                  accent, behavior_mode, station, sound, motion_pack, task_priority, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'default', ?, ?, ?)
+                """,
+                (
+                    profile["id"],
+                    profile["name"],
+                    profile["role"],
+                    profile.get("prompt", ""),
+                    profile.get("personality", ""),
+                    json.dumps(profile.get("defaultTools", [])),
+                    json.dumps(profile.get("defaultPermissions", [])),
+                    profile.get("accent", "#277f71"),
+                    profile.get("behaviorMode", "balanced"),
+                    profile["station"],
+                    int(profile.get("taskPriority", 5)),
+                    now,
+                    now,
+                ),
+            )
+        self.conn.commit()
+
+    @locked_storage_method
+    def list_agent_profiles(self) -> list[AgentProfileSummary]:
+        rows = self.conn.execute("SELECT * FROM agent_profiles ORDER BY task_priority DESC, name").fetchall()
+        return [self._agent_profile_from_row(row) for row in rows]
+
+    @locked_storage_method
+    def get_agent_profile(self, profile_id: str) -> AgentProfileSummary:
+        row = self.conn.execute("SELECT * FROM agent_profiles WHERE id = ?", (profile_id,)).fetchone()
+        if row is None:
+            raise KeyError(profile_id)
+        return self._agent_profile_from_row(row)
+
+    @locked_storage_method
+    def create_agent_profile(
+        self,
+        *,
+        name: str,
+        role: str,
+        station: str,
+        prompt: str,
+        personality: str,
+        accent: str,
+        behavior_mode: str,
+        task_priority: int,
+    ) -> AgentProfileSummary:
+        profile_id = new_id("agent")
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO agent_profiles (
+              id, name, role, prompt, personality, default_tools_json, default_permissions_json,
+              accent, behavior_mode, station, sound, motion_pack, task_priority, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, ?)
+            """,
+            (profile_id, name, role, prompt, personality, accent, behavior_mode, station, task_priority, now, now),
+        )
+        self.conn.commit()
+        return self.get_agent_profile(profile_id)
+
+    @locked_storage_method
+    def update_agent_profile(self, profile_id: str, patch: dict[str, Any]) -> AgentProfileSummary:
+        current = self.get_agent_profile(profile_id)
+        merged = current.model_copy(update={k: v for k, v in patch.items() if v is not None})
+        self.conn.execute(
+            """
+            UPDATE agent_profiles SET name = ?, prompt = ?, personality = ?, accent = ?,
+              behavior_mode = ?, station = ?, task_priority = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                merged.name,
+                merged.prompt,
+                merged.personality,
+                merged.accent,
+                merged.behaviorMode,
+                merged.station,
+                merged.taskPriority,
+                utc_now(),
+                profile_id,
+            ),
+        )
+        self.conn.commit()
+        return self.get_agent_profile(profile_id)
+
+    @locked_storage_method
+    def delete_agent_profile(self, profile_id: str) -> None:
+        cursor = self.conn.execute("DELETE FROM agent_profiles WHERE id = ?", (profile_id,))
+        self.conn.commit()
+        if cursor.rowcount == 0:
+            raise KeyError(profile_id)
+
+    def _agent_profile_from_row(self, row: sqlite3.Row) -> AgentProfileSummary:
+        return AgentProfileSummary(
+            id=row["id"],
+            name=row["name"],
+            role=row["role"],
+            prompt=row["prompt"],
+            personality=row["personality"],
+            defaultTools=json.loads(row["default_tools_json"] or "[]"),
+            defaultPermissions=json.loads(row["default_permissions_json"] or "[]"),
+            accent=row["accent"],
+            behaviorMode=row["behavior_mode"],
+            station=row["station"],
+            sound=row["sound"],
+            motionPack=row["motion_pack"],
+            taskPriority=row["task_priority"],
+            createdAt=row["created_at"],
+            updatedAt=row["updated_at"],
+        )
+
+    # --- Live Office state ----------------------------------------------
+
+    @locked_storage_method
+    def get_live_office_state(self, project_id: str | None) -> LiveOfficeStateSummary:
+        if project_id is None:
+            row = self.conn.execute("SELECT * FROM live_office_state WHERE project_id IS NULL").fetchone()
+        else:
+            row = self.conn.execute("SELECT * FROM live_office_state WHERE project_id = ?", (project_id,)).fetchone()
+        if row is None:
+            return self._default_office_state(project_id)
+        return self._office_state_from_row(row)
+
+    @locked_storage_method
+    def upsert_live_office_state(self, project_id: str | None, patch: dict[str, Any]) -> LiveOfficeStateSummary:
+        current = self.get_live_office_state(project_id)
+        merged = current.model_copy(update={k: v for k, v in patch.items() if v is not None})
+        now = utc_now()
+        existing = (
+            self.conn.execute("SELECT id FROM live_office_state WHERE project_id IS NULL").fetchone()
+            if project_id is None
+            else self.conn.execute("SELECT id FROM live_office_state WHERE project_id = ?", (project_id,)).fetchone()
+        )
+        if existing is None:
+            self.conn.execute(
+                """
+                INSERT INTO live_office_state (id, project_id, theme, behavior_mode, camera_mode, station_layout_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (new_id("office"), project_id, merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), now),
+            )
+        else:
+            self.conn.execute(
+                "UPDATE live_office_state SET theme = ?, behavior_mode = ?, camera_mode = ?, station_layout_json = ?, updated_at = ? WHERE id = ?",
+                (merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), now, existing["id"]),
+            )
+        self.conn.commit()
+        self.append_event("liveOffice.state.updated", project_id=project_id, payload={"projectId": project_id})
+        return self.get_live_office_state(project_id)
+
+    def _default_office_state(self, project_id: str | None) -> LiveOfficeStateSummary:
+        return LiveOfficeStateSummary(
+            id=f"office_default_{project_id or 'global'}",
+            projectId=project_id,
+            theme="warm-light",
+            behaviorMode="balanced",
+            cameraMode="rear",
+            stationLayout={},
+            updatedAt=utc_now(),
+        )
+
+    def _office_state_from_row(self, row: sqlite3.Row) -> LiveOfficeStateSummary:
+        return LiveOfficeStateSummary(
+            id=row["id"],
+            projectId=row["project_id"],
+            theme=row["theme"],
+            behaviorMode=row["behavior_mode"],
+            cameraMode=row["camera_mode"],
+            stationLayout=json.loads(row["station_layout_json"] or "{}"),
+            updatedAt=row["updated_at"],
         )
 
     def install_workshop_pack(

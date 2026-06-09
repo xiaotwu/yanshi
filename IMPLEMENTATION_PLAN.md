@@ -80,9 +80,16 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Artifacts: `/artifacts` API + Artifacts page with metadata + `reveal_path` Tauri command.
 - [x] Search: real grouped search across projects/runs/artifacts/packs.
 
+## Agent System + Live Office (2026-06-08)
+
+- [x] AgentProfile + LiveOfficeState data models, endpoints, migrations, tests.
+- [x] Live Office behavior/fatigue/hover/queue/stations/life-animation system from real events.
+- [x] Workshop Agent Editor / Office Editor / Create + real pack export.
+- [x] Project-scoped Live Office tab + state.
+
 ## Pending
 
-- [ ] Workshop Create/Agent Editor/Office Editor/export.
+- [ ] Persist AgentInstance/AgentActor3D; full drag-drop 3D Office Editor.
 - [ ] Live Office life-animations, hover cards, fatigue, stations, project-scoped office state.
 - [ ] AgentProfile/Instance/Actor3D + LiveOfficeState data models + migrations.
 - [ ] Split frontend into `features/*` per spec §7; add Search; close-with-active-runs prompt.

@@ -1,9 +1,12 @@
 import type {
+  AgentProfileSummary,
   AgentTaskSummary,
   AppSettings,
   ApprovalSummary,
   ArtifactSummary,
   AutomationSummary,
+  BehaviorMode,
+  LiveOfficeStateSummary,
   PermissionMode,
   ProjectFilesResult,
   ProjectSummary,
@@ -106,6 +109,20 @@ export const runtimeApi = {
   deleteAutomation: (automationId: string) => request<void>(`/automations/${automationId}`, { method: "DELETE" }),
   runAutomation: (automationId: string) => request<RunSummary>(`/automations/${automationId}/run`, { method: "POST", body: "{}" }),
   automationRuns: (automationId: string) => request<RunSummary[]>(`/automations/${automationId}/runs`),
+  agentProfiles: () => request<AgentProfileSummary[]>("/agent-profiles"),
+  createAgentProfile: (body: { name: string; role?: string; station?: string; behaviorMode?: BehaviorMode; accent?: string; taskPriority?: number }) =>
+    request<AgentProfileSummary>("/agent-profiles", { method: "POST", body: JSON.stringify(body) }),
+  updateAgentProfile: (id: string, update: Partial<Pick<AgentProfileSummary, "name" | "prompt" | "personality" | "accent" | "behaviorMode" | "station" | "taskPriority">>) =>
+    request<AgentProfileSummary>(`/agent-profiles/${id}`, { method: "PUT", body: JSON.stringify(update) }),
+  deleteAgentProfile: (id: string) => request<void>(`/agent-profiles/${id}`, { method: "DELETE" }),
+  liveOffice: (projectId?: string | null) =>
+    request<LiveOfficeStateSummary>(projectId ? `/live-office?projectId=${encodeURIComponent(projectId)}` : "/live-office"),
+  updateLiveOffice: (projectId: string | null, update: Partial<Pick<LiveOfficeStateSummary, "theme" | "behaviorMode" | "cameraMode" | "stationLayout">>) =>
+    request<LiveOfficeStateSummary>(projectId ? `/live-office?projectId=${encodeURIComponent(projectId)}` : "/live-office", {
+      method: "PUT",
+      body: JSON.stringify(update),
+    }),
+  exportPackUrl: (projectId?: string | null) => `${runtimeUrl}/workshop/export${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`,
   pauseRun: (runId: string) =>
     request<RunSummary>(`/runs/${runId}/pause`, {
       method: "POST",
