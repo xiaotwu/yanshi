@@ -79,11 +79,21 @@ class RuntimeService:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
         self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
-        background_tasks.add_task(self.start_run, run.id, request.task.strip(), request.permissionMode)
+        background_tasks.add_task(self.start_run, run.id, request.task.strip(), request.permissionMode, request.planFirst)
         return run
 
-    def start_run(self, run_id: str, task: str, permission_mode: str) -> None:
-        self.graph.start(run_id, task, permission_mode)
+    def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False) -> None:
+        self.graph.start(run_id, task, permission_mode, plan_first)
+
+    def list_project_files(self, project_id: str) -> dict:
+        try:
+            project = self.storage.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Project not found.") from exc
+        from yanshi_runtime.tools import FileTool
+
+        result = FileTool(Path(project.workspacePath)).list_files(".")
+        return result.model_dump()
 
     def decide_approval(self, approval_id: str, decision: str) -> ApprovalSummary:
         approval = self.storage.decide_approval(approval_id, decision)
@@ -354,6 +364,10 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             return service.storage.get_project(project_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
+
+    @app.get("/projects/{project_id}/files")
+    def list_project_files(project_id: str, service: RuntimeService = Depends(service_dep)):
+        return service.list_project_files(project_id)
 
     @app.put("/projects/{project_id}", response_model=ProjectSummary)
     def update_project(project_id: str, request: UpdateProjectRequest, service: RuntimeService = Depends(service_dep)):

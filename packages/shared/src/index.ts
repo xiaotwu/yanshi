@@ -166,6 +166,8 @@ export interface ProviderHealth {
 export interface AppSettings {
   permissionModeDefault: PermissionMode;
   developerMode: boolean;
+  onboarded: boolean;
+  theme: "light" | "dark";
   liveOfficeAutoOpen: boolean;
   liveOfficeDefaultOpen: boolean;
   browserToolEnabled: boolean;
@@ -191,6 +193,20 @@ export interface WorkshopPackSummary {
   suggestedPermissions: string[];
   securityStatus: string;
   createdAt: string;
+}
+
+export interface WorkspaceFile {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  size?: number | null;
+}
+
+export interface ProjectFilesResult {
+  ok: boolean;
+  summary: string;
+  missingRequirement?: string | null;
+  structuredOutput: { root?: string; items?: WorkspaceFile[] };
 }
 
 export interface LiveAgentState {

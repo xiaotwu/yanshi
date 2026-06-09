@@ -53,6 +53,7 @@ class CreateRunRequest(BaseModel):
     task: str
     projectId: str | None = None
     permissionMode: PermissionMode = "default"
+    planFirst: bool = False
 
 
 class ProjectSummary(BaseModel):
@@ -186,6 +187,8 @@ class ChatMessage(BaseModel):
 class AppSettings(BaseModel):
     permissionModeDefault: PermissionMode = "default"
     developerMode: bool = False
+    onboarded: bool = False
+    theme: Literal["light", "dark"] = "light"
     liveOfficeAutoOpen: bool = True
     liveOfficeDefaultOpen: bool = False
     browserToolEnabled: bool = True
@@ -202,6 +205,8 @@ class AppSettings(BaseModel):
 class AppSettingsUpdate(BaseModel):
     permissionModeDefault: PermissionMode | None = None
     developerMode: bool | None = None
+    onboarded: bool | None = None
+    theme: Literal["light", "dark"] | None = None
     liveOfficeAutoOpen: bool | None = None
     liveOfficeDefaultOpen: bool | None = None
     browserToolEnabled: bool | None = None

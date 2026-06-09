@@ -8,6 +8,12 @@
 - [x] Move provider API key to an off-DB `apiKeyRef` secret store with migration.
 - [ ] Grant Accessibility to packaged `Yanshi.app` and verify Computer bridge `click/type/shortcut`; also verify tray actions, close behavior, notifications, Cmd+Y.
 - [ ] Codesign + notarize the bundle for distribution beyond the build machine.
+- [ ] Build Automations (real create/enable-disable/run-history + at least one real trigger; honest not-configured for scheduled triggers).
+- [ ] Workshop: Create flow, Agent Editor, Office Editor, and pack export (real saved data, no shells).
+- [ ] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, and event-driven life animations.
+- [ ] Data model: AgentProfile / AgentInstance / AgentActor3D / LiveOfficeState tables + migrations.
+- [ ] Split `apps/desktop/src/App.tsx` into `features/*` modules per spec §7.
+- [ ] Search, reasoning levels, composer file upload, and the close-with-active-runs prompt.
 - [ ] Pre-pull or configure the Docker sandbox image, then manually smoke a Docker command run to completion.
 - [ ] Move provider API key storage to macOS Keychain or an `apiKeyRef` design.
 - [ ] Add Workshop export and richer pack-management flows.

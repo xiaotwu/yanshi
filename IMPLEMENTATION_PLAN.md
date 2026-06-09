@@ -65,8 +65,21 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Provider API key moved to an `apiKeyRef` + off-DB secret store (file default, opt-in Keychain) with legacy migration + VACUUM (tests).
 - [x] Computer bridge verified end-to-end in the packaged app for `open-app`; 401 on unauthorized bridge requests.
 
+## Product surfaces (2026-06-08)
+
+- [x] Composer Plus menu (Plan first + tool directives) + real voice button; dead `+` removed.
+- [x] Plan-first approval gate (real interrupt/resume), tested.
+- [x] Settings grouped normal mode + Developer Mode; light/dark theme.
+- [x] Runs grouping + per-message detail expanders (raw events Developer-only).
+- [x] Projects tabbed workspace + `GET /projects/{id}/files`.
+- [x] First-run onboarding with a real demo run; `onboarded`/`theme` settings.
+
 ## Pending
 
+- [ ] Automations (real), Workshop Create/Agent Editor/Office Editor/export.
+- [ ] Live Office life-animations, hover cards, fatigue, stations, project-scoped office state.
+- [ ] AgentProfile/Instance/Actor3D + LiveOfficeState data models + migrations.
+- [ ] Split frontend into `features/*` per spec §7; add Search; close-with-active-runs prompt.
 - [ ] Codesign + notarize the bundle for second-machine / store distribution.
 - [ ] Manually verify Computer bridge `click/type/shortcut` in the packaged app after granting Accessibility.
 - [ ] Manual Docker command smoke after the required image is available locally or image pull can complete.

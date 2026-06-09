@@ -35,11 +35,17 @@ interface RuntimeStore {
   loading: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
-  createRun: (task: string, permissionMode: "default" | "auto_review" | "full_access", projectId?: string | null) => Promise<void>;
+  createRun: (
+    task: string,
+    permissionMode: "default" | "auto_review" | "full_access",
+    projectId?: string | null,
+    planFirst?: boolean,
+  ) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<void>;
   updateProject: (projectId: string, update: { name?: string; description?: string; settings?: Record<string, unknown> }) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   setActiveProject: (projectId: string | null) => void;
+  setActiveRun: (runId: string) => void;
   importWorkshopPack: (file: File) => Promise<void>;
   setWorkshopPackEnabled: (packId: string, enabled: boolean) => Promise<void>;
   decideApproval: (approvalId: string, decision: "approved" | "denied") => Promise<void>;
@@ -133,10 +139,10 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
-  createRun: async (task, permissionMode, projectId) => {
+  createRun: async (task, permissionMode, projectId, planFirst) => {
     set({ loading: true, error: null });
     try {
-      const run = await runtimeApi.createRun(task, permissionMode, projectId);
+      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst);
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
       set({
         activeRunId: run.id,
@@ -193,6 +199,10 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
 
   setActiveProject: (projectId) => {
     set({ activeProjectId: projectId });
+  },
+
+  setActiveRun: (runId) => {
+    set({ activeRunId: runId });
   },
 
   importWorkshopPack: async (file) => {

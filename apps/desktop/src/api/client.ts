@@ -2,6 +2,7 @@ import type {
   AgentTaskSummary,
   AppSettings,
   ApprovalSummary,
+  ProjectFilesResult,
   ProjectSummary,
   ProviderHealth,
   ProviderSettingsPublic,
@@ -68,11 +69,17 @@ export const runtimeApi = {
     }),
   runs: (projectId?: string | null) => request<RunSummary[]>(projectId ? `/runs?projectId=${encodeURIComponent(projectId)}` : "/runs"),
   run: (runId: string) => request<RunSummary>(`/runs/${runId}`),
-  createRun: (task: string, permissionMode: "default" | "auto_review" | "full_access", projectId?: string | null) =>
+  createRun: (
+    task: string,
+    permissionMode: "default" | "auto_review" | "full_access",
+    projectId?: string | null,
+    planFirst?: boolean,
+  ) =>
     request<RunSummary>("/runs", {
       method: "POST",
-      body: JSON.stringify({ task, permissionMode, ...(projectId ? { projectId } : {}) }),
+      body: JSON.stringify({ task, permissionMode, ...(projectId ? { projectId } : {}), ...(planFirst ? { planFirst } : {}) }),
     }),
+  projectFiles: (projectId: string) => request<ProjectFilesResult>(`/projects/${projectId}/files`),
   pauseRun: (runId: string) =>
     request<RunSummary>(`/runs/${runId}/pause`, {
       method: "POST",

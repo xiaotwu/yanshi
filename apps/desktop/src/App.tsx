@@ -9,22 +9,26 @@ import {
   ExternalLink,
   FileSearch,
   FolderOpen,
+  Globe,
   Home,
+  ListChecks,
   Loader2,
   Maximize2,
-  Pencil,
+  Mic,
+  MonitorSmartphone,
   Play,
   Plus,
   Search,
   Send,
   Settings,
   Shield,
-  Trash2,
+  TerminalSquare,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import iconUrl from "../../../icon.png";
+import { runtimeApi } from "./api/client";
 import { openDesktopRuntimeLogs, popOutLiveOffice } from "./api/desktop";
 import { useRuntimeStore } from "./stores/runtimeStore";
 
@@ -49,11 +53,16 @@ export function App() {
   const officeTouchedRef = useRef(false);
   const { hydrate, connectEvents, approvals, activeRunId, events, appSettings } = useRuntimeStore();
   const developerEnabled = appSettings?.developerMode ?? false;
+  const theme = appSettings?.theme ?? "light";
 
   useEffect(() => {
     void hydrate();
     connectEvents();
   }, [connectEvents, hydrate]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     if (!appSettings || officeTouchedRef.current) return;
@@ -154,15 +163,58 @@ export function App() {
           <LiveOfficePanel activeRunId={activeRunId} full onClose={closeOffice} onFull={() => undefined} />
         </div>
       )}
+      {appSettings && !appSettings.onboarded && <Onboarding onStart={() => setView("runs")} />}
     </div>
   );
 }
+
+function Onboarding({ onStart }: { onStart: () => void }) {
+  const { saveAppSettings, createRun } = useRuntimeStore();
+  const [busy, setBusy] = useState(false);
+
+  const dismiss = () => void saveAppSettings({ onboarded: true });
+  const tryDemo = async () => {
+    setBusy(true);
+    await saveAppSettings({ onboarded: true });
+    await createRun("List workspace files", "default", null);
+    setBusy(false);
+    onStart();
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="onboarding-card">
+        <img src={iconUrl} alt="" />
+        <h2>Welcome to Yanshi</h2>
+        <p>Give a task in plain words. Virtual workers plan, act, and show their progress.</p>
+        <div className="onboarding-actions">
+          <button className="primary" onClick={() => void tryDemo()} disabled={busy}>
+            {busy ? <Loader2 className="spin" size={16} /> : "Try a demo"}
+          </button>
+          <button onClick={dismiss} disabled={busy}>
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const TOOL_HINTS: Record<string, string> = {
+  browser: "Use the browser.",
+  computer: "Use the computer.",
+  terminal: "Use the terminal.",
+};
 
 function NewTaskView({ onRuns }: { onRuns: () => void }) {
   const [task, setTask] = useState("");
   const { createRun, loading, error, appSettings, projects, activeProjectId } = useRuntimeStore();
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(appSettings?.permissionModeDefault ?? "default");
   const [selectedProjectId, setSelectedProjectId] = useState(activeProjectId ?? "standalone");
+  const [planFirst, setPlanFirst] = useState(false);
+  const [tools, setTools] = useState<string[]>([]);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const { listening, voiceAvailable, toggleVoice } = useVoiceInput((text) => setTask((prev) => (prev ? `${prev} ${text}` : text)));
 
   useEffect(() => {
     if (appSettings?.permissionModeDefault) setPermissionMode(appSettings.permissionModeDefault);
@@ -174,10 +226,17 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
     }
   }, [projects, selectedProjectId]);
 
+  const toggleTool = (tool: string) =>
+    setTools((prev) => (prev.includes(tool) ? prev.filter((item) => item !== tool) : [...prev, tool]));
+
   const submit = async () => {
     if (!task.trim()) return;
-    await createRun(task, permissionMode, selectedProjectId === "standalone" ? null : selectedProjectId);
+    const directives = tools.map((tool) => TOOL_HINTS[tool]).join(" ");
+    const composed = directives ? `${task.trim()} ${directives}` : task.trim();
+    await createRun(composed, permissionMode, selectedProjectId === "standalone" ? null : selectedProjectId, planFirst);
     setTask("");
+    setTools([]);
+    setPlanFirst(false);
     onRuns();
   };
 
@@ -186,9 +245,32 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
       <div className="composer-wrap">
         <h1>How can Yanshi help you today?</h1>
         <div className="composer">
-          <button className="icon-button" title="Add">
-            <Plus size={18} />
-          </button>
+          <div className="plus-wrap">
+            <button
+              className={plusOpen ? "icon-button active" : "icon-button"}
+              title="Add"
+              onClick={() => setPlusOpen((open) => !open)}
+            >
+              <Plus size={18} />
+            </button>
+            {plusOpen && (
+              <div className="plus-menu" onMouseLeave={() => setPlusOpen(false)}>
+                <button className={planFirst ? "menu-row on" : "menu-row"} onClick={() => setPlanFirst((value) => !value)}>
+                  <ListChecks size={15} /> Plan first {planFirst && <Check size={14} />}
+                </button>
+                <div className="menu-divider" />
+                <button className={tools.includes("browser") ? "menu-row on" : "menu-row"} onClick={() => toggleTool("browser")}>
+                  <Globe size={15} /> Use Browser {tools.includes("browser") && <Check size={14} />}
+                </button>
+                <button className={tools.includes("computer") ? "menu-row on" : "menu-row"} onClick={() => toggleTool("computer")}>
+                  <MonitorSmartphone size={15} /> Use Computer {tools.includes("computer") && <Check size={14} />}
+                </button>
+                <button className={tools.includes("terminal") ? "menu-row on" : "menu-row"} onClick={() => toggleTool("terminal")}>
+                  <TerminalSquare size={15} /> Use Terminal {tools.includes("terminal") && <Check size={14} />}
+                </button>
+              </div>
+            )}
+          </div>
           <textarea
             value={task}
             onChange={(event) => setTask(event.target.value)}
@@ -222,10 +304,28 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
             </select>
             <ChevronDown size={14} />
           </label>
+          <button
+            className={listening ? "icon-button active" : "icon-button"}
+            title={voiceAvailable ? (listening ? "Stop" : "Voice") : "Voice input unavailable"}
+            onClick={toggleVoice}
+            disabled={!voiceAvailable}
+          >
+            <Mic size={18} />
+          </button>
           <button className="send-button" onClick={() => void submit()} disabled={loading || !task.trim()} title="Run">
             {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
           </button>
         </div>
+        {(planFirst || tools.length > 0) && (
+          <div className="composer-flags">
+            {planFirst && <span className="flag-chip">Plan first</span>}
+            {tools.map((tool) => (
+              <span key={tool} className="flag-chip">
+                {tool}
+              </span>
+            ))}
+          </div>
+        )}
         {error && <p className="inline-error">{error}</p>}
         <div className="templates">
           {["Organize files", "Research a topic", "Summarize webpage", "Use computer", "Create report", "Plan my day"].map((label) => (
@@ -237,6 +337,44 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
       </div>
     </section>
   );
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+}
+
+function useVoiceInput(onText: (text: string) => void) {
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const Impl = (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike; SpeechRecognition?: new () => SpeechRecognitionLike })
+    .webkitSpeechRecognition ?? (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition;
+  const voiceAvailable = Boolean(Impl);
+
+  const toggleVoice = () => {
+    if (!Impl) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new Impl();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) onText(transcript.trim());
+    };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  };
+
+  return { listening, voiceAvailable, toggleVoice };
 }
 
 function ProjectsView() {
@@ -317,55 +455,17 @@ function ProjectsView() {
       </div>
       <div className="project-detail">
         {selectedProject ? (
-          <>
-            <header className="view-header">
-              <div>
-                <h2>{selectedProject.name}</h2>
-                <span className="status-pill">{projectRuns.length} runs</span>
-              </div>
-              <div className="icon-actions">
-                <button onClick={() => void saveProject()} disabled={loading || !editName.trim()} title="Save">
-                  <Pencil size={16} />
-                </button>
-                <button className="danger" onClick={() => void removeProject()} disabled={loading} title="Delete">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </header>
-            <div className="settings-form project-edit">
-              <label>
-                Name
-                <input value={editName} onChange={(event) => setEditName(event.target.value)} />
-              </label>
-              <label>
-                Description
-                <input value={editDescription} onChange={(event) => setEditDescription(event.target.value)} />
-              </label>
-            </div>
-            <dl className="runtime-details">
-              <dt>Workspace</dt>
-              <dd>{selectedProject.workspacePath}</dd>
-              <dt>Agents</dt>
-              <dd>{selectedProject.agentTeamId ?? "Not assigned"}</dd>
-              <dt>Office</dt>
-              <dd>{selectedProject.liveOfficeStateId ?? "Not assigned"}</dd>
-            </dl>
-            <div className="event-feed">
-              {projectRuns.length === 0 ? (
-                <article className="event-card">
-                  <span>runs</span>
-                  <p>No runs for this project yet.</p>
-                </article>
-              ) : (
-                projectRuns.map((run) => (
-                  <article key={run.id} className="event-card">
-                    <span>{run.status.replace("_", " ")}</span>
-                    <p>{run.task}</p>
-                  </article>
-                ))
-              )}
-            </div>
-          </>
+          <ProjectWorkspace
+            project={selectedProject}
+            runs={projectRuns}
+            editName={editName}
+            editDescription={editDescription}
+            setEditName={setEditName}
+            setEditDescription={setEditDescription}
+            onSave={saveProject}
+            onDelete={removeProject}
+            loading={loading}
+          />
         ) : (
           <div className="empty-inline">
             <h2>Projects</h2>
@@ -377,10 +477,200 @@ function ProjectsView() {
   );
 }
 
+type ProjectTab = "overview" | "runs" | "files" | "artifacts" | "activity" | "settings";
+
+function ProjectWorkspace({
+  project,
+  runs,
+  editName,
+  editDescription,
+  setEditName,
+  setEditDescription,
+  onSave,
+  onDelete,
+  loading,
+}: {
+  project: import("@yanshi/shared").ProjectSummary;
+  runs: import("@yanshi/shared").RunSummary[];
+  editName: string;
+  editDescription: string;
+  setEditName: (value: string) => void;
+  setEditDescription: (value: string) => void;
+  onSave: () => void;
+  onDelete: () => void;
+  loading: boolean;
+}) {
+  const { events, setActiveRun } = useRuntimeStore();
+  const [tab, setTab] = useState<ProjectTab>("overview");
+  const projectEvents = events.filter((entry) => entry.event.projectId === project.id);
+  const artifacts = projectEvents.filter((entry) => entry.event.type === "artifact.created");
+
+  const tabs: Array<{ id: ProjectTab; label: string }> = [
+    { id: "overview", label: "Overview" },
+    { id: "runs", label: "Runs" },
+    { id: "files", label: "Files" },
+    { id: "artifacts", label: "Artifacts" },
+    { id: "activity", label: "Activity" },
+    { id: "settings", label: "Settings" },
+  ];
+
+  return (
+    <>
+      <header className="view-header">
+        <div>
+          <h2>{project.name}</h2>
+          <span className="status-pill">{runs.length} runs</span>
+        </div>
+      </header>
+      <div className="project-tabs">
+        {tabs.map((item) => (
+          <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <dl className="runtime-details">
+          {project.description && (
+            <>
+              <dt>About</dt>
+              <dd>{project.description}</dd>
+            </>
+          )}
+          <dt>Workspace</dt>
+          <dd>{project.workspacePath}</dd>
+          <dt>Runs</dt>
+          <dd>{runs.length}</dd>
+          <dt>Artifacts</dt>
+          <dd>{artifacts.length}</dd>
+          <dt>Agents</dt>
+          <dd>{project.agentTeamId ? "Project team" : "Global team"}</dd>
+        </dl>
+      )}
+
+      {tab === "runs" && (
+        <div className="event-feed">
+          {runs.length === 0 ? (
+            <p className="transcript-empty">No runs yet.</p>
+          ) : (
+            runs.map((run) => (
+              <button key={run.id} className="event-card" onClick={() => setActiveRun(run.id)} style={{ textAlign: "left" }}>
+                <span>{run.status.replace("_", " ")}</span>
+                <p>{run.task}</p>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === "files" && <ProjectFiles projectId={project.id} />}
+
+      {tab === "artifacts" && (
+        <div className="event-feed">
+          {artifacts.length === 0 ? (
+            <p className="transcript-empty">No artifacts yet.</p>
+          ) : (
+            artifacts.map(({ seq, event }) => (
+              <article key={seq} className="event-card">
+                <span>{String(event.payload.kind ?? "Artifact")}</span>
+                <strong>{String(event.payload.title ?? "Artifact")}</strong>
+                <p>{String(event.payload.summary ?? "")}</p>
+              </article>
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === "activity" && (
+        <div className="event-feed">
+          {projectEvents.length === 0 ? (
+            <p className="transcript-empty">No activity yet.</p>
+          ) : (
+            projectEvents
+              .slice(-40)
+              .reverse()
+              .map(({ seq, event }) => (
+                <article key={seq} className="event-card">
+                  <span>{event.type}</span>
+                  <p>{eventSummary(event.payload)}</p>
+                </article>
+              ))
+          )}
+        </div>
+      )}
+
+      {tab === "settings" && (
+        <>
+          <div className="settings-form project-edit">
+            <label>
+              Name
+              <input value={editName} onChange={(event) => setEditName(event.target.value)} />
+            </label>
+            <label>
+              Description
+              <input value={editDescription} onChange={(event) => setEditDescription(event.target.value)} />
+            </label>
+          </div>
+          <div className="settings-actions">
+            <button onClick={onSave} disabled={loading || !editName.trim()}>
+              Save
+            </button>
+            <button className="danger-text" onClick={onDelete} disabled={loading}>
+              Delete project
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function ProjectFiles({ projectId }: { projectId: string }) {
+  const [files, setFiles] = useState<import("@yanshi/shared").WorkspaceFile[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFiles(null);
+    setError(null);
+    runtimeApi
+      .projectFiles(projectId)
+      .then((result) => {
+        if (cancelled) return;
+        setFiles(result.structuredOutput.items ?? []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load files.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  if (error) return <p className="inline-error">{error}</p>;
+  if (!files) return <p className="muted">Loading files…</p>;
+  if (files.length === 0) return <p className="transcript-empty">No files in this workspace yet.</p>;
+
+  return (
+    <div className="file-list">
+      {files.map((file) => (
+        <div key={file.path} className="file-row">
+          {file.type === "directory" ? <FolderOpen size={15} /> : <FileSearch size={15} />}
+          <span>{file.name}</span>
+          <small>{file.type === "file" && typeof file.size === "number" ? `${file.size} B` : ""}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const TRANSCRIPT_EVENT_TYPES = new Set(["observation.created", "artifact.created"]);
+type RunGrouping = "time" | "project" | "status";
 
 function RunsView() {
-  const { runs, activeRunId, events, approvals, decideApproval, appSettings, loading } = useRuntimeStore();
+  const { runs, activeRunId, events, approvals, decideApproval, appSettings, loading, projects, setActiveRun } = useRuntimeStore();
+  const [grouping, setGrouping] = useState<RunGrouping>("time");
   const run = runs.find((item) => item.id === activeRunId) ?? runs[0];
   const runEvents = events.filter((entry) => !run || entry.event.runId === run.id);
   const developerMode = appSettings?.developerMode ?? false;
@@ -390,16 +680,35 @@ function RunsView() {
   const transcript = runEvents.filter((entry) => TRANSCRIPT_EVENT_TYPES.has(entry.event.type));
   const runApprovals = approvals.filter((approval) => approval.runId === run.id);
   const finished = run.status === "completed" || run.status === "failed";
+  const groups = groupRuns(runs, grouping, projects);
 
   return (
     <section className="workspace-grid">
       <div className="run-list">
-        <h2>Runs</h2>
-        {runs.map((item) => (
-          <article key={item.id} className={item.id === run.id ? "list-row active" : "list-row"}>
-            <strong>{item.task}</strong>
-            <span>{item.status.replace("_", " ")}</span>
-          </article>
+        <div className="run-list-head">
+          <h2>Runs</h2>
+          <div className="group-toggle">
+            {(["time", "project", "status"] as RunGrouping[]).map((option) => (
+              <button key={option} className={grouping === option ? "active" : ""} onClick={() => setGrouping(option)}>
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+        {groups.map((group) => (
+          <div key={group.label} className="run-group">
+            <div className="run-group-label">{group.label}</div>
+            {group.runs.map((item) => (
+              <button
+                key={item.id}
+                className={item.id === run.id ? "list-row active" : "list-row"}
+                onClick={() => setActiveRun(item.id)}
+              >
+                <strong>{item.task}</strong>
+                <span>{item.status.replace("_", " ")}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </div>
       <div className="transcript">
@@ -446,10 +755,7 @@ function RunsView() {
                   <p>{String(event.payload.summary ?? "")}</p>
                 </article>
               ) : (
-                <article key={seq} className={event.payload.error ? "event-card error" : "event-card"}>
-                  <span>{agentLabel(event.payload.agentId ?? event.agentId)}</span>
-                  <p>{eventSummary(event.payload)}</p>
-                </article>
+                <TranscriptMessage key={seq} event={event} developerMode={developerMode} />
               ),
             )
           )}
@@ -554,7 +860,55 @@ function WorkshopView() {
   );
 }
 
+type SettingsSection = "general" | "models" | "permissions" | "live-office" | "workshop" | "notifications" | "about" | "runtime" | "sandbox" | "database";
+
 function SettingsView() {
+  const store = useRuntimeStore();
+  const { appSettings } = store;
+  const developer = appSettings?.developerMode ?? false;
+  const [section, setSection] = useState<SettingsSection>("general");
+
+  const normalSections: Array<{ id: SettingsSection; label: string }> = [
+    { id: "general", label: "General" },
+    { id: "models", label: "Models" },
+    { id: "permissions", label: "Permissions" },
+    { id: "live-office", label: "Live Office" },
+    { id: "workshop", label: "Workshop" },
+    { id: "notifications", label: "Notifications" },
+    { id: "about", label: "About" },
+  ];
+  const devSections: Array<{ id: SettingsSection; label: string }> = [
+    { id: "runtime", label: "Runtime" },
+    { id: "sandbox", label: "Sandbox" },
+    { id: "database", label: "Database" },
+  ];
+  const sections = developer ? [...normalSections, ...devSections] : normalSections;
+  const active = sections.some((item) => item.id === section) ? section : "general";
+
+  return (
+    <section className="settings-layout">
+      <nav className="settings-nav">
+        {normalSections.map((item) => (
+          <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
+            {item.label}
+          </button>
+        ))}
+        {developer && <div className="settings-nav-label">Developer</div>}
+        {developer &&
+          devSections.map((item) => (
+            <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
+              {item.label}
+            </button>
+          ))}
+      </nav>
+      <div className="settings-content">
+        <SettingsSectionView section={active} />
+      </div>
+    </section>
+  );
+}
+
+function SettingsSectionView({ section }: { section: SettingsSection }) {
   const {
     status,
     desktopStatus,
@@ -568,6 +922,7 @@ function SettingsView() {
     loading,
     appSettings,
     macosPermissions,
+    workshopPacks,
   } = useRuntimeStore();
   const [baseUrl, setBaseUrl] = useState(providerSettings?.baseUrl ?? "https://api.openai.com/v1");
   const [model, setModel] = useState(providerSettings?.model ?? "gpt-4o-mini");
@@ -580,147 +935,32 @@ function SettingsView() {
     }
   }, [providerSettings]);
 
-  return (
-    <section className="content-stack">
-      <h2>Settings</h2>
-      <div className="settings-grid">
-        <section>
-          <h3>Runtime</h3>
-          <p>{desktopStatus?.detail ?? status?.details ?? "Checking runtime..."}</p>
-          {desktopStatus && (
-            <div className="settings-actions">
-              <button onClick={() => void restartRuntime()} disabled={loading}>
-                Restart
-              </button>
-              <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus.logPath}>
-                Logs
-              </button>
-            </div>
-          )}
-        </section>
-        <section>
-          <h3>Models</h3>
-          <p>{status?.missingRequirements.includes("model_provider") ? "Provider not configured." : "Provider configured."}</p>
-        </section>
-        <section>
-          <h3>Permissions</h3>
-          <p>{permissionSummary(macosPermissions)}</p>
-          <div className="settings-actions">
-            <button onClick={() => void refreshMacosPermissions()} disabled={loading}>
-              Refresh
-            </button>
-          </div>
-        </section>
-      </div>
-      {macosPermissions && (
-        <section className="settings-panel">
-          <h3>macOS Access</h3>
-          <dl className="runtime-details">
-            <dt>Accessibility</dt>
-            <dd>{permissionLabel(macosPermissions.accessibility)}</dd>
-            <dt>Screen</dt>
-            <dd>{permissionLabel(macosPermissions.screenRecording)}</dd>
-            <dt>Action</dt>
-            <dd>{macosPermissions.requiredAction}</dd>
-          </dl>
-        </section>
-      )}
-      <section className="settings-panel">
-        <h3>Provider</h3>
-        <div className="settings-form">
-          <label>
-            Base URL
-            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} spellCheck={false} />
+  if (!appSettings) return <p className="muted">Loading settings…</p>;
+
+  const toggle = (key: keyof typeof appSettings, label: string, hint?: string) => (
+    <label className="setting-row">
+      <span>
+        {label}
+        {hint && <small>{hint}</small>}
+      </span>
+      <input type="checkbox" checked={Boolean(appSettings[key])} onChange={(event) => void saveAppSettings({ [key]: event.target.checked })} />
+    </label>
+  );
+
+  switch (section) {
+    case "general":
+      return (
+        <div className="settings-panel">
+          <h3>General</h3>
+          <label className="setting-row">
+            <span>Theme</span>
+            <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" })}>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
           </label>
-          <label>
-            Model
-            <input value={model} onChange={(event) => setModel(event.target.value)} spellCheck={false} />
-          </label>
-          <label>
-            API key
-            <input
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={providerSettings?.apiKeyConfigured ? "Configured" : "Not configured"}
-              type="password"
-            />
-          </label>
-        </div>
-        <div className="settings-actions">
-          <button
-            disabled={loading || !baseUrl.trim() || !model.trim()}
-            onClick={() => {
-              void saveProviderSettings({
-                baseUrl: baseUrl.trim(),
-                model: model.trim(),
-                ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-              });
-              setApiKey("");
-            }}
-          >
-            Save
-          </button>
-          <button disabled={loading} onClick={() => void checkProviderHealth()}>
-            Check
-          </button>
-        </div>
-        {providerHealth && <p className={providerHealth.ok ? "status-text ok" : "status-text"}>{providerHealth.detail}</p>}
-      </section>
-      {appSettings && (
-        <section className="settings-panel">
-          <h3>Preferences</h3>
-          <div className="toggle-grid">
-            <label>
-              <span>Developer</span>
-              <input
-                type="checkbox"
-                checked={appSettings.developerMode}
-                onChange={(event) => void saveAppSettings({ developerMode: event.target.checked })}
-              />
-            </label>
-            <label>
-              <span>Live Office</span>
-              <input
-                type="checkbox"
-                checked={appSettings.liveOfficeAutoOpen}
-                onChange={(event) => void saveAppSettings({ liveOfficeAutoOpen: event.target.checked })}
-              />
-            </label>
-            <label>
-              <span>Browser</span>
-              <input
-                type="checkbox"
-                checked={appSettings.browserToolEnabled}
-                onChange={(event) => void saveAppSettings({ browserToolEnabled: event.target.checked })}
-              />
-            </label>
-            <label>
-              <span>Computer</span>
-              <input
-                type="checkbox"
-                checked={appSettings.computerToolEnabled}
-                onChange={(event) => void saveAppSettings({ computerToolEnabled: event.target.checked })}
-              />
-            </label>
-            <label>
-              <span>Terminal</span>
-              <input
-                type="checkbox"
-                checked={appSettings.terminalToolEnabled}
-                onChange={(event) => void saveAppSettings({ terminalToolEnabled: event.target.checked })}
-              />
-            </label>
-            <label>
-              <span>Notify</span>
-              <input
-                type="checkbox"
-                checked={appSettings.notificationsEnabled}
-                onChange={(event) => void saveAppSettings({ notificationsEnabled: event.target.checked })}
-              />
-            </label>
-          </div>
-          <label className="inline-select">
-            Permission
+          <label className="setting-row">
+            <span>Default permission</span>
             <select
               value={appSettings.permissionModeDefault}
               onChange={(event) => void saveAppSettings({ permissionModeDefault: event.target.value as PermissionMode })}
@@ -730,11 +970,138 @@ function SettingsView() {
               <option value="full_access">Full access</option>
             </select>
           </label>
-        </section>
-      )}
-      {appSettings?.developerMode && (
-        <section className="settings-panel">
-          <h3>Docker Sandbox</h3>
+          {toggle("developerMode", "Developer Mode", "Show runtime internals and raw events.")}
+        </div>
+      );
+    case "models":
+      return (
+        <div className="settings-panel">
+          <h3>Models</h3>
+          <p className="muted">{status?.missingRequirements.includes("model_provider") ? "Provider not configured." : "Provider configured."}</p>
+          <div className="settings-form">
+            <label>
+              Base URL
+              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} spellCheck={false} />
+            </label>
+            <label>
+              Model
+              <input value={model} onChange={(event) => setModel(event.target.value)} spellCheck={false} />
+            </label>
+            <label>
+              API key
+              <input
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder={providerSettings?.apiKeyConfigured ? "Configured" : "Not configured"}
+                type="password"
+              />
+            </label>
+          </div>
+          <div className="settings-actions">
+            <button
+              disabled={loading || !baseUrl.trim() || !model.trim()}
+              onClick={() => {
+                void saveProviderSettings({ baseUrl: baseUrl.trim(), model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
+                setApiKey("");
+              }}
+            >
+              Save
+            </button>
+            <button disabled={loading} onClick={() => void checkProviderHealth()}>
+              Check
+            </button>
+          </div>
+          {providerHealth && <p className={providerHealth.ok ? "status-text ok" : "status-text"}>{providerHealth.detail}</p>}
+        </div>
+      );
+    case "permissions":
+      return (
+        <div className="settings-panel">
+          <h3>Permissions</h3>
+          <p className="muted">Allow Yanshi to use these tools during approved tasks.</p>
+          {toggle("browserToolEnabled", "Browser")}
+          {toggle("computerToolEnabled", "Computer")}
+          {toggle("terminalToolEnabled", "Terminal")}
+          {macosPermissions && (
+            <dl className="runtime-details">
+              <dt>Accessibility</dt>
+              <dd>{permissionLabel(macosPermissions.accessibility)}</dd>
+              <dt>Screen</dt>
+              <dd>{permissionLabel(macosPermissions.screenRecording)}</dd>
+            </dl>
+          )}
+          <div className="settings-actions">
+            <button onClick={() => void refreshMacosPermissions()} disabled={loading}>
+              Refresh
+            </button>
+          </div>
+        </div>
+      );
+    case "live-office":
+      return (
+        <div className="settings-panel">
+          <h3>Live Office</h3>
+          {toggle("liveOfficeAutoOpen", "Auto-open on task start")}
+          {toggle("liveOfficeDefaultOpen", "Open by default")}
+        </div>
+      );
+    case "workshop":
+      return (
+        <div className="settings-panel">
+          <h3>Workshop</h3>
+          <p className="muted">{workshopPacks.length} pack{workshopPacks.length === 1 ? "" : "s"} installed.</p>
+        </div>
+      );
+    case "notifications":
+      return (
+        <div className="settings-panel">
+          <h3>Notifications</h3>
+          {toggle("notificationsEnabled", "Desktop notifications")}
+        </div>
+      );
+    case "about":
+      return (
+        <div className="settings-panel">
+          <h3>About</h3>
+          <dl className="runtime-details">
+            <dt>Yanshi</dt>
+            <dd>0.1.0</dd>
+            <dt>Runtime</dt>
+            <dd>{desktopStatus?.launchMode ?? "—"}</dd>
+            <dt>Status</dt>
+            <dd>{status?.details ?? desktopStatus?.detail ?? "—"}</dd>
+          </dl>
+        </div>
+      );
+    case "runtime":
+      return (
+        <div className="settings-panel">
+          <h3>Runtime</h3>
+          <p className="muted">{desktopStatus?.detail ?? status?.details ?? "Checking runtime…"}</p>
+          <dl className="runtime-details">
+            <dt>Mode</dt>
+            <dd>{desktopStatus?.launchMode ?? "—"}</dd>
+            <dt>URL</dt>
+            <dd>{desktopStatus?.runtimeUrl ?? "—"}</dd>
+            <dt>Log</dt>
+            <dd>{desktopStatus?.logPath ?? "Not available"}</dd>
+            <dt>Missing</dt>
+            <dd>{desktopStatus?.missingRequirements.length ? desktopStatus.missingRequirements.join(", ") : "None"}</dd>
+          </dl>
+          <div className="settings-actions">
+            <button onClick={() => void restartRuntime()} disabled={loading}>
+              Restart
+            </button>
+            <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus?.logPath}>
+              Logs
+            </button>
+          </div>
+        </div>
+      );
+    case "sandbox":
+      return (
+        <div className="settings-panel">
+          <h3>Sandbox</h3>
           <div className="settings-form split">
             <label>
               Image
@@ -776,32 +1143,28 @@ function SettingsView() {
                 inputMode="numeric"
                 onBlur={(event) => {
                   const value = Number(event.currentTarget.value);
-                  if (Number.isInteger(value) && value > 0 && value !== appSettings.dockerPidsLimit) {
-                    void saveAppSettings({ dockerPidsLimit: value });
-                  }
+                  if (Number.isInteger(value) && value > 0 && value !== appSettings.dockerPidsLimit) void saveAppSettings({ dockerPidsLimit: value });
                 }}
               />
             </label>
           </div>
-        </section>
-      )}
-      {desktopStatus && (
-        <details className="plan-box">
-          <summary>Runtime details</summary>
+        </div>
+      );
+    case "database":
+      return (
+        <div className="settings-panel">
+          <h3>Database</h3>
           <dl className="runtime-details">
-            <dt>Mode</dt>
-            <dd>{desktopStatus.launchMode}</dd>
-            <dt>URL</dt>
-            <dd>{desktopStatus.runtimeUrl}</dd>
-            <dt>Log</dt>
-            <dd>{desktopStatus.logPath ?? "Not available"}</dd>
-            <dt>Missing</dt>
-            <dd>{desktopStatus.missingRequirements.length ? desktopStatus.missingRequirements.join(", ") : "None"}</dd>
+            <dt>Health</dt>
+            <dd>{status?.status ?? "—"}</dd>
+            <dt>Runtime URL</dt>
+            <dd>{desktopStatus?.runtimeUrl ?? "—"}</dd>
           </dl>
-        </details>
-      )}
-    </section>
-  );
+        </div>
+      );
+    default:
+      return null;
+  }
 }
 
 function DeveloperView() {
@@ -888,6 +1251,34 @@ function LiveOfficePanel({
   );
 }
 
+function TranscriptMessage({ event, developerMode }: { event: import("@yanshi/shared").YanshiEvent; developerMode: boolean }) {
+  const output = (event.payload.structuredOutput ?? {}) as Record<string, unknown>;
+  const entries = Object.entries(output).filter(([, value]) => typeof value !== "object" || value === null);
+  const hasDetails = entries.length > 0 || developerMode;
+  return (
+    <article className={event.payload.error ? "event-card error" : "event-card"}>
+      <span>{agentLabel(event.payload.agentId ?? event.agentId)}</span>
+      <p>{eventSummary(event.payload)}</p>
+      {hasDetails && (
+        <details className="msg-details">
+          <summary>Details</summary>
+          {entries.length > 0 && (
+            <dl className="runtime-details">
+              {entries.map(([key, value]) => (
+                <Fragment key={key}>
+                  <dt>{key}</dt>
+                  <dd>{String(value)}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+          {developerMode && <pre className="msg-raw">{JSON.stringify(event.payload, null, 2)}</pre>}
+        </details>
+      )}
+    </article>
+  );
+}
+
 function EmptyView({ title, text }: { title: string; text: string }) {
   return (
     <section className="empty-view">
@@ -909,6 +1300,28 @@ const AGENT_LABELS: Record<string, string> = {
 function agentLabel(agentId: unknown): string {
   if (typeof agentId === "string" && agentId in AGENT_LABELS) return AGENT_LABELS[agentId];
   return "Yanshi";
+}
+
+function groupRuns(
+  runs: import("@yanshi/shared").RunSummary[],
+  grouping: RunGrouping,
+  projects: import("@yanshi/shared").ProjectSummary[],
+): Array<{ label: string; runs: import("@yanshi/shared").RunSummary[] }> {
+  const buckets = new Map<string, import("@yanshi/shared").RunSummary[]>();
+  const labelFor = (run: import("@yanshi/shared").RunSummary): string => {
+    if (grouping === "status") return run.status.replace("_", " ");
+    if (grouping === "project") return run.projectId ? projects.find((p) => p.id === run.projectId)?.name ?? "Project" : "Standalone";
+    const day = run.createdAt.slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    return day === today ? "Today" : day;
+  };
+  for (const run of runs) {
+    const label = labelFor(run);
+    const list = buckets.get(label) ?? [];
+    list.push(run);
+    buckets.set(label, list);
+  }
+  return [...buckets.entries()].map(([label, list]) => ({ label, runs: list }));
 }
 
 function eventSummary(payload: Record<string, unknown>): string {

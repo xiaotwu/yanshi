@@ -27,6 +27,7 @@ class GraphState(TypedDict, total=False):
     run_id: str
     task: str
     permission_mode: str
+    plan_first: bool
     risk_level: str
     plan: list[str]
     approval_required: bool
@@ -111,9 +112,14 @@ class RuntimeGraph:
         builder.add_edge("finalizer", END)
         return builder.compile(checkpointer=self.checkpointer)
 
-    def start(self, run_id: str, task: str, permission_mode: str) -> dict[str, Any]:
+    def start(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False) -> dict[str, Any]:
         config = {"configurable": {"thread_id": run_id}}
-        state: GraphState = {"run_id": run_id, "task": task, "permission_mode": permission_mode}
+        state: GraphState = {
+            "run_id": run_id,
+            "task": task,
+            "permission_mode": permission_mode,
+            "plan_first": plan_first,
+        }
         return self.graph.invoke(state, config=config)
 
     def resume(self, run_id: str, approved: bool) -> dict[str, Any]:
@@ -209,14 +215,21 @@ class RuntimeGraph:
                 "agent_tasks": queued_assignments,
             }
 
+        plan_first = bool(state.get("plan_first"))
+        requires_approval = decision.requires_approval or plan_first
         approval_id: str | None = None
-        if decision.requires_approval:
+        if requires_approval:
+            request_message = (
+                f"Yanshi needs approval before continuing this {decision.risk_level}-risk task."
+                if decision.requires_approval
+                else "Review the plan before Yanshi starts working."
+            )
             approval = self.storage.create_approval(
                 run_id,
                 "run",
                 run_id,
                 decision.risk_level,
-                f"Yanshi needs approval before continuing this {decision.risk_level}-risk task.",
+                request_message,
             )
             approval_id = approval.id
             self.storage.update_run(run_id, status="pending_approval", plan=plan)
@@ -225,7 +238,7 @@ class RuntimeGraph:
             **state,
             "risk_level": decision.risk_level,
             "plan": plan,
-            "approval_required": decision.requires_approval,
+            "approval_required": requires_approval,
             "approval_id": approval_id,
             "blocked": False,
             "missing_model": not self.provider.configured and not self._can_run_without_model(task),

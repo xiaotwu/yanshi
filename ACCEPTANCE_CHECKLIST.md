@@ -67,4 +67,14 @@
 - [ ] Light / Dark UI works.
 - [x] Standalone Python runtime sidecar (PyInstaller onefile) is bundled into `Yanshi.app/Contents/Resources/resources/` and launches the runtime from a clean environment (no uv, no repo, no venv). Not yet codesigned/notarized for Gatekeeper on a second machine.
 - [x] Provider API key moved out of SQLite to an `apiKeyRef` + off-DB secret store (file store default, opt-in macOS Keychain); legacy inline keys are migrated and VACUUMed from the DB file; settings responses never return the key.
+- [x] Composer has a real Plus menu (Plan first + tool directives) and a real voice button (honest disabled state).
+- [x] Plan-first creates a real approval gate after planning (interrupt/resume), tested.
+- [x] Settings split into grouped normal mode + Developer Mode; theme light/dark works.
+- [x] Runs support grouping (time/project/status) and per-message detail expanders; raw events in Developer Mode only.
+- [x] Projects have a tabbed workspace (Overview/Runs/Files/Artifacts/Activity/Settings) on real data; `/projects/{id}/files` lists the real workspace.
+- [x] First-run onboarding modal with a real demo run; `onboarded` persists.
+- [ ] Automations implemented (create/enable/disable/run history/trigger).
+- [ ] Workshop Create / Agent Editor / Office Editor / pack export.
+- [ ] Live Office hover cards, fatigue, behavior modes, stations, and life animations.
+- [ ] Project-scoped Live Office state + AgentProfile/Instance/Actor3D data models.
 - [ ] No user-facing incomplete core flow remains.

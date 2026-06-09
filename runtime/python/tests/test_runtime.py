@@ -1281,6 +1281,44 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
 
 
+def test_plan_first_forces_approval_then_resumes(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "notes.txt").write_text("hello", encoding="utf-8")
+    client = make_client(tmp_path)
+
+    created = client.post("/runs", json={"task": "List workspace files", "planFirst": True})
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "pending_approval"
+    approvals = client.get("/approvals").json()
+    assert len(approvals) == 1
+    assert "plan" in approvals[0]["request"].lower()
+
+    decided = client.post(f"/approvals/{approvals[0]['id']}/decision", json={"decision": "approved"})
+    assert decided.status_code == 200
+    resumed = client.get(f"/runs/{run_id}").json()
+    assert resumed["status"] == "completed"
+
+
+def test_project_files_endpoint_lists_workspace(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    project = client.post("/projects", json={"name": "Files"}).json()
+    workspace = Path(project["workspacePath"])
+    (workspace / "report.md").write_text("draft", encoding="utf-8")
+
+    response = client.get(f"/projects/{project['id']}/files")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert any(item["name"] == "report.md" for item in body["structuredOutput"]["items"])
+
+    missing = client.get("/projects/proj_missing/files")
+    assert missing.status_code == 404
+
+
 def test_disabled_terminal_tool_returns_tool_disabled(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service

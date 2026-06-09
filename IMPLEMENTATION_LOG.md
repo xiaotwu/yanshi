@@ -481,3 +481,35 @@
   `uv run --project runtime/python pytest` (54 passed), `cargo check`, `cargo test` (10 passed),
   `pnpm --filter @yanshi/desktop tauri build`, and `pnpm desktop:release` (bundled `.app` + `.dmg`).
 - Next: design alignment / UI polish pass against the product design spec, then codesign/notarize.
+
+## Phase: Product surfaces toward full spec (2026-06-08)
+
+Source of truth: docs/Yanshi_Product_Design_Spec.md. Large refactors allowed; no shells/mocks.
+
+- Composer (§10): replaced the dead `+` button with a real Plus menu (Plan first + Use
+  Browser/Computer/Terminal directives that affect routing); added a real voice button using the
+  Web Speech API with an honest disabled state when unavailable; flags chips reflect selections.
+- Plan-first (§10/§11): `CreateRunRequest.planFirst` → graph forces a real approval gate after
+  planning ("Review the plan before Yanshi starts working."), reusing the existing interrupt/resume.
+- Settings (§25/§26): rebuilt into a grouped layout with a left sub-nav — normal mode
+  (General, Models, Permissions, Live Office, Workshop, Notifications, About) and a Developer
+  group (Runtime, Sandbox, Database) shown only when Developer Mode is on. Added Theme (light/dark)
+  with real dark-theme CSS. All actions remain real (provider save/health, restart/logs, tool
+  toggles, docker config, macOS permission refresh).
+- Runs (§11/§13): added grouping (Time / Project / Status), clickable run rows, and a per-message
+  Details expander (concise key/values; raw JSON only in Developer Mode). Hybrid Transcript kept.
+- Projects (§12): rebuilt the detail pane into a tabbed workspace — Overview, Runs, Files,
+  Artifacts, Activity, Settings — all backed by real data. New `GET /projects/{id}/files`
+  endpoint lists the real workspace via FileTool.
+- Onboarding (§24): first-run modal ("Try a demo" runs a real file-scan; "Not now" persists
+  `onboarded`). Added `AppSettings.onboarded` + `theme` with migration-safe defaults.
+- Tests: added plan-first approval-gate test and project-files endpoint test (pytest 56 passed).
+- Verification (all green): pnpm lint/typecheck/build, pytest 56, cargo check, cargo test 10,
+  pnpm desktop:release (rebuilt sidecar + `.app`/`.dmg`). Visually smoke-checked New Task (+ menu),
+  Onboarding, Projects tabs (Overview/Files real data), and grouped Settings via the web UI on the
+  live runtime.
+- Found + fixed during smoke: the previously-built sidecar binary was stale (missing the new
+  settings fields); `desktop:release` rebuilds it. No mocks introduced.
+- Deferred (documented, NOT shipped as shells): Automations, Workshop Create/Agent Editor/Office
+  Editor/export, Live Office life-animations/hover-cards/fatigue/stations/project-scoped state,
+  Search, reasoning levels, file upload, close-behavior prompt, codesign/notarization.

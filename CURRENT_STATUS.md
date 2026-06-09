@@ -78,6 +78,23 @@
 - Tray/global-shortcut/notification behavior still needs manual packaged-app verification.
 - Live Office office editor is not implemented.
 
+## Product Surfaces Progress (2026-06-08, toward full spec)
+
+- Composer: real `+` menu (Plan first + Use Browser/Computer/Terminal directives), real voice
+  button (Web Speech API; honest disabled state), flag chips. Plan-first creates a real approval
+  gate after planning.
+- Settings: grouped normal mode (General, Models, Permissions, Live Office, Workshop, Notifications,
+  About) + Developer group (Runtime, Sandbox, Database). Theme light/dark with real dark CSS.
+- Runs: grouping (Time/Project/Status), clickable rows, per-message Details expander (raw JSON in
+  Developer Mode only). Hybrid Transcript retained.
+- Projects: tabbed workspace (Overview, Runs, Files, Artifacts, Activity, Settings) on real data;
+  new `GET /projects/{id}/files` lists the real workspace.
+- Onboarding: first-run modal with a real "Try a demo" run; persists `onboarded`.
+
+Still not built (deferred, no shells): Automations, Workshop Create/Agent Editor/Office Editor/
+export, Live Office life-animations/hover-cards/fatigue/stations/project-scoped office state,
+Search, reasoning levels, file upload, close-behavior prompt, codesign/notarization.
+
 ## Design / Visual Smoke (2026-06-08)
 
 Checked the running web UI (vite + bundled runtime) against the product design spec:
