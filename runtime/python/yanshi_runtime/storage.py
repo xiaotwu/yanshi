@@ -514,7 +514,7 @@ class Storage:
             "action.created",
             run_id=run_id,
             agent_id=agent_id,
-            payload={"actionId": action_id, "type": action_type, "riskLevel": risk_level},
+            payload={"actionId": action_id, "type": action_type, "riskLevel": risk_level, "input": input_data},
         )
         return action_id
 

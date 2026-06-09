@@ -1382,6 +1382,40 @@ def test_reasoning_level_and_profile_affect_manager_prompt(tmp_path: Path) -> No
     assert "extra_high" in planning_prompt
 
 
+def test_agent_profile_persona_in_file_agent_execution_context(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "n.txt").write_text("x", encoding="utf-8")
+    client = make_client(tmp_path)
+    client.put("/agent-profiles/agent_file", json={"personality": "Tidy-file-signature"})
+
+    created = client.post("/runs", json={"task": "List workspace files"})
+    run_id = created.json()["id"]
+    events = client.get("/events", params={"runId": run_id}).json()
+    actions = [e["event"]["payload"] for e in events if e["event"]["type"] == "action.created"]
+    file_action = next(a for a in actions if a["type"] == "FileAction")
+    assert "Tidy-file-signature" in file_action["input"]["persona"]
+    # Persona is delimited as advisory (prompt-injection separation).
+    assert "advisory" in file_action["input"]["persona"]
+
+
+def test_agent_profile_persona_in_terminal_and_computer_context(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put("/settings", json={"terminalToolEnabled": True})
+    client.put("/agent-profiles/agent_terminal", json={"personality": "Precise-terminal-signature"})
+    client.put("/agent-profiles/agent_computer", json={"personality": "Steady-computer-signature"})
+
+    term = client.post("/runs", json={"task": "Run command `ls` in terminal", "permissionMode": "full_access"})
+    term_events = client.get("/events", params={"runId": term.json()["id"]}).json()
+    term_action = next(e["event"]["payload"] for e in term_events if e["event"]["type"] == "action.created" and e["event"]["payload"]["type"] == "TerminalAction")
+    assert "Precise-terminal-signature" in term_action["input"]["persona"]
+
+    comp = client.post("/runs", json={"task": "Take a computer screenshot", "permissionMode": "auto_review"})
+    comp_events = client.get("/events", params={"runId": comp.json()["id"]}).json()
+    comp_action = next(e["event"]["payload"] for e in comp_events if e["event"]["type"] == "action.created" and e["event"]["payload"]["type"] == "ComputerAction")
+    assert "Steady-computer-signature" in comp_action["input"]["persona"]
+
+
 def test_reasoning_default_comes_from_settings(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service

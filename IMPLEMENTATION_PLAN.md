@@ -80,6 +80,14 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Artifacts: `/artifacts` API + Artifacts page with metadata + `reveal_path` Tauri command.
 - [x] Search: real grouped search across projects/runs/artifacts/packs.
 
+## Persona-everywhere + 2D Office Editor + cleanup (2026-06-09)
+
+- [x] AgentProfile persona injected into every agent type (advisory, prompt-injection-separated); tests.
+- [x] Office Editor upgraded to a real visual 2D drag canvas (stations + areas + snap + reset), persisted.
+- [x] Fixed `capture_screen` permission-path crash bug.
+- [x] Rewrote ACCEPTANCE_CHECKLIST into clean categories; packaged non-interactive verification recorded.
+- [ ] Pending: App.tsx → features/* split; Office furniture/path editing; interactive packaged verification.
+
 ## Persistence + Upload + Close-prompt + Q-style workers (2026-06-08)
 
 - [x] AgentInstance + AgentActor3D persistence (tables, endpoints, runtime updates, restart survival, tests).

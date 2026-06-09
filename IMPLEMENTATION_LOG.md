@@ -626,3 +626,29 @@ Signature product features, all real (no mocks):
   binary). No-mock audit clean.
 - Honestly deferred this session: drag-drop 2D/2.5D Office Editor; App.tsx → features/* split;
   interactive packaged Computer click/type/shortcut + Docker smokes; codesign/notarization.
+
+## Phase: Persona-everywhere + 2D Office Editor + final cleanup (2026-06-09)
+
+- AgentProfile persona injected into every agent type: Manager/Browser via LLM system prompts;
+  File/Computer/Terminal/Reviewer via the recorded action `input.persona` (execution context,
+  Developer-Mode visible — action.created events now carry `input`). Persona is wrapped as a
+  delimited *advisory* section so user-edited profiles can't override instructions/safety
+  (prompt-injection separation). Tests: File + Terminal + Computer persona present.
+- Fixed a real latent bug: `ComputerTool.capture_screen` called `_status_result(status)` without the
+  required `needs_screen_recording` kwarg, crashing the screenshot path when permission is missing;
+  now returns the honest permission-required state.
+- Office Editor upgraded to a real visual 2D drag canvas (SVG): draggable station dots, area blocks
+  (rest/coffee/break/meeting/workshop), snap-to-grid toggle, reset, persists `stationLayout` to
+  LiveOfficeState (drives Live Office), exports via Workshop pack. Verified: dragging Manager
+  persisted `[-1.4, -2.0]` to the office state.
+- Docs: rewrote ACCEPTANCE_CHECKLIST.md into clean categories (complete / partial / manual-verify /
+  release-only) with no contradictions.
+- Packaged verification (this machine, non-interactive): `.app` launches `mode=bundled-sidecar`;
+  Computer bridge rejects unauthorized (401); runtime task → native `open-app TextEdit` completed;
+  6 AgentInstances persisted in the packaged app. Interactive checks (click/type/shortcut/screenshot
+  need Accessibility/Screen-Recording grant; Docker needs the daemon; tray/notifications/shortcuts
+  need a human) remain pending and are recorded honestly.
+- Verification: pnpm lint/typecheck/build green; pytest 72 passed (+3); cargo test 10 passed;
+  pnpm desktop:release rebuilt sidecar + bundles. No-mock audit clean.
+- Deferred honestly: App.tsx → features/* split (large; would risk the green build this session);
+  furniture/path/collision editing in the Office Editor; modelled worker art; codesign/notarization.

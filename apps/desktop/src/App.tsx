@@ -1274,9 +1274,140 @@ function AgentEditor() {
   );
 }
 
+const OFFICE_WORLD = { minX: -3.5, maxX: 3.5, minZ: -2.5, maxZ: 2.5 };
+const OFFICE_SVG = { w: 700, h: 500 };
+const STATION_DEFAULTS: Record<string, [number, number]> = {
+  manager: [-2.4, -0.6],
+  browser: [-0.9, -1.3],
+  computer: [0.9, -1.3],
+  file: [2.4, -0.6],
+  reviewer: [0, 1.0],
+  terminal: [2.2, 1.2],
+};
+const OFFICE_AREAS = [
+  { id: "coffee", x: -2.7, z: 1.4, label: "Coffee" },
+  { id: "rest", x: -2.8, z: -1.7, label: "Rest" },
+  { id: "break", x: 2.8, z: -1.7, label: "Break" },
+  { id: "meeting", x: 0, z: -0.1, label: "Meeting" },
+  { id: "workshop", x: 2.7, z: 1.7, label: "Workshop" },
+];
+const STATION_COLORS: Record<string, string> = {
+  manager: "#1faa6a",
+  browser: "#3f7fb0",
+  computer: "#9a5b2d",
+  file: "#5b8d55",
+  reviewer: "#b65c2f",
+  terminal: "#6a6f86",
+};
+
+function worldToSvg(x: number, z: number): [number, number] {
+  return [
+    ((x - OFFICE_WORLD.minX) / (OFFICE_WORLD.maxX - OFFICE_WORLD.minX)) * OFFICE_SVG.w,
+    ((z - OFFICE_WORLD.minZ) / (OFFICE_WORLD.maxZ - OFFICE_WORLD.minZ)) * OFFICE_SVG.h,
+  ];
+}
+
+function OfficeLayoutCanvas({
+  layout,
+  snap,
+  onCommit,
+}: {
+  layout: Record<string, number[]>;
+  snap: boolean;
+  onCommit: (station: string, pos: [number, number]) => void;
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [positions, setPositions] = useState<Record<string, [number, number]>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next: Record<string, [number, number]> = {};
+    for (const station of STATION_OPTIONS) {
+      const override = layout[station];
+      next[station] = override && override.length >= 2 ? [override[0], override[1]] : STATION_DEFAULTS[station];
+    }
+    setPositions(next);
+  }, [layout]);
+
+  const pointerToWorld = (event: { clientX: number; clientY: number }): [number, number] => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const sx = ((event.clientX - rect.left) / rect.width) * OFFICE_SVG.w;
+    const sy = ((event.clientY - rect.top) / rect.height) * OFFICE_SVG.h;
+    let x = (sx / OFFICE_SVG.w) * (OFFICE_WORLD.maxX - OFFICE_WORLD.minX) + OFFICE_WORLD.minX;
+    let z = (sy / OFFICE_SVG.h) * (OFFICE_WORLD.maxZ - OFFICE_WORLD.minZ) + OFFICE_WORLD.minZ;
+    if (snap) {
+      x = Math.round(x / 0.2) * 0.2;
+      z = Math.round(z / 0.2) * 0.2;
+    }
+    x = Math.min(OFFICE_WORLD.maxX - 0.3, Math.max(OFFICE_WORLD.minX + 0.3, x));
+    z = Math.min(OFFICE_WORLD.maxZ - 0.3, Math.max(OFFICE_WORLD.minZ + 0.3, z));
+    return [Math.round(x * 100) / 100, Math.round(z * 100) / 100];
+  };
+
+  return (
+    <svg
+      ref={svgRef}
+      className="office-canvas-2d"
+      viewBox={`0 0 ${OFFICE_SVG.w} ${OFFICE_SVG.h}`}
+      preserveAspectRatio="xMidYMid meet"
+      onPointerMove={(event) => {
+        if (!dragging) return;
+        const pos = pointerToWorld(event);
+        setPositions((prev) => ({ ...prev, [dragging]: pos }));
+      }}
+      onPointerUp={() => {
+        if (dragging) onCommit(dragging, positions[dragging]);
+        setDragging(null);
+      }}
+      onPointerLeave={() => {
+        if (dragging) onCommit(dragging, positions[dragging]);
+        setDragging(null);
+      }}
+    >
+      {Array.from({ length: 8 }).map((_, i) => (
+        <line key={`v${i}`} x1={(i / 7) * OFFICE_SVG.w} y1={0} x2={(i / 7) * OFFICE_SVG.w} y2={OFFICE_SVG.h} className="grid-line" />
+      ))}
+      {Array.from({ length: 6 }).map((_, i) => (
+        <line key={`h${i}`} x1={0} y1={(i / 5) * OFFICE_SVG.h} x2={OFFICE_SVG.w} y2={(i / 5) * OFFICE_SVG.h} className="grid-line" />
+      ))}
+      {OFFICE_AREAS.map((area) => {
+        const [cx, cy] = worldToSvg(area.x, area.z);
+        return (
+          <g key={area.id}>
+            <rect x={cx - 48} y={cy - 26} width={96} height={52} rx={10} className="office-area" />
+            <text x={cx} y={cy + 4} className="office-area-label">
+              {area.label}
+            </text>
+          </g>
+        );
+      })}
+      {STATION_OPTIONS.map((station) => {
+        const pos = positions[station] ?? STATION_DEFAULTS[station];
+        const [cx, cy] = worldToSvg(pos[0], pos[1]);
+        return (
+          <g
+            key={station}
+            transform={`translate(${cx} ${cy})`}
+            className={dragging === station ? "office-station dragging" : "office-station"}
+            onPointerDown={(event) => {
+              (event.target as Element).setPointerCapture?.(event.pointerId);
+              setDragging(station);
+            }}
+          >
+            <circle r={18} fill={STATION_COLORS[station]} />
+            <text y={32} className="office-station-label">
+              {station}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function OfficeEditor() {
   const { officeState, saveOfficeState, loadOfficeState } = useRuntimeStore();
-  const [busy, setBusy] = useState(false);
+  const [snap, setSnap] = useState(true);
 
   useEffect(() => {
     if (!officeState) void loadOfficeState(null);
@@ -1284,19 +1415,15 @@ function OfficeEditor() {
 
   if (!officeState) return <p className="muted">Loading office…</p>;
 
-  const setLayout = (station: string, axis: 0 | 1, value: number) => {
-    const current = officeState.stationLayout[station] ?? [0, 0];
-    const next = [...current];
-    next[axis] = value;
-    void saveOfficeState(null, { stationLayout: { ...officeState.stationLayout, [station]: next } });
-  };
+  const commit = (station: string, pos: [number, number]) =>
+    void saveOfficeState(null, { stationLayout: { ...officeState.stationLayout, [station]: pos } });
 
   return (
     <div className="office-editor">
       <div className="office-editor-grid">
         <label className="setting-row">
           <span>Behavior</span>
-          <select value={officeState.behaviorMode} onChange={(event) => { setBusy(true); void saveOfficeState(null, { behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode }).finally(() => setBusy(false)); }}>
+          <select value={officeState.behaviorMode} onChange={(event) => void saveOfficeState(null, { behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode })}>
             {BEHAVIOR_OPTIONS.map((mode) => (
               <option key={mode} value={mode}>
                 {mode}
@@ -1312,32 +1439,18 @@ function OfficeEditor() {
           </select>
         </label>
       </div>
-      <h3 style={{ marginTop: 16 }}>Station layout</h3>
-      <div className="layout-grid">
-        {STATION_OPTIONS.map((station) => {
-          const pos = officeState.stationLayout[station] ?? [];
-          return (
-            <Fragment key={station}>
-              <span style={{ textTransform: "capitalize" }}>{station}</span>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="x"
-                defaultValue={pos[0] ?? ""}
-                onBlur={(event) => event.target.value !== "" && setLayout(station, 0, Number(event.target.value))}
-              />
-              <input
-                type="number"
-                step="0.1"
-                placeholder="z"
-                defaultValue={pos[1] ?? ""}
-                onBlur={(event) => event.target.value !== "" && setLayout(station, 1, Number(event.target.value))}
-              />
-            </Fragment>
-          );
-        })}
+      <div className="office-editor-toolbar">
+        <span className="muted">Drag stations to lay out the office.</span>
+        <div className="office-editor-actions">
+          <button className={snap ? "ghost-button on" : "ghost-button"} onClick={() => setSnap((value) => !value)}>
+            Snap {snap ? "on" : "off"}
+          </button>
+          <button className="ghost-button" onClick={() => void saveOfficeState(null, { stationLayout: {} })}>
+            Reset layout
+          </button>
+        </div>
       </div>
-      {busy && <p className="muted">Saving…</p>}
+      <OfficeLayoutCanvas layout={officeState.stationLayout} snap={snap} onCommit={commit} />
     </div>
   );
 }

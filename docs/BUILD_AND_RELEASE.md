@@ -71,6 +71,18 @@ warning until codesigning + notarization are added.
 - Pending interactive step: grant **System Settings → Privacy & Security → Accessibility →
   Yanshi** to verify `click`/`type`/`shortcut` (these require Accessibility; `open-app` does not).
 
+### Verification record (2026-06-09, re-confirmed)
+
+- `pnpm desktop:release` produced `Yanshi.app` + `.dmg`; packaged app launched `mode=bundled-sidecar`,
+  `/health` ok, `computer bridge listening …`.
+- Computer bridge `open-app` end-to-end → "Computer bridge opened TextEdit." (completed); bridge
+  rejects unauthorized requests (401). 6 AgentInstances persisted in the packaged app.
+- Office Editor 2D drag verified in dev: dragging a station persisted `stationLayout` to the office
+  state and drives Live Office.
+- **Still pending (interactive / environment):** Computer `click/type/shortcut` (Accessibility) and
+  `screenshot` (Screen Recording); Docker command smoke (Docker daemon + pre-pulled image);
+  tray/notifications/global-shortcuts/close-prompt in the packaged app.
+
 ## Automations
 
 The runtime persists automations (`automations` + `automation_runs` tables). A background

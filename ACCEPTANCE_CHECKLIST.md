@@ -1,91 +1,53 @@
 # Acceptance Checklist
 
-- [x] App builds.
-- [x] Runtime can start alongside desktop app.
-- [x] REST API works.
-- [x] WebSocket event stream works.
-- [x] SQLite persistence works.
-- [x] LangGraph checkpointing works.
-- [x] Agent run creation works.
-- [x] Action / Observation model works.
-- [x] Approval flow pauses and resumes in runtime tests.
-- [x] File tool uses real workspace sandbox.
-- [x] Browser tool has a real not-configured state.
-- [x] Browser tool has a Playwright execution path with action/observation/artifact records.
-- [x] Browser tool is manually verified with installed Playwright Chromium.
-- [x] Browser summarization uses a configured provider after real page capture.
-- [x] Computer Use has real macOS permission probes and a bridge-missing state.
-- [x] Computer Use can capture the screen through a real macOS command and persist a PNG artifact when permission is granted.
-- [x] Tauri exposes real macOS click/type/shortcut/open-app bridge commands.
-- [x] Runtime Computer Tool calls a configured bridge for click/type/shortcut/open-app and reports missing bridge honestly.
-- [x] Terminal / Docker sandbox shows a real Docker-required/readiness state.
-- [x] Terminal Tool executes read-only workspace commands safely.
-- [x] Docker-backed sandbox path uses Docker CLI with workspace bind mount, no network, resource limits, timeout, and log artifacts.
-- [x] Terminal Tool supports approved mutating commands in an isolated Docker sandbox path.
-- [x] Real OpenAI-compatible provider client works in runtime tests.
-- [x] Provider settings persist without returning API keys.
-- [x] App settings persist real state.
-- [x] Projects work for CRUD, project-scoped runs, and project-scoped workspaces.
-- [x] New Task page works.
-- [x] Composer can create a real runtime run.
-- [x] Composer can create project-scoped runs.
-- [x] Runs and Run Details work for implemented run data.
-- [x] Workshop validation rejects unsafe packs.
-- [x] Workshop upload filenames are basename-sanitized.
-- [x] Workshop validation rejects zip bombs, oversized uploads, oversized members, too many files, unsafe paths, executables, and symlinks.
-- [x] Workshop imports valid packs after validation.
-- [x] Workshop enables/disables installed packs with persisted state.
-- [x] Live Office consumes real events.
-- [x] Live Office is lazy-loaded and can be default closed.
-- [x] Live Office auto-opens on real run start when enabled.
-- [x] Live Office can be closed during a run.
-- [x] Live Office has Full Office View, queue bubbles, and a pop-out always-on-top window path.
-- [x] Settings normal mode is concise and backed by runtime status.
-- [x] Developer Mode exposes real runtime state/events.
-- [x] Developer Mode persists Docker image/resource limit settings.
-- [x] Tauri CSP is tightened.
-- [x] Build/release docs document setup-required runtime packaging status.
-- [x] Build passes.
-- [x] Tauri release build passes and produces `.app` and `.dmg`.
-- [x] Tests pass for implemented suites.
-- [x] App has been manually launched as the packaged `.app` (runtime came up in `mode=bundled-sidecar`; `/health` returned ok).
-- [x] Manager performs provider-backed structured planning for general provider tasks.
-- [x] Agent queues are persisted and project/agent filterable.
-- [x] Manager executes queued multi-agent plans with several live tool agents in one run.
-- [x] Runtime launch injects a concrete Computer bridge transport URL + bearer token for runtime control actions (localhost server, random port, per-launch token; Rust + Python tests).
-- [x] Computer bridge rejects missing/invalid bearer tokens (HTTP 401) and unknown operations (404).
-- [x] Computer Use `open-app` verified end-to-end in the packaged app: runtime task → bridge (bearer token) → native `open -a TextEdit`, returnCode 0, run completed. Bridge also returns 401 for no-token/bad-token requests.
-- [ ] Computer Use `click/type/shortcut` manually verified in the packaged app — pending a one-time macOS Accessibility grant to Yanshi.app (interactive; steps in BUILD_AND_RELEASE.md).
-- [x] Docker sandbox uses persisted Developer settings (`dockerImage/dockerMemory/dockerCpus/dockerPidsLimit`) and returns `docker_config_invalid` for unsafe values (tests added).
-- [x] Tool-availability settings enforced: disabled Browser/Computer/Terminal tasks return an honest `tool_disabled` observation (tests added).
-- [ ] Docker-backed sandbox has been manually smoked to successful command completion with the configured image available.
-- [ ] Workshop exports valid packs.
-- [ ] Menubar/tray works fully in manual packaged-app verification.
-- [x] Notifications are wired for runtime events.
-- [ ] Notifications are manually verified on macOS.
-- [ ] Global shortcuts are manually verified in the desktop app.
-- [x] System / Light / Dark theme works (tokenized; no beige; green accent; OS detection); verified light + dark.
-- [x] Reasoning levels (Low/Medium/High/Extra) persist and affect Manager planning; shown in Composer.
-- [x] AgentProfile personality/prompt injected into Manager/Browser execution prompts (Agent Editor affects runtime).
-- [x] Standalone Python runtime sidecar (PyInstaller onefile) is bundled into `Yanshi.app/Contents/Resources/resources/` and launches the runtime from a clean environment (no uv, no repo, no venv). Not yet codesigned/notarized for Gatekeeper on a second machine.
-- [x] Provider API key moved out of SQLite to an `apiKeyRef` + off-DB secret store (file store default, opt-in macOS Keychain); legacy inline keys are migrated and VACUUMed from the DB file; settings responses never return the key.
-- [x] Composer has a real Plus menu (Plan first + tool directives) and a real voice button (honest disabled state).
-- [x] Plan-first creates a real approval gate after planning (interrupt/resume), tested.
-- [x] Settings split into grouped normal mode + Developer Mode; theme light/dark works.
-- [x] Runs support grouping (time/project/status) and per-message detail expanders; raw events in Developer Mode only.
-- [x] Projects have a tabbed workspace (Overview/Runs/Files/Artifacts/Activity/Settings) on real data; `/projects/{id}/files` lists the real workspace.
-- [x] First-run onboarding modal with a real demo run; `onboarded` persists.
-- [x] Automations implemented (create/enable/disable/Run now/run history/interval trigger + real scheduler), tested.
-- [x] Search is a real grouped search across projects/runs/artifacts/packs (no placeholder).
-- [x] Artifacts page lists real artifacts with metadata; Reveal-in-Finder via Tauri (desktop-only).
-- [x] Workshop Agent Editor (edit/save AgentProfiles), Office Editor (theme/behavior/camera/layout), Create + real pack export (re-importable), tested.
-- [x] Live Office hover cards, queue bubbles, fatigue, behavior modes, stations, and life/idle animations — driven by real runtime state.
-- [x] Project-scoped Live Office state (`live_office_state` table + project Live Office tab) and AgentProfile data model (`agent_profiles` table, seeded, editable).
-- [ ] Full drag-and-drop 3D Office Editor (current first version is a numeric station-layout editor per spec allowance).
-- [ ] AgentInstance / AgentActor3D persisted tables (Live Office actor state currently derived live from events).
-- [x] AgentInstance + AgentActor3D persisted (project-scoped + standalone), updated from real run events, survive app restart; tested.
-- [x] Composer file upload copies into the workspace safely (basename sanitize + size limit), shows chips, removable, File Agent can scan them; tested.
-- [x] Close-with-active-runs prompt (Pause and quit / Keep running / Cancel); pause is real, keep-running hides to tray, cancel aborts close.
-- [x] Live Office workers upgraded to Q-style mechanical figures with role props + status/life states.
-- [ ] Office Editor is a drag-drop visual 2D/2.5D editor (current: real numeric station-layout editor).
-- [ ] No user-facing incomplete core flow remains.
+_Clean snapshot, 2026-06-09. Categories: ✅ complete · 🟡 partial · 🔍 manual-verify pending ·
+🚀 release-only pending. No contradictory entries — superseded items were removed._
+
+## ✅ Complete (real, automated-tested where applicable)
+
+- App + bundled runtime sidecar launch (`bundled-sidecar` mode, no uv/repo dependency).
+- REST + WebSocket, SQLite persistence, LangGraph runtime, Action/Observation model.
+- OpenAI-compatible provider; API key as `apiKeyRef` in off-DB secret store; never in
+  responses/logs/events.
+- Computer bridge (localhost, random port, bearer token; token never logged).
+- Multi-agent queue execution; Manager planning/synthesis; Reviewer; approval interrupt/resume.
+- Reasoning levels persisted + per-run override → Manager planning depth.
+- AgentProfile persona injected into **all** agent execution contexts (Manager/Browser LLM prompts;
+  File/Computer/Terminal/Reviewer action context), delimited as advisory (prompt-injection separation).
+- Tools: File, Browser (Playwright), Computer (screenshot + bridge click/type/shortcut/open-app),
+  Terminal/Docker. Tool toggles enforced; Docker settings validated + applied.
+- Data model: Project / Run / Action / Observation / Approval / Artifact / WorkshopPack /
+  Automation / AgentProfile / LiveOfficeState / AgentInstance / AgentActor3D. Project-scoped agent
+  teams + office state persist and survive restart.
+- New Task / Composer: `+` menu (upload/plan-first/tool directives), reasoning chip, permission +
+  project chips, voice, file upload with chips, templates.
+- Runs grouping + Hybrid Transcript (raw events Developer-only).
+- Projects tabbed workspace (Overview/Runs/Files/Artifacts/Automations/Live Office/Activity/Settings).
+- Search (grouped, real). Artifacts (list + metadata + Reveal). Automations (CRUD + Run now +
+  interval scheduler). Workshop (Installed / Agent Editor / Office Editor / Create+Export).
+- Office Editor: visual 2D drag canvas (draggable stations, areas, snap, reset) persisting real
+  layout that drives Live Office; export/import via Workshop pack.
+- Live Office: Q-style mechanical workers with role props, hover cards, queue bubbles, fatigue,
+  behavior modes, life animations, camera modes, theme-aware; mini/full/pop-out; persisted actors.
+- Settings: grouped normal + Developer Mode; System/Light/Dark theme (tokenized, green accent, no beige).
+- Onboarding; tray/menu; notifications; global shortcut; close-with-active-runs prompt.
+- Verification: pnpm lint/typecheck/build green; pytest 72 passed; cargo test 10 passed;
+  `pnpm desktop:release` builds `.app` + `.dmg` (bundled sidecar verified serving new endpoints).
+
+## 🟡 Partial (real first version)
+
+- Office Editor edits stations + areas; furniture/path/collision metadata are not yet editable.
+- Live Office workers are procedural (not modelled art assets).
+- `apps/desktop/src/App.tsx` is still a single large file (feature split pending).
+
+## 🔍 Manual verification pending (interactive / environment-limited)
+
+- Packaged Computer `click` / `type` / `shortcut` (need a one-time macOS Accessibility grant).
+- Computer `screenshot` (needs Screen Recording grant).
+- Docker command completion (needs Docker Desktop running + pre-pulled image).
+- Tray actions / notifications / global shortcuts / close-prompt / Light-Dark-System in the
+  packaged `.app` (functional in dev; need a packaged interactive pass).
+
+## 🚀 Release-only pending
+
+- Codesign (Developer ID) + notarization + stapling for distribution beyond the build machine.

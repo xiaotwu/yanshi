@@ -4,11 +4,9 @@ _Clean list as of 2026-06-08. Completed work is in IMPLEMENTATION_LOG.md / CURRE
 
 ## Remaining product gaps
 
-- [ ] Office Editor: upgrade the numeric station-layout editor to a drag-drop 2D/2.5D canvas
-      (furniture/area/path/collision metadata; save/apply/export).
+- [ ] Office Editor: add furniture placement + path/collision metadata (stations + areas done).
 - [ ] Live Office: replace procedural mechanical figures with modelled Q-style worker assets;
       add more task-state/life animations.
-- [ ] Inject AgentProfile prompt/personality into every agent's execution (currently Manager + Browser).
 - [ ] Split `apps/desktop/src/App.tsx` into `features/*` + `components/*` per spec §7.
 
 ## Manual verification (interactive / environment)

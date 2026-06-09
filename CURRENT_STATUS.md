@@ -1,6 +1,6 @@
 # Current Status
 
-_Last updated: 2026-06-08. This is a clean snapshot; phase history lives in IMPLEMENTATION_LOG.md._
+_Last updated: 2026-06-09. This is a clean snapshot; phase history lives in IMPLEMENTATION_LOG.md._
 
 ## Complete (real, tested, no mocks)
 
@@ -15,7 +15,7 @@ _Last updated: 2026-06-08. This is a clean snapshot; phase history lives in IMPL
 **Agents & execution**
 - Multi-agent queue execution; Manager planning/synthesis; Reviewer reviews; approval interrupt/resume.
 - Reasoning levels (Low/Medium/High/Extra) persisted + per-run override, affect Manager planning.
-- AgentProfile personality/prompt injected into Manager/Browser execution prompts.
+- AgentProfile persona injected into all agent execution contexts (advisory, prompt-injection-separated).
 - Tools: File, Browser (Playwright), Computer (screenshot + bridge click/type/shortcut/open-app),
   Terminal/Docker sandbox. Tool-availability toggles enforced (`tool_disabled`). Docker settings
   validated + applied (`docker_config_invalid`).
@@ -45,21 +45,29 @@ _Last updated: 2026-06-08. This is a clean snapshot; phase history lives in IMPL
 
 ## Partial / honest first version
 
-- **Office Editor**: real persisted editor (theme, behavior, camera, numeric station layout applied
-  to Live Office) — not yet a drag-drop 2D/2.5D canvas.
+- **Office Editor**: real visual 2D drag canvas (draggable stations + area blocks + snap + reset),
+  persists layout that drives Live Office, exports as pack. Furniture/path/collision editing not yet.
 - **Live Office workers**: Q-style procedural mechanical figures (not modelled art assets).
-- **AgentProfile → runtime**: personality/prompt injected into Manager/Browser; not yet every agent.
+- **AgentProfile → runtime**: persona injected into **all** agent execution contexts (Manager/Browser
+  LLM prompts; File/Computer/Terminal/Reviewer action context), delimited as advisory.
 
-## Manual verification pending (interactive / environment-limited)
+## Packaged verification (2026-06-09, this machine)
 
-- Packaged Computer `click/type/shortcut` (needs a one-time macOS Accessibility grant).
+Non-interactive checks **passed** in the packaged `.app`: bundled runtime starts
+(`mode=bundled-sidecar`); Computer bridge rejects unauthorized requests (401); a runtime task drove
+native `open-app TextEdit` to completion through the bridge; 6 AgentInstances persisted.
+
+Still pending (interactive / environment-limited):
+- Computer `click/type/shortcut` (one-time macOS Accessibility grant) and `screenshot`
+  (Screen Recording grant).
 - Docker command smoke (needs Docker Desktop running + image pre-pulled).
-- Tray actions / notifications / global shortcuts in the packaged `.app`.
+- Tray actions / notifications / global shortcuts / close-prompt / Light-Dark-System in the
+  packaged `.app` (functional in dev; need a packaged interactive pass).
 
 ## Not done (optional polish)
 
-- Drag-drop 2D/2.5D Office Editor; `App.tsx` split into `features/*`; modelled worker art;
-  codesign + notarization (guide in docs/BUILD_AND_RELEASE.md).
+- `App.tsx` split into `features/*`; Office Editor furniture/path/collision editing; modelled worker
+  art; codesign + notarization (guide in docs/BUILD_AND_RELEASE.md).
 
 ## Build / run
 
@@ -69,7 +77,7 @@ _Last updated: 2026-06-08. This is a clean snapshot; phase history lives in IMPL
 
 ## Tests
 
-- Python: `uv run --project runtime/python pytest` — 70 passed.
+- Python: `uv run --project runtime/python pytest` — 72 passed.
 - Rust: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` — 10 passed.
 - JS: lint/typecheck/build green (no JS unit tests yet).
 

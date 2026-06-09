@@ -147,7 +147,7 @@ class ComputerTool:
     def capture_screen(self, output_dir: Path, timeout_seconds: int = 15) -> ToolResult:
         status = self.probe.status()
         if not status.granted:
-            return self._status_result(status)
+            return self._status_result(status, needs_screen_recording=True)
 
         output_dir.mkdir(parents=True, exist_ok=True)
         screenshot_path = output_dir / "computer-screen.png"

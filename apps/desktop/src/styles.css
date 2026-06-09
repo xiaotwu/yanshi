@@ -1541,3 +1541,73 @@ button.list-row {
 .file-chip button:hover {
   opacity: 1;
 }
+
+/* Office Editor 2D canvas */
+.office-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 8px;
+}
+
+.office-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ghost-button.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.office-canvas-2d {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 7 / 5;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  touch-action: none;
+}
+
+.office-canvas-2d .grid-line {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.office-canvas-2d .office-area {
+  fill: var(--accent-soft);
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.office-canvas-2d .office-area-label {
+  fill: var(--text-muted);
+  font-size: 13px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.office-canvas-2d .office-station {
+  cursor: grab;
+}
+
+.office-canvas-2d .office-station.dragging {
+  cursor: grabbing;
+}
+
+.office-canvas-2d .office-station circle {
+  stroke: var(--surface-elevated);
+  stroke-width: 3;
+}
+
+.office-canvas-2d .office-station-label {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  text-anchor: middle;
+  text-transform: capitalize;
+  pointer-events: none;
+}
