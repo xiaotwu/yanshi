@@ -1226,6 +1226,7 @@ fn bundled_sidecar_candidates(resource_dir: &Path) -> Vec<PathBuf> {
         resource_dir.join("yanshi-runtime-sidecar"),
         resource_dir.join("bin").join("yanshi-runtime-sidecar"),
         resource_dir.join("runtime").join("yanshi-runtime-sidecar"),
+        resource_dir.join("resources").join("yanshi-runtime-sidecar"),
     ]
 }
 

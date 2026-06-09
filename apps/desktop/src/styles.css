@@ -475,6 +475,29 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.event-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.event-card.error span {
+  color: #ad3f42;
+}
+
+.event-card.final {
+  border-color: #cdb79b;
+  background: #fbf6ee;
+}
+
+.event-card.final span {
+  color: #277f71;
+}
+
+.transcript-empty {
+  color: #8a7a64;
+  font-size: 14px;
+}
+
 .approval-card {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto auto;

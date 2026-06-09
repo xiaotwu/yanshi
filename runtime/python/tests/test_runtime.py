@@ -820,6 +820,7 @@ def test_terminal_run_records_action_observation_and_stdout(tmp_path: Path) -> N
     (workspace / "terminal-note.txt").write_text("hello", encoding="utf-8")
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
+    client.put("/settings", json={"terminalToolEnabled": True})
 
     created = client.post(
         "/runs",
@@ -917,6 +918,7 @@ def test_docker_run_records_terminal_log_artifact(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
     service.graph.terminal_tool = TerminalTool(runner=runner)
+    client.put("/settings", json={"terminalToolEnabled": True})
 
     created = client.post(
         "/runs",
@@ -1277,6 +1279,207 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert body["dockerCpus"] == "2"
     assert body["dockerPidsLimit"] == 256
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
+
+
+def test_disabled_terminal_tool_returns_tool_disabled(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    # terminalToolEnabled defaults to False; leave it off.
+
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `ls` in terminal", "permissionMode": "full_access"},
+    )
+
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    terminal_observation = next(observation for observation in observations if observation["type"] == "TerminalObservation")
+    assert terminal_observation["error"] == "tool_disabled"
+    assert terminal_observation["structuredOutput"]["setting"] == "terminalToolEnabled"
+    terminal_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_terminal")
+    assert [task.status for task in terminal_tasks] == ["failed"]
+
+
+def test_disabled_browser_tool_returns_tool_disabled(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put("/settings", json={"browserToolEnabled": False})
+
+    created = client.post(
+        "/runs",
+        json={"task": "Use browser https://example.test", "permissionMode": "auto_review"},
+    )
+
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    browser_observation = next(observation for observation in observations if observation["type"] == "BrowserObservation")
+    assert browser_observation["error"] == "tool_disabled"
+    assert browser_observation["structuredOutput"]["setting"] == "browserToolEnabled"
+
+
+def test_disabled_computer_tool_returns_tool_disabled(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put("/settings", json={"computerToolEnabled": False})
+
+    created = client.post(
+        "/runs",
+        json={"task": "Click 10, 20 on the computer", "permissionMode": "auto_review"},
+    )
+
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    computer_observation = next(observation for observation in observations if observation["type"] == "ComputerObservation")
+    assert computer_observation["error"] == "tool_disabled"
+    assert computer_observation["structuredOutput"]["setting"] == "computerToolEnabled"
+
+
+def test_docker_config_validation_rejects_unsafe_values() -> None:
+    from yanshi_runtime.tools import validate_docker_config
+
+    assert validate_docker_config("alpine:3.20", "512m", "1", 128) is None
+
+    bad_image = validate_docker_config("alpine; rm -rf /", "512m", "1", 128)
+    assert bad_image is not None and bad_image.missingRequirement == "docker_config_invalid"
+    assert "dockerImage" in bad_image.structuredOutput["invalid"]
+
+    bad_memory = validate_docker_config("alpine:3.20", "lots", "1", 128)
+    assert bad_memory is not None and "dockerMemory" in bad_memory.structuredOutput["invalid"]
+
+    bad_cpus = validate_docker_config("alpine:3.20", "512m", "0", 128)
+    assert bad_cpus is not None and "dockerCpus" in bad_cpus.structuredOutput["invalid"]
+
+    bad_pids = validate_docker_config("alpine:3.20", "512m", "1", 0)
+    assert bad_pids is not None and "dockerPidsLimit" in bad_pids.structuredOutput["invalid"]
+
+
+def test_docker_run_uses_persisted_developer_settings(tmp_path: Path) -> None:
+    captured: list[list[str]] = []
+
+    def runner(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        if args == ["docker", "info"]:
+            return subprocess.CompletedProcess(args, 0, "ready", "")
+        captured.append(args)
+        return subprocess.CompletedProcess(args, 0, "done\n", "")
+
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.terminal_tool = TerminalTool(runner=runner)
+    client.put(
+        "/settings",
+        json={
+            "terminalToolEnabled": True,
+            "dockerImage": "python:3.12-alpine",
+            "dockerMemory": "1g",
+            "dockerCpus": "2",
+            "dockerPidsLimit": 256,
+        },
+    )
+
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `echo hi` in Docker", "permissionMode": "full_access"},
+    )
+
+    assert created.status_code == 200
+    run = client.get(f"/runs/{created.json()['id']}").json()
+    assert run["status"] == "completed"
+    docker_run = next(args for args in captured if args[:2] == ["docker", "run"])
+    assert "python:3.12-alpine" in docker_run
+    assert docker_run[docker_run.index("--memory") + 1] == "1g"
+    assert docker_run[docker_run.index("--cpus") + 1] == "2"
+    assert docker_run[docker_run.index("--pids-limit") + 1] == "256"
+
+
+def test_docker_run_rejects_invalid_persisted_settings(tmp_path: Path) -> None:
+    def runner(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("Docker must not run with invalid settings.")
+
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.terminal_tool = TerminalTool(runner=runner)
+    client.put("/settings", json={"terminalToolEnabled": True, "dockerImage": "bad image name"})
+
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `echo hi` in Docker", "permissionMode": "full_access"},
+    )
+
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    terminal_observation = next(observation for observation in observations if observation["type"] == "TerminalObservation")
+    assert terminal_observation["error"] == "docker_config_invalid"
+
+
+def test_provider_api_key_stored_outside_sqlite_via_ref(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put(
+        "/settings/provider",
+        json={"baseUrl": "http://127.0.0.1:9999/v1", "model": "yanshi-test-model", "apiKey": "top-secret-key"},
+    )
+
+    # The raw key must not be present anywhere in the SQLite database file.
+    db_bytes = (tmp_path / "yanshi.db").read_bytes()
+    assert b"top-secret-key" not in db_bytes
+    # The persisted provider setting stores only an opaque reference.
+    service = client.app.state.runtime_service
+    stored = service.storage.get_setting("provider")
+    assert "apiKey" not in stored
+    assert stored["apiKeyRef"]
+    # But the runtime can still resolve the secret for provider calls.
+    secret = service.storage.get_provider_settings_secret()
+    assert secret is not None and secret["apiKey"] == "top-secret-key"
+
+
+def test_legacy_inline_api_key_is_migrated_out_of_sqlite(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    database_path = tmp_path / "yanshi.db"
+    legacy = Storage(database_path, "test")
+    legacy.set_setting("provider", {"baseUrl": "http://127.0.0.1/v1", "model": "m", "apiKey": "legacy-secret"})
+    legacy.conn.close()
+
+    migrated = Storage(database_path, "test")
+    stored = migrated.get_setting("provider")
+    assert "apiKey" not in stored
+    assert stored["apiKeyRef"]
+    assert migrated.get_provider_settings_secret()["apiKey"] == "legacy-secret"
+    assert b"legacy-secret" not in database_path.read_bytes()
 
 
 def test_parallel_hydration_requests_do_not_misuse_sqlite_connection(tmp_path: Path) -> None:

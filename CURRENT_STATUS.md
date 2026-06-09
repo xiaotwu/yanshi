@@ -61,18 +61,54 @@
 - Runtime-event notifications are wired for approvals, run completion, run failure, and runtime error events.
 - Live Office is lazy-loaded, default-closed by settings, auto-opens on real run start, can be closed during runs, includes Full Office View, queue bubbles, and a pop-out always-on-top window path.
 - Tauri CSP is tightened and no longer `null`.
+- A standalone PyInstaller runtime sidecar (`yanshi-runtime-sidecar`, onefile) is built via `pnpm sidecar:build` and bundled into `Yanshi.app/Contents/Resources/resources/`; the packaged app launches it in `mode=bundled-sidecar` with no uv/repo/venv dependency (verified `/health` ok).
+- The packaged Computer bridge was verified end-to-end via the runtime task path for `open-app` (native `open -a TextEdit`, returnCode 0) and rejects unauthorized bridge requests with 401.
+- Persisted Docker Developer settings (`dockerImage/dockerMemory/dockerCpus/dockerPidsLimit`) are validated and used for per-run Docker sandbox execution; unsafe values return `docker_config_invalid`.
+- Tool-availability settings are enforced: disabled Browser/Computer/Terminal tasks return honest `tool_disabled` observations.
+- Provider API key is stored as an `apiKeyRef` in SQLite with the raw secret kept in an off-DB secret store (0600 file store by default; opt-in macOS Keychain via `YANSHI_SECRET_BACKEND=keychain`); legacy inline keys are migrated out and VACUUMed.
 - Build/release docs exist in `docs/BUILD_AND_RELEASE.md`.
 
 ## What Does Not Work Yet
 
-- Runtime Computer Use control actions are now wired end-to-end (localhost bridge server + token + env injection, covered by Rust and Python tests), but the click/type/shortcut/open-app path has not yet been manually verified in the packaged `.app` with real macOS Accessibility permission granted.
+- Computer Use `click/type/shortcut` still need a one-time interactive macOS Accessibility grant to `Yanshi.app` before they can be manually verified; `open-app` is already verified (it needs no Accessibility).
+- The bundled `.app`/`.dmg` are not codesigned or notarized, so Gatekeeper will warn on a second machine; functional distribution (self-contained runtime) works.
 - Manual Docker command smoke did not complete because the required `alpine:3.20` image pull timed out in this environment.
-- Persisted Docker Developer Mode settings are not yet wired into per-run TerminalTool construction.
 - Terminal Tool does not support local shell pipelines; mutating commands are limited to the Docker sandbox path.
 - Workshop export and richer pack-management flows are not implemented yet.
 - Tray/global-shortcut/notification behavior still needs manual packaged-app verification.
 - Live Office office editor is not implemented.
-- The packaged `.app` is not fully distributable until a standalone Python runtime sidecar is bundled and tested.
+
+## Design / Visual Smoke (2026-06-08)
+
+Checked the running web UI (vite + bundled runtime) against the product design spec:
+
+- **New Task** — visually checked. Warm light theme, mascot brand, simple sidebar
+  (New Task, Search, Projects, Runs, Workshop, Settings + conditional Artifacts), a single
+  centered rounded composer with capsule Permission/Project chips and icon buttons, short
+  template chips. No top bar, no dense cards, no subtitles. On-spec.
+- **Runs / Run Details** — visually checked. Converted from a raw event dump into the spec's
+  **Hybrid Transcript**: collapsible Plan, agent messages with friendly labels (Manager/Browser/
+  File/…), Artifact cards, inline Approval cards, and a highlighted final Result. Raw event
+  stream moved to a Developer-Mode-only collapsible (`Raw events`).
+
+What was simplified this pass:
+
+- Run transcript no longer shows low-level event types (`run.created`, `agent.task.*`,
+  `observation.created`) in normal mode — only curated, human-readable items; raw stream is
+  Developer-Mode only.
+- Removed non-functional Workshop tabs (`Discover`/`Create`) that did nothing (placeholder smell).
+- Shortened "Plan created · N steps" → "Plan · N steps".
+
+What remains rough (not blocking RC):
+
+- The 3D Live Office uses simple primitives; the "Q-style mechanical workers" / workshop styling
+  is minimal, not final art.
+- `Search` is an honest empty state (no index yet); `Projects` detail still shows a small
+  technical `runtime-details` list (kept concise).
+
+No-excess-text rule: followed — labels are short, settings copy is terse, technical detail sits
+behind Developer Mode or expanders. No fake/mock data introduced; all transcript content is real
+runtime output, and empty/not-configured/permission-required states are preserved.
 
 ## Current Failing Tests
 
@@ -114,4 +150,4 @@ uv run --project runtime/python yanshi-runtime --host 127.0.0.1 --port 8765
 - Computer Use screen capture requires macOS Accessibility and Screen Recording permission; click/type/shortcut control requires Accessibility plus a configured desktop bridge transport.
 - Docker execution requires Docker Desktop running and the configured sandbox image to be available or pullable before timeout.
 - Local terminal execution is intentionally limited to read-only workspace commands.
-- Packaged distribution requires a bundled standalone Python runtime sidecar; current release bundles are setup-required when no sidecar or `uv` runtime project is available.
+- A truly distributable `.app` requires `pnpm desktop:release` (builds + bundles the standalone sidecar). A plain `pnpm --filter @yanshi/desktop tauri build` produces a setup-required bundle (no sidecar). For store/second-machine distribution, codesigning + notarization are still required.

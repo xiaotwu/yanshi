@@ -449,3 +449,35 @@
   control path with Accessibility granted.
 - Next action: wire persisted Docker settings into per-run `TerminalTool` and enforce
   tool-availability toggles with honest `tool_disabled` observations (P0 #3 + #4).
+
+## Phase: RC blockers — sidecar bundling, Docker/tool enforcement, key storage (2026-06-08)
+
+- P0 #5 Provider API key off SQLite: added `yanshi_runtime/secrets.py` (`FileSecretStore` 0600,
+  opt-in `KeychainSecretStore` via `YANSHI_SECRET_BACKEND=keychain`, `default_secret_store`).
+  `Storage` now persists only `apiKeyRef`; `get_provider_settings_secret` resolves the raw key
+  from the store. Startup migration moves any legacy inline `apiKey` out and runs
+  `VACUUM` + `wal_checkpoint(TRUNCATE)` so the raw key does not linger in the DB file. Tests:
+  ref-not-in-DB, legacy migration purged from file.
+- P0 #3 Docker settings: `TerminalTool` gained `DockerConfig` + `validate_docker_config`
+  (image/memory/cpus/pids regex + bounds → `docker_config_invalid`). Graph passes a
+  `DockerConfig` built from persisted app settings into `run_in_docker`. Tests: validation
+  matrix, persisted-settings applied to `docker run` args, invalid settings short-circuit.
+- P0 #4 Tool availability: graph `_tool_disabled_result` checks `browserToolEnabled`/
+  `computerToolEnabled`/`terminalToolEnabled` before dispatch and records a `tool_disabled`
+  observation (failed action + failed agent_task). Tests for all three. Updated two pre-existing
+  terminal tests to enable `terminalToolEnabled` (it defaults off, which is now enforced).
+- P0 #1 Standalone sidecar: added `runtime/python/sidecar_main.py`, `scripts/build-sidecar.sh`,
+  `apps/desktop/src-tauri/tauri.sidecar.conf.json`, and `pnpm sidecar:build` / `pnpm desktop:release`.
+  PyInstaller `--onefile` (collect uvicorn/langgraph submodules) builds a ~63 MB
+  `yanshi-runtime-sidecar`. Rust resolver gained a `Resources/resources/` candidate. Bundled into
+  `Yanshi.app/Contents/Resources/resources/`.
+- P0 #2 Packaged verification (this machine, Apple Silicon):
+  - Clean-env launch of bundled binary served `/health` ok.
+  - Packaged app launched → `mode=bundled-sidecar`, `/health` ok, `computer bridge listening …`.
+  - Bridge end-to-end: 401 on no/bad token; runtime task `open-app TextEdit` →
+    `Computer bridge opened TextEdit.` returnCode 0, run completed.
+  - Remaining interactive step: grant Accessibility to verify click/type/shortcut.
+- Verification (all green): `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
+  `uv run --project runtime/python pytest` (54 passed), `cargo check`, `cargo test` (10 passed),
+  `pnpm --filter @yanshi/desktop tauri build`, and `pnpm desktop:release` (bundled `.app` + `.dmg`).
+- Next: design alignment / UI polish pass against the product design spec, then codesign/notarize.

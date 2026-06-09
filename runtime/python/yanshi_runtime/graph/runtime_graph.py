@@ -13,7 +13,14 @@ from yanshi_runtime.approvals import PermissionPolicy
 from yanshi_runtime.models import ChatMessage
 from yanshi_runtime.providers import OpenAICompatibleProvider, ProviderCallError
 from yanshi_runtime.storage import Storage
-from yanshi_runtime.tools import BrowserTool, ComputerTool, FileTool, TerminalTool
+from yanshi_runtime.tools import BrowserTool, ComputerTool, DockerConfig, FileTool, TerminalTool
+
+
+TOOL_TOGGLE_BY_AGENT = {
+    "agent_browser": "browserToolEnabled",
+    "agent_computer": "computerToolEnabled",
+    "agent_terminal": "terminalToolEnabled",
+}
 
 
 class GraphState(TypedDict, total=False):
@@ -384,6 +391,11 @@ class RuntimeGraph:
         if task_id:
             self.storage.start_agent_task(task_id)
 
+        disabled_result = self._tool_disabled_result(state, assignment, agent_id)
+        if disabled_result is not None:
+            self._complete_agent_task(task_id, False, {"summary": disabled_result["summary"]})
+            return disabled_result
+
         if agent_id == "agent_file":
             result = self._execute_file_assignment(state, assignment)
         elif agent_id == "agent_browser":
@@ -414,6 +426,46 @@ class RuntimeGraph:
 
         self._complete_agent_task(task_id, result["ok"], {"summary": result["summary"]})
         return result
+
+    def _tool_disabled_result(
+        self, state: GraphState, assignment: dict[str, Any], agent_id: str
+    ) -> AgentExecutionResult | None:
+        toggle = TOOL_TOGGLE_BY_AGENT.get(agent_id)
+        if toggle is None:
+            return None
+        settings = self.storage.get_app_settings()
+        if getattr(settings, toggle):
+            return None
+        observation_type = {
+            "agent_browser": "BrowserObservation",
+            "agent_computer": "ComputerObservation",
+            "agent_terminal": "TerminalObservation",
+        }[agent_id]
+        tool_label = {
+            "agent_browser": "Browser Tool",
+            "agent_computer": "Computer Tool",
+            "agent_terminal": "Terminal Tool",
+        }[agent_id]
+        summary = f"{tool_label} is turned off in Settings."
+        output = {"setting": toggle, "agentId": agent_id}
+        action_id = self.storage.create_action(
+            state["run_id"],
+            "ToolGateAction",
+            state.get("risk_level", "low"),
+            {"task": str(assignment.get("task") or ""), "setting": toggle},
+            agent_id,
+        )
+        self.storage.complete_action(action_id, state["run_id"], status="failed", agent_id=agent_id)
+        self.storage.create_observation(
+            state["run_id"],
+            observation_type,
+            summary,
+            action_id=action_id,
+            agent_id=agent_id,
+            structured_output=output,
+            error="tool_disabled",
+        )
+        return self._agent_execution_result(agent_id, assignment, False, summary, observation_type, "tool_disabled", output)
 
     def _execute_file_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
         run_id = state["run_id"]
@@ -697,7 +749,11 @@ class RuntimeGraph:
         )
 
         if self._looks_like_docker_command(task_text):
-            result = self.terminal_tool.run_in_docker_from_task(task_text, workspace_root=self._workspace_for_run(run_id))
+            result = self.terminal_tool.run_in_docker_from_task(
+                task_text,
+                workspace_root=self._workspace_for_run(run_id),
+                config=self._docker_config_from_settings(),
+            )
         elif self._looks_like_terminal_command(task_text):
             result = self.terminal_tool.run_from_task(task_text, workspace_root=self._workspace_for_run(run_id))
         else:
@@ -1168,6 +1224,15 @@ class RuntimeGraph:
 
     def _file_tool_for_run(self, run_id: str) -> FileTool:
         return FileTool(self._workspace_for_run(run_id))
+
+    def _docker_config_from_settings(self) -> DockerConfig:
+        settings = self.storage.get_app_settings()
+        return DockerConfig(
+            image=settings.dockerImage,
+            memory=settings.dockerMemory,
+            cpus=settings.dockerCpus,
+            pids_limit=settings.dockerPidsLimit,
+        )
 
     def _workspace_for_run(self, run_id: str) -> Path:
         run = self.storage.get_run(run_id)

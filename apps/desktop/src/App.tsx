@@ -377,12 +377,19 @@ function ProjectsView() {
   );
 }
 
+const TRANSCRIPT_EVENT_TYPES = new Set(["observation.created", "artifact.created"]);
+
 function RunsView() {
-  const { runs, activeRunId, events } = useRuntimeStore();
+  const { runs, activeRunId, events, approvals, decideApproval, appSettings, loading } = useRuntimeStore();
   const run = runs.find((item) => item.id === activeRunId) ?? runs[0];
   const runEvents = events.filter((entry) => !run || entry.event.runId === run.id);
+  const developerMode = appSettings?.developerMode ?? false;
 
   if (!run) return <EmptyView title="Runs" text="No runs yet." />;
+
+  const transcript = runEvents.filter((entry) => TRANSCRIPT_EVENT_TYPES.has(entry.event.type));
+  const runApprovals = approvals.filter((approval) => approval.runId === run.id);
+  const finished = run.status === "completed" || run.status === "failed";
 
   return (
     <section className="workspace-grid">
@@ -404,7 +411,7 @@ function RunsView() {
         </header>
         {run.plan.length > 0 && (
           <details className="plan-box" open>
-            <summary>Plan created · {run.plan.length} steps</summary>
+            <summary>Plan · {run.plan.length} steps</summary>
             <ol>
               {run.plan.map((step) => (
                 <li key={step}>{step}</li>
@@ -412,14 +419,60 @@ function RunsView() {
             </ol>
           </details>
         )}
+        {runApprovals.map((approval) => (
+          <article key={approval.id} className="approval-card">
+            <Shield size={18} />
+            <div>
+              <strong>{approval.request}</strong>
+              <span>{approval.riskLevel} risk</span>
+            </div>
+            <button onClick={() => void decideApproval(approval.id, "approved")} disabled={loading}>
+              <Check size={16} /> Approve
+            </button>
+            <button className="danger" onClick={() => void decideApproval(approval.id, "denied")} disabled={loading}>
+              <X size={16} /> Deny
+            </button>
+          </article>
+        ))}
         <div className="event-feed">
-          {runEvents.map(({ seq, event }) => (
-            <article key={seq} className="event-card">
-              <span>{event.type}</span>
-              <p>{eventSummary(event.payload)}</p>
+          {transcript.length === 0 && !finished ? (
+            <p className="transcript-empty">Working…</p>
+          ) : (
+            transcript.map(({ seq, event }) =>
+              event.type === "artifact.created" ? (
+                <article key={seq} className="event-card">
+                  <span>Artifact</span>
+                  <strong>{String(event.payload.title ?? "Artifact")}</strong>
+                  <p>{String(event.payload.summary ?? "")}</p>
+                </article>
+              ) : (
+                <article key={seq} className={event.payload.error ? "event-card error" : "event-card"}>
+                  <span>{agentLabel(event.payload.agentId ?? event.agentId)}</span>
+                  <p>{eventSummary(event.payload)}</p>
+                </article>
+              ),
+            )
+          )}
+          {finished && run.resultSummary && (
+            <article className={run.status === "failed" ? "event-card error" : "event-card final"}>
+              <span>{run.status === "failed" ? "Stopped" : "Result"}</span>
+              <p>{run.resultSummary}</p>
             </article>
-          ))}
+          )}
         </div>
+        {developerMode && (
+          <details className="plan-box">
+            <summary>Raw events · {runEvents.length}</summary>
+            <div className="event-feed">
+              {runEvents.map(({ seq, event }) => (
+                <article key={seq} className="event-card">
+                  <span>{event.type}</span>
+                  <p>{eventSummary(event.payload)}</p>
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </section>
   );
@@ -463,11 +516,6 @@ function WorkshopView() {
   return (
     <section className="content-stack">
       <h2>Workshop</h2>
-      <div className="tabs">
-        <button className="active">Installed</button>
-        <button>Discover</button>
-        <button>Create</button>
-      </div>
       <label className="drop-zone">
         <Archive size={22} />
         <span>{loading ? "Importing..." : "Import pack"}</span>
@@ -847,6 +895,20 @@ function EmptyView({ title, text }: { title: string; text: string }) {
       <p>{text}</p>
     </section>
   );
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  agent_manager: "Manager",
+  agent_browser: "Browser",
+  agent_computer: "Computer",
+  agent_file: "File",
+  agent_terminal: "Terminal",
+  agent_reviewer: "Reviewer",
+};
+
+function agentLabel(agentId: unknown): string {
+  if (typeof agentId === "string" && agentId in AGENT_LABELS) return AGENT_LABELS[agentId];
+  return "Yanshi";
 }
 
 function eventSummary(payload: Record<string, unknown>): string {

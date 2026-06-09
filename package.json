@@ -12,7 +12,9 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "tauri": "pnpm --filter @yanshi/desktop tauri"
+    "tauri": "pnpm --filter @yanshi/desktop tauri",
+    "sidecar:build": "bash scripts/build-sidecar.sh",
+    "desktop:release": "pnpm sidecar:build && pnpm --filter @yanshi/desktop tauri build --config src-tauri/tauri.sidecar.conf.json"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

@@ -21,6 +21,9 @@ from .models import (
     new_id,
     utc_now,
 )
+from .secrets import SecretStore, default_secret_store
+
+PROVIDER_API_KEY_SECRET = "provider_api_key"
 
 
 def locked_storage_method(method):
@@ -33,9 +36,15 @@ def locked_storage_method(method):
 
 
 class Storage:
-    def __init__(self, database_path: Path, runtime_version: str) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        runtime_version: str,
+        secret_store: SecretStore | None = None,
+    ) -> None:
         self.database_path = database_path
         self.runtime_version = runtime_version
+        self.secret_store = secret_store or default_secret_store(database_path.parent)
         self._lock = RLock()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.database_path, check_same_thread=False)
@@ -43,6 +52,7 @@ class Storage:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.migrate()
+        self._migrate_provider_api_key()
 
     def migrate(self) -> None:
         self.conn.executescript(
@@ -746,27 +756,54 @@ class Storage:
 
     def set_provider_settings(self, *, base_url: str, model: str, api_key: str | None) -> ProviderSettingsPublic:
         existing = self.get_setting("provider") or {}
+        api_key_ref = existing.get("apiKeyRef")
+        if api_key is not None:
+            api_key_ref = self.secret_store.set_secret(PROVIDER_API_KEY_SECRET, api_key)
         next_value = {
             "baseUrl": base_url.rstrip("/"),
             "model": model,
-            "apiKey": api_key if api_key is not None else existing.get("apiKey"),
+            "apiKeyRef": api_key_ref,
         }
+        # Never persist the raw key in SQLite.
+        next_value.pop("apiKey", None)
         self.set_setting("provider", next_value)
         return self.get_provider_settings_public()
 
     def get_provider_settings_secret(self) -> dict[str, Any] | None:
         value = self.get_setting("provider")
-        if value and value.get("baseUrl") and value.get("model") and value.get("apiKey"):
-            return value
-        return None
+        if not value or not value.get("baseUrl") or not value.get("model"):
+            return None
+        ref = value.get("apiKeyRef")
+        if not ref:
+            return None
+        api_key = self.secret_store.get_secret(ref)
+        if not api_key:
+            return None
+        return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key}
 
     def get_provider_settings_public(self) -> ProviderSettingsPublic:
         value = self.get_setting("provider") or {}
         return ProviderSettingsPublic(
             baseUrl=value.get("baseUrl") or "https://api.openai.com/v1",
             model=value.get("model"),
-            apiKeyConfigured=bool(value.get("apiKey")),
+            apiKeyConfigured=bool(value.get("apiKeyRef")),
         )
+
+    def _migrate_provider_api_key(self) -> None:
+        """Move any legacy inline ``apiKey`` out of SQLite and into the secret store."""
+        value = self.get_setting("provider")
+        if not value or "apiKey" not in value:
+            return
+        raw_key = value.pop("apiKey")
+        if raw_key:
+            value["apiKeyRef"] = self.secret_store.set_secret(PROVIDER_API_KEY_SECRET, raw_key)
+        self.set_setting("provider", value)
+        # VACUUM purges the legacy key bytes from freed pages, and the checkpoint
+        # flushes the rebuilt pages into the main database file so the raw secret
+        # does not linger on disk after migration.
+        self.conn.execute("VACUUM")
+        self.conn.commit()
+        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def get_app_settings(self) -> AppSettings:
         value = self.get_setting("app") or {}

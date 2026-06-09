@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Protocol
@@ -16,6 +17,39 @@ COMMAND_RE = re.compile(r"`([^`]+)`")
 READ_ONLY_COMMANDS = {"pwd", "ls", "find", "cat", "head", "tail", "wc", "stat", "du", "grep", "rg"}
 SHELL_TOKENS = ("|", "&", ";", ">", "<", "$", "\n")
 DOCKER_LOCK = Lock()
+
+DOCKER_IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*$")
+DOCKER_MEMORY_RE = re.compile(r"^\d+(?:\.\d+)?[bkmgBKMG]?$")
+DOCKER_CPUS_RE = re.compile(r"^\d+(?:\.\d+)?$")
+
+
+@dataclass(frozen=True)
+class DockerConfig:
+    image: str = "alpine:3.20"
+    memory: str = "512m"
+    cpus: str = "1"
+    pids_limit: int = 128
+
+
+def validate_docker_config(image: str, memory: str, cpus: str, pids_limit: int) -> ToolResult | None:
+    """Return a ``docker_config_invalid`` ToolResult when any value is unsafe, else None."""
+    invalid: dict[str, str] = {}
+    if not isinstance(image, str) or not DOCKER_IMAGE_RE.match(image) or len(image) > 200:
+        invalid["dockerImage"] = str(image)
+    if not isinstance(memory, str) or not DOCKER_MEMORY_RE.match(memory):
+        invalid["dockerMemory"] = str(memory)
+    if not isinstance(cpus, str) or not DOCKER_CPUS_RE.match(cpus) or float(cpus or 0) <= 0:
+        invalid["dockerCpus"] = str(cpus)
+    if not isinstance(pids_limit, int) or isinstance(pids_limit, bool) or pids_limit < 1 or pids_limit > 100_000:
+        invalid["dockerPidsLimit"] = str(pids_limit)
+    if invalid:
+        return ToolResult(
+            ok=False,
+            summary="Docker sandbox settings are invalid. Check the Developer Mode sandbox configuration.",
+            missingRequirement="docker_config_invalid",
+            structuredOutput={"invalid": invalid},
+        )
+    return None
 
 
 class CommandRunner(Protocol):
@@ -34,10 +68,19 @@ class CommandRunner(Protocol):
 
 
 class TerminalTool:
-    def __init__(self, runner: CommandRunner | None = None, docker_image: str = "alpine:3.20") -> None:
+    def __init__(
+        self,
+        runner: CommandRunner | None = None,
+        docker_image: str = "alpine:3.20",
+        docker_config: DockerConfig | None = None,
+    ) -> None:
         self.runner = runner or subprocess.run
         self._runner_provided = runner is not None
-        self.docker_image = docker_image
+        self.docker_config = docker_config or DockerConfig(image=docker_image)
+
+    @property
+    def docker_image(self) -> str:
+        return self.docker_config.image
 
     def docker_status(self) -> ToolResult:
         if not self._runner_provided and shutil.which("docker") is None:
@@ -56,7 +99,14 @@ class TerminalTool:
             )
         return ToolResult(ok=True, summary="Docker sandbox is available.")
 
-    def run_in_docker_from_task(self, task: str, *, workspace_root: Path, timeout_seconds: int = 30) -> ToolResult:
+    def run_in_docker_from_task(
+        self,
+        task: str,
+        *,
+        workspace_root: Path,
+        timeout_seconds: int = 30,
+        config: DockerConfig | None = None,
+    ) -> ToolResult:
         command = self.extract_command(task)
         if command is None:
             return ToolResult(
@@ -65,9 +115,21 @@ class TerminalTool:
                 missingRequirement="terminal_command",
                 structuredOutput={"example": "Run command `python --version` in Docker"},
             )
-        return self.run_in_docker(command, workspace_root=workspace_root, timeout_seconds=timeout_seconds)
+        return self.run_in_docker(command, workspace_root=workspace_root, timeout_seconds=timeout_seconds, config=config)
 
-    def run_in_docker(self, command: str, *, workspace_root: Path, timeout_seconds: int = 30) -> ToolResult:
+    def run_in_docker(
+        self,
+        command: str,
+        *,
+        workspace_root: Path,
+        timeout_seconds: int = 30,
+        config: DockerConfig | None = None,
+    ) -> ToolResult:
+        config = config or self.docker_config
+        invalid = validate_docker_config(config.image, config.memory, config.cpus, config.pids_limit)
+        if invalid is not None:
+            return invalid
+
         status = self.docker_status()
         if not status.ok:
             return status
@@ -80,16 +142,16 @@ class TerminalTool:
             "--network",
             "none",
             "--memory",
-            "512m",
+            config.memory,
             "--cpus",
-            "1",
+            config.cpus,
             "--pids-limit",
-            "128",
+            str(config.pids_limit),
             "--mount",
             f"type=bind,src={workspace_root.resolve()},dst=/workspace",
             "--workdir",
             "/workspace",
-            self.docker_image,
+            config.image,
             "/bin/sh",
             "-lc",
             command,
@@ -122,7 +184,7 @@ class TerminalTool:
                 missingRequirement=missing_requirement,
                 structuredOutput={
                     "command": command,
-                    "image": self.docker_image,
+                    "image": config.image,
                     "workspace": str(workspace_root.resolve()),
                     "stdout": self._truncate(exc.stdout or ""),
                     "stderr": stderr,
@@ -140,7 +202,7 @@ class TerminalTool:
             ),
             structuredOutput={
                 "command": command,
-                "image": self.docker_image,
+                "image": config.image,
                 "workspace": str(workspace_root.resolve()),
                 "returnCode": completed.returncode,
                 "stdout": self._truncate(completed.stdout),

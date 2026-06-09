@@ -48,13 +48,16 @@
 - [x] Build passes.
 - [x] Tauri release build passes and produces `.app` and `.dmg`.
 - [x] Tests pass for implemented suites.
-- [ ] App has been manually launched as the packaged `.app`.
+- [x] App has been manually launched as the packaged `.app` (runtime came up in `mode=bundled-sidecar`; `/health` returned ok).
 - [x] Manager performs provider-backed structured planning for general provider tasks.
 - [x] Agent queues are persisted and project/agent filterable.
 - [x] Manager executes queued multi-agent plans with several live tool agents in one run.
 - [x] Runtime launch injects a concrete Computer bridge transport URL + bearer token for runtime control actions (localhost server, random port, per-launch token; Rust + Python tests).
 - [x] Computer bridge rejects missing/invalid bearer tokens (HTTP 401) and unknown operations (404).
-- [ ] Computer Use click/type/shortcut/open-app actions have been manually verified in the packaged app with macOS Accessibility permission.
+- [x] Computer Use `open-app` verified end-to-end in the packaged app: runtime task → bridge (bearer token) → native `open -a TextEdit`, returnCode 0, run completed. Bridge also returns 401 for no-token/bad-token requests.
+- [ ] Computer Use `click/type/shortcut` manually verified in the packaged app — pending a one-time macOS Accessibility grant to Yanshi.app (interactive; steps in BUILD_AND_RELEASE.md).
+- [x] Docker sandbox uses persisted Developer settings (`dockerImage/dockerMemory/dockerCpus/dockerPidsLimit`) and returns `docker_config_invalid` for unsafe values (tests added).
+- [x] Tool-availability settings enforced: disabled Browser/Computer/Terminal tasks return an honest `tool_disabled` observation (tests added).
 - [ ] Docker-backed sandbox has been manually smoked to successful command completion with the configured image available.
 - [ ] Workshop exports valid packs.
 - [ ] Menubar/tray works fully in manual packaged-app verification.
@@ -62,6 +65,6 @@
 - [ ] Notifications are manually verified on macOS.
 - [ ] Global shortcuts are manually verified in the desktop app.
 - [ ] Light / Dark UI works.
-- [ ] Standalone Python runtime sidecar is bundled and verified from a clean machine.
-- [ ] Provider API keys are stored through Keychain or an `apiKeyRef` design.
+- [x] Standalone Python runtime sidecar (PyInstaller onefile) is bundled into `Yanshi.app/Contents/Resources/resources/` and launches the runtime from a clean environment (no uv, no repo, no venv). Not yet codesigned/notarized for Gatekeeper on a second machine.
+- [x] Provider API key moved out of SQLite to an `apiKeyRef` + off-DB secret store (file store default, opt-in macOS Keychain); legacy inline keys are migrated and VACUUMed from the DB file; settings responses never return the key.
 - [ ] No user-facing incomplete core flow remains.

@@ -17,18 +17,72 @@ pnpm --filter @yanshi/desktop tauri build
 
 ## Runtime Packaging Status
 
-The current `.app` is setup-required for distribution unless a Python runtime sidecar is bundled.
+A standalone runtime sidecar can now be built and bundled, producing a self-contained
+`.app` that launches the runtime without `uv` or a repo checkout.
 
-Supported current launch paths:
+### Build the bundled, distributable app
 
-- Development: Tauri starts `uv run --project runtime/python yanshi-runtime`.
-- Override: set `YANSHI_RUNTIME_PROJECT` to a valid `runtime/python` directory with `uv` installed.
-- Future bundled sidecar: package an executable named `yanshi-runtime-sidecar` in one of:
-  - app resources root
-  - `Resources/bin/yanshi-runtime-sidecar`
-  - `Resources/runtime/yanshi-runtime-sidecar`
+```bash
+pnpm desktop:release
+```
 
-Do not claim the app is fully distributable until the standalone runtime sidecar is included and tested from a clean machine.
+This runs `pnpm sidecar:build` (PyInstaller) and then `tauri build` with the sidecar
+overlay config (`apps/desktop/src-tauri/tauri.sidecar.conf.json`).
+
+`pnpm sidecar:build` alone (`scripts/build-sidecar.sh`):
+
+- Uses PyInstaller (`--onefile`) to build `yanshi-runtime-sidecar` from
+  `runtime/python/sidecar_main.py`.
+- Stages it at `apps/desktop/src-tauri/resources/yanshi-runtime-sidecar` (gitignored;
+  ~63 MB).
+- The overlay config bundles `resources/yanshi-runtime-sidecar` into the app, landing at
+  `Yanshi.app/Contents/Resources/resources/yanshi-runtime-sidecar`.
+
+### Launch-path resolution order (Rust)
+
+1. `YANSHI_RUNTIME_PROJECT` env → `uv run` against that project (dev override).
+2. Bundled sidecar binary at any of: `Resources/yanshi-runtime-sidecar`,
+   `Resources/bin/…`, `Resources/runtime/…`, `Resources/resources/…` → `mode=bundled-sidecar`.
+3. Bundled `Resources/runtime/python` project with `uv` available.
+4. (debug builds only) the repo `runtime/python` project.
+5. Otherwise: honest `setup_required` state.
+
+### Plain vs. release build
+
+- `pnpm --filter @yanshi/desktop tauri build` → setup-required bundle (no sidecar). Used in CI/verification.
+- `pnpm desktop:release` → distributable bundle with the embedded sidecar.
+
+### Gatekeeper
+
+The bundle is **not codesigned or notarized**. It is functionally self-contained (the
+runtime launches with no external Python), but a second machine will show a Gatekeeper
+warning until codesigning + notarization are added.
+
+### Verification record (2026-06-08, Apple Silicon, dev machine)
+
+- `pnpm desktop:release` produced `Yanshi.app` + `Yanshi_0.1.0_aarch64.dmg`.
+- Sidecar present at `Yanshi.app/Contents/Resources/resources/yanshi-runtime-sidecar`, mode `0755`.
+- Bundled binary launched with a clean env (`env -i HOME=… PATH=/usr/bin:/bin`) and served `/health` → ok.
+- Launched the packaged app: runtime came up in `mode=bundled-sidecar`, `/health` ok, and the
+  log shows `computer bridge listening at http://127.0.0.1:<random-port>`.
+- Computer bridge end-to-end (packaged app): `POST /computer/open-app` with no/invalid token → **401**.
+  Runtime task `Use the computer to open app \`TextEdit\`` → `Computer bridge opened TextEdit.`
+  (`returnCode 0`), run **completed**.
+- Pending interactive step: grant **System Settings → Privacy & Security → Accessibility →
+  Yanshi** to verify `click`/`type`/`shortcut` (these require Accessibility; `open-app` does not).
+
+## Provider API Key Storage
+
+The provider API key is never stored inline in SQLite. `set_provider_settings` writes the
+raw key to an off-database secret store and persists only an opaque `apiKeyRef`:
+
+- Default backend: 0600 files under `<data_dir>/secrets/` (deterministic, no prompts).
+- Opt-in macOS Keychain: set `YANSHI_SECRET_BACKEND=keychain` (uses the `security` CLI).
+- On startup, any legacy inline `apiKey` is migrated to the secret store and the database is
+  `VACUUM`ed so the raw key does not linger in freed pages.
+- Settings responses only expose `apiKeyConfigured`; the key never appears in responses or logs.
+
+## External Requirements
 
 ## Computer Use Bridge
 
@@ -65,10 +119,14 @@ uv run --project runtime/python playwright install chromium
 
 ## Release Checklist
 
-- [ ] Run the full verification command set above.
-- [ ] Manually launch `apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app`.
-- [ ] Confirm runtime launch mode is either `bundled-sidecar` or explicitly setup-required.
-- [ ] If distributing, bundle and verify `yanshi-runtime-sidecar`.
+- [x] Run the full verification command set above.
+- [x] Build the distributable bundle with `pnpm desktop:release`.
+- [x] Manually launch `apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app`.
+- [x] Confirm runtime launch mode is `bundled-sidecar`.
+- [x] Bundle and verify `yanshi-runtime-sidecar` launches from a clean environment.
+- [x] Verify Computer bridge `open-app` end-to-end and 401 on unauthorized bridge requests.
+- [ ] Grant Accessibility and verify Computer bridge `click`/`type`/`shortcut`.
+- [ ] Codesign + notarize for second-machine distribution.
 - [ ] Verify Browser Use with installed Chromium and screenshot artifact output.
 - [ ] Verify Docker sandbox with the configured image pre-pulled or pullable.
 - [ ] Verify macOS Accessibility and Screen Recording permission flows.

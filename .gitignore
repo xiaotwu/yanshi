@@ -22,3 +22,6 @@ logs/
 .playwright-mcp/
 yanshi-smoke*.png
 yanshi-ui-run-smoke.png
+runtime/python/build/
+runtime/python/dist/
+apps/desktop/src-tauri/resources/yanshi-runtime-sidecar

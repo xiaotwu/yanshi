@@ -59,15 +59,17 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Build/release docs and setup-required runtime packaging status are documented.
 - [x] Tauri runs a secure localhost Computer bridge HTTP server (random port + per-launch random bearer token) and injects `YANSHI_COMPUTER_BRIDGE_URL`/`YANSHI_COMPUTER_BRIDGE_TOKEN` into the spawned runtime process so Computer Use control actions are connected end-to-end. Missing/invalid tokens are rejected (401); unknown ops 404; non-POST 405. Covered by Rust unit + end-to-end tests and Python bridge-client tests.
 - [x] Repository cleanup: `.playwright-mcp/` untracked and ignored; root smoke screenshots moved to `docs/assets/`; `.gitignore` updated.
+- [x] Standalone PyInstaller runtime sidecar (`pnpm sidecar:build`) bundled into the app via the `tauri.sidecar.conf.json` overlay (`pnpm desktop:release`); packaged app launches it in `mode=bundled-sidecar` with no uv/repo dependency.
+- [x] Persisted Docker Developer settings wired into per-run Docker execution with `docker_config_invalid` validation (tests).
+- [x] Tool-availability settings enforced with honest `tool_disabled` observations for Browser/Computer/Terminal (tests).
+- [x] Provider API key moved to an `apiKeyRef` + off-DB secret store (file default, opt-in Keychain) with legacy migration + VACUUM (tests).
+- [x] Computer bridge verified end-to-end in the packaged app for `open-app`; 401 on unauthorized bridge requests.
 
 ## Pending
 
-- [ ] Bundle a standalone Python runtime sidecar for truly distributable `.app` packages.
+- [ ] Codesign + notarize the bundle for second-machine / store distribution.
+- [ ] Manually verify Computer bridge `click/type/shortcut` in the packaged app after granting Accessibility.
 - [ ] Manual Docker command smoke after the required image is available locally or image pull can complete.
-- [ ] Wire persisted Docker Developer Mode settings into per-run TerminalTool construction.
-- [ ] Enforce `browserToolEnabled`/`computerToolEnabled`/`terminalToolEnabled` settings so disabled tools return honest `tool_disabled` observations.
-- [ ] Move provider API key storage to macOS Keychain or an `apiKeyRef` design.
-- [ ] Manually verify the Computer bridge click/type/shortcut/open-app path in the packaged `.app` with macOS Accessibility granted.
 - [ ] Manually verify menubar/tray actions and notification delivery in the packaged desktop app.
 - [ ] Workshop export and richer pack management.
 - [ ] Live Office office editor.
