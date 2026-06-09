@@ -34,11 +34,23 @@ _Clean snapshot, 2026-06-09. Categories: ✅ complete · 🟡 partial · 🔍 ma
 - Verification: pnpm lint/typecheck/build green; pytest 72 passed; cargo test 10 passed;
   `pnpm desktop:release` builds `.app` + `.dmg` (bundled sidecar verified serving new endpoints).
 
+- Office Editor: visual 2D drag canvas with stations + areas + **editable draggable furniture**;
+  persists + drives Live Office; exports/imports via pack. (Path/collision metadata + real
+  pathfinding are future, not stubbed.)
+- `App.tsx` split into `lib/shared` + `features/*` + `components/*` (App.tsx now 174 lines);
+  behavior preserved (typecheck + build + UI smoke).
+
 ## 🟡 Partial (real first version)
 
-- Office Editor edits stations + areas; furniture/path/collision metadata are not yet editable.
-- Live Office workers are procedural (not modelled art assets).
-- `apps/desktop/src/App.tsx` is still a single large file (feature split pending).
+- Live Office workers are procedural Q-style figures (not modelled art assets).
+- Office Editor has no path/collision editing yet.
+
+## ✅ Packaged verification passed (2026-06-09, non-interactive)
+
+- `.app` launch → `mode=bundled-sidecar`; `/agent-instances`,`/agent-actors`,`/live-office` → 200.
+- Computer bridge rejects no-token/bad-token → 401; runtime task → native `open-app TextEdit` completed.
+- Office furniture round-trips in the packaged app; provider settings never returns the API key;
+  no secret/token in the runtime log.
 
 ## 🔍 Manual verification pending (interactive / environment-limited)
 

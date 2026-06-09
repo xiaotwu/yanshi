@@ -1611,3 +1611,29 @@ button.list-row {
   text-transform: capitalize;
   pointer-events: none;
 }
+
+/* Office Editor furniture */
+.office-canvas-2d .office-furniture {
+  cursor: grab;
+}
+.office-canvas-2d .office-furniture.dragging {
+  cursor: grabbing;
+}
+.office-canvas-2d .office-furniture rect {
+  stroke: var(--surface-elevated);
+  stroke-width: 2;
+  opacity: 0.92;
+}
+.office-canvas-2d .office-furniture-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: middle;
+  text-transform: capitalize;
+  pointer-events: none;
+}
+.furniture-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}

@@ -652,3 +652,30 @@ Signature product features, all real (no mocks):
   pnpm desktop:release rebuilt sidecar + bundles. No-mock audit clean.
 - Deferred honestly: App.tsx → features/* split (large; would risk the green build this session);
   furniture/path/collision editing in the Office Editor; modelled worker art; codesign/notarization.
+
+## Phase: App.tsx split + Office furniture + final hardening (2026-06-09)
+
+- App.tsx split (P0 #1): refactored the ~2,090-line App.tsx into feature modules with behavior
+  preserved. New layout: `lib/shared.tsx` (types + helpers: eventSummary/agentLabel/groupRuns/
+  permission*/EmptyView/TranscriptMessage + BEHAVIOR_OPTIONS/STATION_OPTIONS); `features/`
+  new-task, search, projects, runs, artifacts, automations, workshop, settings, developer,
+  live-office; `components/modals.tsx` (Onboarding + CloseRunsModal). App.tsx is now 174 lines
+  (orchestration + nav only). Verified via typecheck + build + a runtime UI smoke (all views render,
+  lazy Live Office loads). Extraction used `sed` line-range copies (no transcription) + auto-export.
+- Office Editor furniture (P0 #2): added `FurnitureItem` + `furniture` to LiveOfficeState (model +
+  `furniture_json` column with idempotent ALTER migration + get/upsert/export). Office Editor gained
+  a furniture palette (desk/plant/shelf/couch/table/lamp), draggable furniture on the 2D canvas,
+  a removable furniture list; the 3D Live Office renders furniture meshes. Path/collision metadata
+  intentionally not added as fake controls (agents use lerp movement; real pathfinding is future).
+  Test: furniture persists + appears in the exported pack.
+- Live Office polish (P0 #4): status-driven ground glow ring under workers (soft green when working,
+  dim when idle); workers already Q-style with role props + glowing eyes.
+- Packaged verification (P0 #3, this machine, non-interactive): `.app` launches `mode=bundled-sidecar`;
+  `/agent-instances`,`/agent-actors`,`/live-office` 200; Computer bridge 401 on no/bad token; runtime
+  task → native `open-app TextEdit` completed; furniture round-trips in the packaged app; provider
+  settings never returns the API key; no secret/token in the runtime log. Interactive items
+  (click/type/shortcut/screenshot → Accessibility/Screen-Recording; Docker → daemon+image;
+  tray/notifications/shortcuts → human) remain pending.
+- Verification: pnpm lint/typecheck/test/build green; pytest 73 passed; cargo check + test 10 passed;
+  pnpm desktop:release built `.app` + `.dmg` (first DMG attempt hit a transient bundle_dmg flake;
+  succeeded on retry after clearing the stale dmg). No-mock audit clean.

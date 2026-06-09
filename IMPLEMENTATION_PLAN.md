@@ -80,6 +80,14 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Artifacts: `/artifacts` API + Artifacts page with metadata + `reveal_path` Tauri command.
 - [x] Search: real grouped search across projects/runs/artifacts/packs.
 
+## App.tsx split + Office furniture + hardening (2026-06-09)
+
+- [x] App.tsx split into `lib/shared` + `features/*` + `components/*` (App.tsx 2090 → 174 lines), behavior preserved.
+- [x] Office Editor furniture: model + storage (column + migration + export), palette + draggable + removable, 3D render; tested.
+- [x] Live Office polish: status-driven green ground glow ring.
+- [x] Packaged non-interactive verification re-run (bundled-sidecar, bridge 401, open-app, furniture, no key/token leak).
+- [ ] Pending: Office path/collision + pathfinding; modelled worker art; interactive packaged + Docker verification; codesign/notarization.
+
 ## Persona-everywhere + 2D Office Editor + cleanup (2026-06-09)
 
 - [x] AgentProfile persona injected into every agent type (advisory, prompt-injection-separated); tests.

@@ -1,15 +1,41 @@
 import { Environment, Html, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import type { CameraMode, LifeAction, LiveAgentState } from "@yanshi/shared";
+import type { CameraMode, FurnitureItem, LifeAction, LiveAgentState } from "@yanshi/shared";
 import { Suspense, useMemo, useRef, useState } from "react";
-import { Group, MathUtils, Mesh } from "three";
+import { Group, MathUtils } from "three";
 
 export interface LiveOfficeSceneProps {
   agents: LiveAgentState[];
   compact?: boolean;
   cameraMode?: CameraMode;
   stationLayout?: Record<string, number[]>;
+  furniture?: FurnitureItem[];
   dark?: boolean;
+}
+
+function FurnitureMesh({ item }: { item: FurnitureItem }) {
+  const color = { desk: "#9a6f4c", plant: "#4f9a5b", shelf: "#8b939b", couch: "#5f7f9a", table: "#b08a5e", lamp: "#d7b24a" }[item.type] ?? "#8b939b";
+  if (item.type === "plant" || item.type === "lamp") {
+    return (
+      <group position={[item.x, 0, item.z]}>
+        <mesh position={[0, item.type === "lamp" ? 0.34 : 0.18, 0]} castShadow>
+          {item.type === "lamp" ? <coneGeometry args={[0.12, 0.18, 12]} /> : <sphereGeometry args={[0.16, 12, 12]} />}
+          <meshStandardMaterial color={color} emissive={item.type === "lamp" ? color : "#000"} emissiveIntensity={item.type === "lamp" ? 0.4 : 0} roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.06, 0]}>
+          <cylinderGeometry args={[0.04, 0.05, 0.12, 8]} />
+          <meshStandardMaterial color="#6a6f86" />
+        </mesh>
+      </group>
+    );
+  }
+  const height = item.type === "shelf" ? 0.5 : 0.18;
+  return (
+    <mesh position={[item.x, height / 2, item.z]} castShadow>
+      <boxGeometry args={[0.4, height, 0.3]} />
+      <meshStandardMaterial color={color} roughness={0.75} metalness={0.1} />
+    </mesh>
+  );
 }
 
 const ACTIVE_GLOW = "#2fc279";
@@ -157,6 +183,11 @@ function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLa
 
   return (
     <group ref={groupRef} position={[start[0], 0, start[1]]}>
+      {/* Status ground ring — soft green glow when actively working, dim otherwise. */}
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.22, 0.32, 28]} />
+        <meshBasicMaterial color={statusColor} transparent opacity={agent.status === "working" ? 0.6 : agent.status === "idle" ? 0.12 : 0.3} />
+      </mesh>
       {/* Q-style mechanical worker: cylindrical torso, boxy head with glowing eyes, arms, feet. */}
       <group
         ref={bodyRef}
@@ -284,12 +315,25 @@ function Furniture({ dark }: { dark: boolean }) {
   );
 }
 
-function Scene({ agents, stationLayout, dark }: { agents: LiveAgentState[]; stationLayout: Record<string, number[]>; dark: boolean }) {
+function Scene({
+  agents,
+  stationLayout,
+  furniture,
+  dark,
+}: {
+  agents: LiveAgentState[];
+  stationLayout: Record<string, number[]>;
+  furniture: FurnitureItem[];
+  dark: boolean;
+}) {
   return (
     <>
       <ambientLight intensity={dark ? 0.7 : 1.15} />
       <directionalLight castShadow position={[2, 5, 3]} intensity={dark ? 0.9 : 1.5} />
       <Furniture dark={dark} />
+      {furniture.map((item) => (
+        <FurnitureMesh key={item.id} item={item} />
+      ))}
       {agents.map((agent) => (
         <AgentActor key={agent.id} agent={agent} stationLayout={stationLayout} />
       ))}
@@ -299,13 +343,13 @@ function Scene({ agents, stationLayout, dark }: { agents: LiveAgentState[]; stat
   );
 }
 
-export function LiveOfficeScene({ agents, compact = false, cameraMode = "rear", stationLayout = {}, dark = false }: LiveOfficeSceneProps) {
+export function LiveOfficeScene({ agents, compact = false, cameraMode = "rear", stationLayout = {}, furniture = [], dark = false }: LiveOfficeSceneProps) {
   const cameraPosition: [number, number, number] =
     cameraMode === "iso" ? [6, 6, 6] : compact ? [3.8, 3.4, 4.8] : [5, 4.6, 5.6];
   return (
     <Canvas camera={{ position: cameraPosition, fov: compact ? 42 : 38 }} dpr={[1, 1.5]} frameloop="always" shadows>
       <Suspense fallback={null}>
-        <Scene agents={agents} stationLayout={stationLayout} dark={dark} />
+        <Scene agents={agents} stationLayout={stationLayout} furniture={furniture} dark={dark} />
       </Suspense>
     </Canvas>
   );

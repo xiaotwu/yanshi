@@ -45,11 +45,14 @@ _Last updated: 2026-06-09. This is a clean snapshot; phase history lives in IMPL
 
 ## Partial / honest first version
 
-- **Office Editor**: real visual 2D drag canvas (draggable stations + area blocks + snap + reset),
-  persists layout that drives Live Office, exports as pack. Furniture/path/collision editing not yet.
-- **Live Office workers**: Q-style procedural mechanical figures (not modelled art assets).
-- **AgentProfile → runtime**: persona injected into **all** agent execution contexts (Manager/Browser
-  LLM prompts; File/Computer/Terminal/Reviewer action context), delimited as advisory.
+- **Office Editor**: visual 2D drag canvas with stations + area blocks + **editable furniture**
+  (desk/plant/shelf/couch/table/lamp; draggable + removable), snap + reset; persists and drives the
+  3D Live Office; exports/imports as a Workshop pack. Path/collision metadata not added (agents use
+  lerp movement; real pathfinding is future — not stubbed).
+- **Live Office workers**: Q-style procedural mechanical figures with role props + status glow
+  (not modelled art assets).
+- **Frontend structure**: `App.tsx` split into `lib/shared` + `features/*` + `components/*`
+  (App.tsx now 174 lines). Finer `components/composer|layout|ui` extraction is optional future work.
 
 ## Packaged verification (2026-06-09, this machine)
 
@@ -66,8 +69,9 @@ Still pending (interactive / environment-limited):
 
 ## Not done (optional polish)
 
-- `App.tsx` split into `features/*`; Office Editor furniture/path/collision editing; modelled worker
-  art; codesign + notarization (guide in docs/BUILD_AND_RELEASE.md).
+- Office Editor path/collision metadata + real agent pathfinding; modelled worker art;
+  finer `components/composer|layout|ui` split; codesign + notarization (guide in
+  docs/BUILD_AND_RELEASE.md).
 
 ## Build / run
 
@@ -77,7 +81,7 @@ Still pending (interactive / environment-limited):
 
 ## Tests
 
-- Python: `uv run --project runtime/python pytest` — 72 passed.
+- Python: `uv run --project runtime/python pytest` — 73 passed.
 - Rust: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` — 10 passed.
 - JS: lint/typecheck/build green (no JS unit tests yet).
 

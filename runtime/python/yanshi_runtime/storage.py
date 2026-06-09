@@ -271,6 +271,7 @@ class Storage:
               behavior_mode TEXT NOT NULL DEFAULT 'balanced',
               camera_mode TEXT NOT NULL DEFAULT 'rear',
               station_layout_json TEXT NOT NULL DEFAULT '{}',
+              furniture_json TEXT NOT NULL DEFAULT '[]',
               updated_at TEXT NOT NULL
             );
 
@@ -306,7 +307,15 @@ class Storage:
             """
         )
         self.conn.commit()
+        self._add_missing_columns()
         self._seed_agent_profiles()
+
+    def _add_missing_columns(self) -> None:
+        """Idempotent column additions for tables that existed before a field was introduced."""
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(live_office_state)").fetchall()}
+        if "furniture_json" not in existing:
+            self.conn.execute("ALTER TABLE live_office_state ADD COLUMN furniture_json TEXT NOT NULL DEFAULT '[]'")
+            self.conn.commit()
 
     def create_project(self, name: str, *, description: str | None = None, workspace_root: Path) -> ProjectSummary:
         now = utc_now()
@@ -1084,18 +1093,19 @@ class Storage:
             if project_id is None
             else self.conn.execute("SELECT id FROM live_office_state WHERE project_id = ?", (project_id,)).fetchone()
         )
+        furniture_json = json.dumps([item.model_dump() if hasattr(item, "model_dump") else item for item in merged.furniture])
         if existing is None:
             self.conn.execute(
                 """
-                INSERT INTO live_office_state (id, project_id, theme, behavior_mode, camera_mode, station_layout_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO live_office_state (id, project_id, theme, behavior_mode, camera_mode, station_layout_json, furniture_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (new_id("office"), project_id, merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), now),
+                (new_id("office"), project_id, merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), furniture_json, now),
             )
         else:
             self.conn.execute(
-                "UPDATE live_office_state SET theme = ?, behavior_mode = ?, camera_mode = ?, station_layout_json = ?, updated_at = ? WHERE id = ?",
-                (merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), now, existing["id"]),
+                "UPDATE live_office_state SET theme = ?, behavior_mode = ?, camera_mode = ?, station_layout_json = ?, furniture_json = ?, updated_at = ? WHERE id = ?",
+                (merged.theme, merged.behaviorMode, merged.cameraMode, json.dumps(merged.stationLayout), furniture_json, now, existing["id"]),
             )
         self.conn.commit()
         self.append_event("liveOffice.state.updated", project_id=project_id, payload={"projectId": project_id})
@@ -1120,6 +1130,7 @@ class Storage:
             behaviorMode=row["behavior_mode"],
             cameraMode=row["camera_mode"],
             stationLayout=json.loads(row["station_layout_json"] or "{}"),
+            furniture=json.loads(row["furniture_json"] or "[]"),
             updatedAt=row["updated_at"],
         )
 

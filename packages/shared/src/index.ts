@@ -307,6 +307,13 @@ export interface AgentInstanceSummary {
   updatedAt: string;
 }
 
+export interface FurnitureItem {
+  id: string;
+  type: string;
+  x: number;
+  z: number;
+}
+
 export interface LiveOfficeStateSummary {
   id: string;
   projectId?: string | null;
@@ -314,5 +321,6 @@ export interface LiveOfficeStateSummary {
   behaviorMode: BehaviorMode;
   cameraMode: CameraMode;
   stationLayout: Record<string, number[]>;
+  furniture: FurnitureItem[];
   updatedAt: string;
 }

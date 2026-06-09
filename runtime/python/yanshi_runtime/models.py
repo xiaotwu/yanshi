@@ -169,6 +169,13 @@ class CreateAgentProfileRequest(BaseModel):
     taskPriority: int = 5
 
 
+class FurnitureItem(BaseModel):
+    id: str
+    type: str  # desk, plant, shelf, couch, table, lamp, divider
+    x: float = 0.0
+    z: float = 0.0
+
+
 class LiveOfficeStateSummary(BaseModel):
     id: str
     projectId: str | None = None
@@ -176,6 +183,7 @@ class LiveOfficeStateSummary(BaseModel):
     behaviorMode: BehaviorMode = "balanced"
     cameraMode: CameraMode = "rear"
     stationLayout: dict[str, list[float]] = Field(default_factory=dict)
+    furniture: list[FurnitureItem] = Field(default_factory=list)
     updatedAt: str
 
 
@@ -184,6 +192,7 @@ class UpdateLiveOfficeStateRequest(BaseModel):
     behaviorMode: BehaviorMode | None = None
     cameraMode: CameraMode | None = None
     stationLayout: dict[str, list[float]] | None = None
+    furniture: list[FurnitureItem] | None = None
 
 
 class AgentInstanceSummary(BaseModel):

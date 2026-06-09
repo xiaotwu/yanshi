@@ -83,6 +83,40 @@ warning until codesigning + notarization are added.
   `screenshot` (Screen Recording); Docker command smoke (Docker daemon + pre-pulled image);
   tray/notifications/global-shortcuts/close-prompt in the packaged app.
 
+### Verification record (2026-06-09, App.tsx split + furniture)
+
+- Re-ran the packaged non-interactive suite: `.app` `mode=bundled-sidecar`; `/agent-instances`,
+  `/agent-actors`, `/live-office` → 200; bridge no-token/bad-token → 401; runtime task → native
+  `open-app TextEdit` completed; office **furniture** round-trips in the packaged app; provider
+  settings response contains no API key; runtime log contains no secret/bearer token.
+- `pnpm desktop:release`: the first DMG attempt hit a transient `bundle_dmg.sh` flake; succeeded on
+  retry after clearing the stale `.dmg`. `.app` always built. If the DMG step fails, detach any
+  mounted `Yanshi` volume and delete the stale dmg, then re-run.
+
+## Public Distribution Checklist
+
+A release for users beyond the build machine requires, in order:
+
+1. `pnpm desktop:release` → confirm `mode=bundled-sidecar` and a clean-env `/health`.
+2. Run the interactive packaged checks (grant Accessibility + Screen Recording): Computer
+   click/type/shortcut/open-app + screenshot; tray menu; notifications; global shortcuts;
+   close-with-active-runs prompt; Light/Dark/System.
+3. Docker smoke with `alpine:3.20` pre-pulled.
+4. **Codesign** with a Developer ID Application certificate (see "Codesign & Notarization" above).
+5. **Notarize** the `.dmg` and **staple** both `.app` and `.dmg`.
+6. Verify Gatekeeper acceptance on a second Mac (`spctl -a -vv Yanshi.app`).
+
+### Known limitations (current build)
+
+- Unsigned / un-notarized: Gatekeeper will warn on another Mac until steps 4–6 are done.
+- Office Editor edits stations/areas/furniture; no path/collision/pathfinding yet.
+- Live Office workers are procedural (no modelled art assets).
+- Interactive Computer-Use, Docker, tray/notification/shortcut checks are verified in dev but not
+  yet in a packaged interactive pass.
+
+**Public release readiness: NOT yet — codesign + notarization (and the interactive packaged pass)
+remain. A functionally distributable local build exists.**
+
 ## Automations
 
 The runtime persists automations (`automations` + `automation_runs` tables). A background

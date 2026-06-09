@@ -1487,6 +1487,25 @@ def test_live_office_state_default_and_upsert(tmp_path: Path) -> None:
     assert client.get("/live-office").json()["cameraMode"] == "rear"
 
 
+def test_office_furniture_persists_and_exports(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    updated = client.put(
+        "/live-office",
+        json={"furniture": [{"id": "f1", "type": "plant", "x": 1.2, "z": -0.4}, {"id": "f2", "type": "desk", "x": -2.0, "z": 1.0}]},
+    )
+    assert updated.status_code == 200
+    furniture = updated.json()["furniture"]
+    assert len(furniture) == 2
+    assert {item["type"] for item in furniture} == {"plant", "desk"}
+    # Persisted.
+    assert len(client.get("/live-office").json()["furniture"]) == 2
+    # Included in the exported pack theme.
+    export = client.post("/workshop/export")
+    with zipfile.ZipFile(io.BytesIO(export.content)) as archive:
+        office = json.loads(archive.read("themes/office.json"))
+    assert len(office["furniture"]) == 2
+
+
 def test_workshop_export_is_reimportable(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     export = client.post("/workshop/export")
