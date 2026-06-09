@@ -24,13 +24,14 @@ import {
   Shield,
   Sparkles,
   TerminalSquare,
+  Upload,
   X,
 } from "lucide-react";
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import iconUrl from "../../../icon.png";
 import { runtimeApi } from "./api/client";
-import { canRevealFiles, openDesktopRuntimeLogs, popOutLiveOffice, revealPath } from "./api/desktop";
+import { canRevealFiles, hideMainWindow, openDesktopRuntimeLogs, popOutLiveOffice, quitApp, revealPath, updateActiveRuns } from "./api/desktop";
 import { useRuntimeStore } from "./stores/runtimeStore";
 
 type View = "new-task" | "search" | "projects" | "runs" | "workshop" | "settings" | "approvals" | "artifacts" | "developer";
@@ -52,9 +53,23 @@ export function App() {
   const [officeOpen, setOfficeOpen] = useState(false);
   const [officeFull, setOfficeFull] = useState(new URLSearchParams(window.location.search).get("liveOffice") === "1");
   const officeTouchedRef = useRef(false);
-  const { hydrate, connectEvents, approvals, activeRunId, events, appSettings } = useRuntimeStore();
+  const { hydrate, connectEvents, approvals, activeRunId, events, appSettings, runs } = useRuntimeStore();
   const developerEnabled = appSettings?.developerMode ?? false;
   const theme = appSettings?.theme ?? "system";
+  const [closePrompt, setClosePrompt] = useState(false);
+  const activeRunCount = runs.filter((run) => run.status === "running" || run.status === "pending_approval").length;
+
+  useEffect(() => {
+    void updateActiveRuns(activeRunCount);
+  }, [activeRunCount]);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    const unlisten = listen("desktop:close-prompt", () => setClosePrompt(true));
+    return () => {
+      void unlisten.then((callback) => callback());
+    };
+  }, []);
 
   useEffect(() => {
     void hydrate();
@@ -174,6 +189,40 @@ export function App() {
         </div>
       )}
       {appSettings && !appSettings.onboarded && <Onboarding onStart={() => setView("runs")} />}
+      {closePrompt && <CloseRunsModal count={activeRunCount} onClose={() => setClosePrompt(false)} />}
+    </div>
+  );
+}
+
+function CloseRunsModal({ count, onClose }: { count: number; onClose: () => void }) {
+  const { pauseAllRuns } = useRuntimeStore();
+  const [busy, setBusy] = useState(false);
+
+  const pauseAndQuit = async () => {
+    setBusy(true);
+    await pauseAllRuns();
+    await quitApp();
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="onboarding-card">
+        <h2>Quit Yanshi?</h2>
+        <p>
+          {count} task{count === 1 ? " is" : "s are"} still running.
+        </p>
+        <div className="onboarding-actions" style={{ flexWrap: "wrap", justifyContent: "center" }}>
+          <button className="primary" onClick={() => void pauseAndQuit()} disabled={busy}>
+            Pause and quit
+          </button>
+          <button onClick={() => { void hideMainWindow(); onClose(); }} disabled={busy}>
+            Keep running
+          </button>
+          <button onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -225,7 +274,22 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
   const [planFirst, setPlanFirst] = useState(false);
   const [tools, setTools] = useState<string[]>([]);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [attachments, setAttachments] = useState<Array<{ name: string; path: string }>>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { listening, voiceAvailable, toggleVoice } = useVoiceInput((text) => setTask((prev) => (prev ? `${prev} ${text}` : text)));
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadError(null);
+    try {
+      const projectId = selectedProjectId === "standalone" ? null : selectedProjectId;
+      const result = await runtimeApi.uploadFiles(projectId, Array.from(files));
+      setAttachments((prev) => [...prev, ...result.files.map((file) => ({ name: file.name, path: file.path }))]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+    }
+  };
 
   useEffect(() => {
     if (appSettings?.permissionModeDefault) setPermissionMode(appSettings.permissionModeDefault);
@@ -243,11 +307,13 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
   const submit = async () => {
     if (!task.trim()) return;
     const directives = tools.map((tool) => TOOL_HINTS[tool]).join(" ");
-    const composed = directives ? `${task.trim()} ${directives}` : task.trim();
+    const attachmentNote = attachments.length > 0 ? ` Uploaded files: ${attachments.map((file) => file.path).join(", ")}.` : "";
+    const composed = `${task.trim()}${directives ? ` ${directives}` : ""}${attachmentNote}`;
     await createRun(composed, permissionMode, selectedProjectId === "standalone" ? null : selectedProjectId, planFirst, reasoning);
     setTask("");
     setTools([]);
     setPlanFirst(false);
+    setAttachments([]);
     onRuns();
   };
 
@@ -266,6 +332,9 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
             </button>
             {plusOpen && (
               <div className="plus-menu" onMouseLeave={() => setPlusOpen(false)}>
+                <button className="menu-row" onClick={() => { fileInputRef.current?.click(); setPlusOpen(false); }}>
+                  <Upload size={15} /> Upload files
+                </button>
                 <button className={planFirst ? "menu-row on" : "menu-row"} onClick={() => setPlanFirst((value) => !value)}>
                   <ListChecks size={15} /> Plan first {planFirst && <Check size={14} />}
                 </button>
@@ -337,7 +406,17 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
             {loading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
           </button>
         </div>
-        {(planFirst || tools.length > 0) && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={(event) => {
+            void uploadFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        {(planFirst || tools.length > 0 || attachments.length > 0) && (
           <div className="composer-flags">
             {planFirst && <span className="flag-chip">Plan first</span>}
             {tools.map((tool) => (
@@ -345,9 +424,17 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
                 {tool}
               </span>
             ))}
+            {attachments.map((file, index) => (
+              <span key={file.path} className="flag-chip file-chip">
+                {file.name}
+                <button onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))} title="Remove">
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
           </div>
         )}
-        {error && <p className="inline-error">{error}</p>}
+        {(error || uploadError) && <p className="inline-error">{error ?? uploadError}</p>}
         <div className="templates">
           {["Organize files", "Research a topic", "Summarize webpage", "Use computer", "Create report", "Plan my day"].map((label) => (
             <button key={label} onClick={() => setTask(label)}>

@@ -1,4 +1,5 @@
 import type {
+  AgentInstanceSummary,
   AgentProfileSummary,
   AgentTaskSummary,
   AppSettings,
@@ -122,6 +123,8 @@ export const runtimeApi = {
   updateAgentProfile: (id: string, update: Partial<Pick<AgentProfileSummary, "name" | "prompt" | "personality" | "accent" | "behaviorMode" | "station" | "taskPriority">>) =>
     request<AgentProfileSummary>(`/agent-profiles/${id}`, { method: "PUT", body: JSON.stringify(update) }),
   deleteAgentProfile: (id: string) => request<void>(`/agent-profiles/${id}`, { method: "DELETE" }),
+  agentInstances: (projectId?: string | null) =>
+    request<AgentInstanceSummary[]>(projectId ? `/agent-instances?projectId=${encodeURIComponent(projectId)}` : "/agent-instances"),
   liveOffice: (projectId?: string | null) =>
     request<LiveOfficeStateSummary>(projectId ? `/live-office?projectId=${encodeURIComponent(projectId)}` : "/live-office"),
   updateLiveOffice: (projectId: string | null, update: Partial<Pick<LiveOfficeStateSummary, "theme" | "behaviorMode" | "cameraMode" | "stationLayout">>) =>
@@ -130,6 +133,16 @@ export const runtimeApi = {
       body: JSON.stringify(update),
     }),
   exportPackUrl: (projectId?: string | null) => `${runtimeUrl}/workshop/export${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`,
+  uploadFiles: async (projectId: string | null, files: File[]) => {
+    const form = new FormData();
+    files.forEach((file) => form.append("files", file));
+    const response = await fetch(`${runtimeUrl}/uploads${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`, {
+      method: "POST",
+      body: form,
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return (await response.json()) as { files: Array<{ name: string; path: string; size: number }> };
+  },
   pauseRun: (runId: string) =>
     request<RunSummary>(`/runs/${runId}/pause`, {
       method: "POST",

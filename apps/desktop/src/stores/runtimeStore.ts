@@ -1,4 +1,5 @@
 import type {
+  AgentInstanceSummary,
   AgentProfileSummary,
   AppSettings,
   ApprovalSummary,
@@ -37,6 +38,7 @@ interface RuntimeStore {
   activeRunId: string | null;
   liveAgents: LiveAgentState[];
   agentProfiles: AgentProfileSummary[];
+  agentInstances: AgentInstanceSummary[];
   officeState: LiveOfficeStateSummary | null;
   loading: boolean;
   error: string | null;
@@ -68,6 +70,7 @@ interface RuntimeStore {
   deleteAgentProfile: (id: string) => Promise<void>;
   loadOfficeState: (projectId: string | null) => Promise<void>;
   saveOfficeState: (projectId: string | null, update: Partial<LiveOfficeStateSummary>) => Promise<void>;
+  loadAgentInstances: (projectId: string | null) => Promise<void>;
   connectEvents: () => void;
 }
 
@@ -101,10 +104,22 @@ function computeAgents(
   profiles: AgentProfileSummary[],
   events: Array<{ seq: number; event: YanshiEvent }>,
   officeBehavior: BehaviorMode,
+  instances: AgentInstanceSummary[] = [],
 ): LiveAgentState[] {
   const base = profiles.length > 0 ? profiles : FALLBACK_PROFILES;
+  // Seed each agent from its persisted AgentInstance so restored office state shows last-known
+  // status/fatigue/queue before any live events arrive; events then overlay the live run.
+  const instanceById = new Map(instances.map((instance) => [instance.profileId, instance]));
   const acc = new Map<string, AgentAccumulator>();
-  for (const profile of base) acc.set(profile.id, { status: "idle", queue: 0, work: 0, task: null });
+  for (const profile of base) {
+    const persisted = instanceById.get(profile.id);
+    acc.set(profile.id, {
+      status: persisted?.status ?? "idle",
+      queue: persisted?.queueCount ?? 0,
+      work: persisted ? Math.round(persisted.fatigue / 0.16) : 0,
+      task: persisted?.currentTask ?? null,
+    });
+  }
 
   for (const { event } of events) {
     const id = event.agentId || (event.type.startsWith("approval.") ? "agent_reviewer" : "agent_manager");
@@ -196,6 +211,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   activeRunId: null,
   liveAgents: computeAgents(FALLBACK_PROFILES as AgentProfileSummary[], [], "balanced"),
   agentProfiles: [],
+  agentInstances: [],
   officeState: null,
   loading: false,
   error: null,
@@ -203,19 +219,22 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   hydrate: async () => {
     set({ loading: true, error: null });
     try {
-      const [status, runs, approvals, providerSettings, appSettings, projects, workshopPacks, agentProfiles, officeState] = await Promise.all([
-        runtimeApi.status(),
-        runtimeApi.runs(),
-        runtimeApi.approvals(),
-        runtimeApi.providerSettings(),
-        runtimeApi.appSettings(),
-        runtimeApi.projects(),
-        runtimeApi.workshopPacks(),
-        runtimeApi.agentProfiles(),
-        runtimeApi.liveOffice(),
-      ]);
+      const currentProjectId = get().activeProjectId;
+      const [status, runs, approvals, providerSettings, appSettings, projects, workshopPacks, agentProfiles, officeState, agentInstances] =
+        await Promise.all([
+          runtimeApi.status(),
+          runtimeApi.runs(),
+          runtimeApi.approvals(),
+          runtimeApi.providerSettings(),
+          runtimeApi.appSettings(),
+          runtimeApi.projects(),
+          runtimeApi.workshopPacks(),
+          runtimeApi.agentProfiles(),
+          runtimeApi.liveOffice(currentProjectId),
+          runtimeApi.agentInstances(currentProjectId),
+        ]);
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
-      const activeProjectId = projects.some((project) => project.id === get().activeProjectId) ? get().activeProjectId : null;
+      const activeProjectId = projects.some((project) => project.id === currentProjectId) ? currentProjectId : null;
       set({
         status,
         desktopStatus,
@@ -225,8 +244,9 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         projects,
         workshopPacks,
         agentProfiles,
+        agentInstances,
         officeState,
-        liveAgents: computeAgents(agentProfiles, get().events, officeState.behaviorMode),
+        liveAgents: computeAgents(agentProfiles, get().events, officeState.behaviorMode, agentInstances),
         runs,
         approvals,
         activeProjectId,
@@ -300,6 +320,8 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
 
   setActiveProject: (projectId) => {
     set({ activeProjectId: projectId });
+    void get().loadAgentInstances(projectId);
+    void get().loadOfficeState(projectId);
   },
 
   setActiveRun: (runId) => {
@@ -403,7 +425,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
 
   loadAgentProfiles: async () => {
     const agentProfiles = await runtimeApi.agentProfiles();
-    set((state) => ({ agentProfiles, liveAgents: computeAgents(agentProfiles, state.events, state.officeState?.behaviorMode ?? "balanced") }));
+    set((state) => ({ agentProfiles, liveAgents: computeAgents(agentProfiles, state.events, state.officeState?.behaviorMode ?? "balanced", state.agentInstances) }));
   },
 
   saveAgentProfile: async (id, update) => {
@@ -423,12 +445,20 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
 
   loadOfficeState: async (projectId) => {
     const officeState = await runtimeApi.liveOffice(projectId);
-    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode) }));
+    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode, state.agentInstances) }));
+  },
+
+  loadAgentInstances: async (projectId) => {
+    const agentInstances = await runtimeApi.agentInstances(projectId);
+    set((state) => ({
+      agentInstances,
+      liveAgents: computeAgents(state.agentProfiles, state.events, state.officeState?.behaviorMode ?? "balanced", agentInstances),
+    }));
   },
 
   saveOfficeState: async (projectId, update) => {
     const officeState = await runtimeApi.updateLiveOffice(projectId, update);
-    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode) }));
+    set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode, state.agentInstances) }));
   },
 
   connectEvents: () => {
@@ -440,7 +470,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         const events = [...state.events.slice(-300), payload];
         return {
           events,
-          liveAgents: computeAgents(state.agentProfiles, events, state.officeState?.behaviorMode ?? "balanced"),
+          liveAgents: computeAgents(state.agentProfiles, events, state.officeState?.behaviorMode ?? "balanced", state.agentInstances),
         };
       });
       notifyForEvent(payload.event, get().appSettings?.notificationsEnabled ?? true);

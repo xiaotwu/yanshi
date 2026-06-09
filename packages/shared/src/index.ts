@@ -290,6 +290,23 @@ export interface AgentProfileSummary {
   updatedAt: string;
 }
 
+export interface AgentInstanceSummary {
+  id: string;
+  profileId: string;
+  projectId?: string | null;
+  name: string;
+  role: string;
+  status: AgentStatus;
+  currentTask?: string | null;
+  queueCount: number;
+  fatigue: number;
+  behaviorMode: BehaviorMode;
+  station: string;
+  accent: string;
+  availability: string;
+  updatedAt: string;
+}
+
 export interface LiveOfficeStateSummary {
   id: string;
   projectId?: string | null;

@@ -2,9 +2,9 @@ mod runtime;
 
 use runtime::{
     computer_click, computer_open_app, computer_shortcut, computer_type, desktop_notify,
-    macos_permission_status, open_live_office, open_runtime_logs, open_yanshi, restart_runtime,
-    pop_out_live_office, reveal_path, runtime_status, show_main_window, start_runtime, stop_runtime,
-    RuntimeState,
+    hide_main_window, macos_permission_status, open_live_office, open_runtime_logs, open_yanshi,
+    pop_out_live_office, quit_app, restart_runtime, reveal_path, runtime_status, show_main_window,
+    start_runtime, stop_runtime, update_active_runs, RuntimeState,
 };
 use tauri::{
     menu::{Menu, MenuItem},
@@ -46,7 +46,10 @@ pub fn run() {
             open_live_office,
             pop_out_live_office,
             desktop_notify,
-            reveal_path
+            reveal_path,
+            update_active_runs,
+            hide_main_window,
+            quit_app
         ])
         .setup(|app| {
             let shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyY);
@@ -61,7 +64,16 @@ pub fn run() {
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let state = window.state::<RuntimeState>();
+                    let active = *state.active_runs.lock().expect("active runs mutex poisoned");
+                    if active > 0 {
+                        // Ask the user how to handle active runs instead of silently hiding.
+                        let _ = window.emit("desktop:close-prompt", active);
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    } else {
+                        let _ = window.hide();
+                    }
                 }
                 tauri::WindowEvent::Destroyed => {
                     let state = window.state::<RuntimeState>();

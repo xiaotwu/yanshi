@@ -47,3 +47,18 @@ export async function revealPath(path: string): Promise<void> {
   if (!("__TAURI_INTERNALS__" in window)) return;
   await invoke("reveal_path", { path });
 }
+
+export async function updateActiveRuns(count: number): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  await invoke("update_active_runs", { count });
+}
+
+export async function hideMainWindow(): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  await invoke("hide_main_window");
+}
+
+export async function quitApp(): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  await invoke("quit_app");
+}

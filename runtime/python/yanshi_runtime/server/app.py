@@ -19,6 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from yanshi_runtime.config import RuntimeSettings, settings_from_env
 from yanshi_runtime.graph import RuntimeGraph
 from yanshi_runtime.models import (
+    AgentActor3DSummary,
+    AgentInstanceSummary,
     AgentProfileSummary,
     AppSettings,
     AppSettingsUpdate,
@@ -51,6 +53,7 @@ from yanshi_runtime.workshop import WorkshopPackValidator
 from yanshi_runtime.workshop.packs import MAX_WORKSHOP_UPLOAD_BYTES, is_zip_symlink, safe_archive_path
 
 UPLOAD_CHUNK_BYTES = 1024 * 1024
+MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024
 
 
 class RuntimeService:
@@ -112,6 +115,40 @@ class RuntimeService:
 
     def list_artifacts(self, project_id: str | None, run_id: str | None) -> list[ArtifactSummary]:
         return self.storage.list_artifacts(project_id=project_id, run_id=run_id)
+
+    def _workspace_for_project(self, project_id: str | None) -> Path:
+        if project_id is None:
+            return self.settings.workspace_root / "default"
+        try:
+            return Path(self.storage.get_project(project_id).workspacePath)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Project not found.") from exc
+
+    async def save_uploads(self, project_id: str | None, files: list[UploadFile]) -> list[dict]:
+        workspace = self._workspace_for_project(project_id)
+        uploads_dir = workspace / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        saved: list[dict] = []
+        for upload in files:
+            name = safe_upload_basename(upload.filename)
+            target = uploads_dir / name
+            # Resolve and confirm the destination stays inside the uploads dir (path traversal guard).
+            if uploads_dir.resolve() not in target.resolve().parents and target.resolve() != (uploads_dir / name).resolve():
+                raise HTTPException(status_code=400, detail="Unsafe upload path.")
+            total = 0
+            with target.open("wb") as handle:
+                while True:
+                    chunk = await upload.read(UPLOAD_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_UPLOAD_FILE_BYTES:
+                        handle.close()
+                        target.unlink(missing_ok=True)
+                        raise HTTPException(status_code=413, detail=f"Upload too large. Limit is {MAX_UPLOAD_FILE_BYTES} bytes.")
+                    handle.write(chunk)
+            saved.append({"name": name, "path": str(target.relative_to(workspace)), "size": total})
+        return saved
 
     def create_automation(self, request: CreateAutomationRequest) -> AutomationSummary:
         name = request.name.strip()
@@ -242,6 +279,7 @@ class RuntimeService:
         if not name:
             raise HTTPException(status_code=400, detail="Project name is required.")
         project = self.storage.create_project(name, description=request.description, workspace_root=self.settings.workspace_root)
+        self.storage.ensure_agent_team(project.id)
         self.storage.append_event("project.created", project_id=project.id, payload=project.model_dump())
         return project
 
@@ -488,6 +526,14 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     def list_project_files(project_id: str, service: RuntimeService = Depends(service_dep)):
         return service.list_project_files(project_id)
 
+    @app.post("/uploads")
+    async def upload_files(
+        projectId: str | None = None,
+        files: list[UploadFile] = File(...),
+        service: RuntimeService = Depends(service_dep),
+    ):
+        return {"files": await service.save_uploads(projectId, files)}
+
     @app.get("/artifacts", response_model=list[ArtifactSummary])
     def list_artifacts(
         projectId: str | None = None,
@@ -570,6 +616,15 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.put("/live-office", response_model=LiveOfficeStateSummary)
     def update_live_office(request: UpdateLiveOfficeStateRequest, projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
         return service.storage.upsert_live_office_state(projectId, request.model_dump())
+
+    @app.get("/agent-instances", response_model=list[AgentInstanceSummary])
+    def list_agent_instances(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.storage.ensure_agent_team(projectId)
+
+    @app.get("/agent-actors", response_model=list[AgentActor3DSummary])
+    def list_agent_actors(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        service.storage.ensure_agent_team(projectId)
+        return service.storage.list_agent_actors(projectId)
 
     @app.post("/workshop/export")
     def export_pack(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):

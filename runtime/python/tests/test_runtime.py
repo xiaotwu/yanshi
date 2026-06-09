@@ -1282,6 +1282,81 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
 
 
+def test_file_upload_copies_into_workspace_and_is_scannable(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.post("/uploads", files={"files": ("../escape report.txt", b"hello upload", "text/plain")})
+    assert response.status_code == 200
+    saved = response.json()["files"]
+    assert len(saved) == 1
+    assert ".." not in saved[0]["path"]
+    assert saved[0]["path"].startswith("uploads/")
+    assert saved[0]["size"] == len(b"hello upload")
+    # The uploaded file is a real workspace file the File Agent can scan.
+    uploaded = tmp_path / "workspaces" / "default" / saved[0]["path"]
+    assert uploaded.exists()
+    assert uploaded.read_text(encoding="utf-8") == "hello upload"
+
+    run = client.post("/runs", json={"task": "List workspace files"})
+    run_id = run.json()["id"]
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    file_obs = next(o for o in observations if o["type"] == "FileObservation")
+    assert any(item["name"] == "uploads" for item in file_obs["structuredOutput"]["items"])
+
+
+def test_file_upload_to_project_workspace(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    project = client.post("/projects", json={"name": "Docs"}).json()
+    response = client.post(
+        f"/uploads?projectId={project['id']}",
+        files={"files": ("brief.md", b"project file", "text/markdown")},
+    )
+    assert response.status_code == 200
+    uploaded = Path(project["workspacePath"]) / "uploads" / "brief.md"
+    assert uploaded.exists()
+
+
+def test_agent_instances_and_actors_persist_and_update(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "n.txt").write_text("x", encoding="utf-8")
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    instances = client.get("/agent-instances").json()
+    ids = {i["profileId"] for i in instances}
+    assert {"agent_manager", "agent_file"}.issubset(ids)
+    actors = client.get("/agent-actors").json()
+    assert len(actors) == len(instances)
+    file_actor = next(a for a in actors if a["profileId"] == "agent_file")
+    assert file_actor["station"] == "file"
+
+    # A real run drives the File agent and must persist its instance/actor state.
+    client.post("/runs", json={"task": "List workspace files"})
+    file_instance = next(i for i in service.storage.list_agent_instances(None) if i.profileId == "agent_file")
+    assert file_instance.status in {"done", "working", "failed"}
+    assert file_instance.fatigue > 0
+    file_actor2 = next(a for a in service.storage.list_agent_actors(None) if a.profileId == "agent_file")
+    assert file_actor2.animation in {"organizing_files", "celebrating", "failed"}
+
+
+def test_agent_office_state_survives_restart(tmp_path: Path) -> None:
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.storage import Storage
+
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    storage = Storage(settings.database_path, "test")
+    storage.ensure_agent_team(None)
+    storage.update_agent_state(None, "agent_file", status="done", current_task="Scan", fatigue_delta=0.3)
+    storage.conn.close()
+
+    reopened = Storage(settings.database_path, "test")
+    instance = next(i for i in reopened.list_agent_instances(None) if i.profileId == "agent_file")
+    assert instance.fatigue == 0.3
+    assert instance.status == "done"
+
+
 def test_reasoning_level_and_profile_affect_manager_prompt(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service

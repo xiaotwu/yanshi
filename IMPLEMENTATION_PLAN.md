@@ -80,6 +80,14 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Artifacts: `/artifacts` API + Artifacts page with metadata + `reveal_path` Tauri command.
 - [x] Search: real grouped search across projects/runs/artifacts/packs.
 
+## Persistence + Upload + Close-prompt + Q-style workers (2026-06-08)
+
+- [x] AgentInstance + AgentActor3D persistence (tables, endpoints, runtime updates, restart survival, tests).
+- [x] Composer file upload (safe workspace copy, chips, File Agent scannable, tests).
+- [x] Close-with-active-runs prompt (Rust + frontend modal; real pause/hide/cancel).
+- [x] Live Office Q-style mechanical workers.
+- [ ] Pending: drag-drop 2D Office Editor; App.tsx → features/* split; interactive packaged verification.
+
 ## Theme + Reasoning + Profile Injection (2026-06-08)
 
 - [x] Tokenized theme layer (System/Light/Dark, green accent, no beige); theme-aware Live Office.

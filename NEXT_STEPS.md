@@ -1,32 +1,24 @@
 # Next Steps
 
-- [x] Run the full requested verification stack after this phase (lint, typecheck, test, build, pytest, cargo check, cargo test, tauri build — all green on 2026-06-08).
-- [x] Implement a concrete Tauri-to-runtime Computer bridge transport so the Python runtime receives `YANSHI_COMPUTER_BRIDGE_URL`/`_TOKEN` in every launch (done: in-process localhost server + token + env injection + tests).
-- [x] Bundle a standalone Python runtime sidecar (PyInstaller) — `pnpm desktop:release`; packaged app launches it in `mode=bundled-sidecar`.
-- [x] Wire persisted Docker image/resource settings into per-run Docker execution with validation.
-- [x] Enforce tool-availability settings with honest `tool_disabled` observations.
-- [x] Move provider API key to an off-DB `apiKeyRef` secret store with migration.
-- [ ] Grant Accessibility to packaged `Yanshi.app` and verify Computer bridge `click/type/shortcut`; also verify tray actions, close behavior, notifications, Cmd+Y.
-- [ ] Codesign + notarize the bundle for distribution beyond the build machine.
-- [x] Automations (real create/enable-disable/run-history + interval scheduler + Run now).
-- [x] Search (real grouped results) and Artifacts page (real data + Reveal in Finder).
-- [ ] Automation triggers beyond interval (calendar/event-based); composer "Create automation" entry.
-- [x] Workshop: Agent Editor, Office Editor, Create + real pack export.
-- [x] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, event-driven life animations.
-- [x] Data model: AgentProfile + LiveOfficeState tables + migrations.
-- [ ] Persist AgentInstance / AgentActor3D (positions/fatigue) instead of deriving live; full drag-drop 3D Office Editor.
-- [x] Theme system (System/Light/Dark, tokenized, green accent, no beige).
-- [x] Reasoning levels wired to Manager planning + Composer chip.
-- [x] AgentProfile personality/prompt injected into runtime execution prompts.
-- [ ] Persist AgentInstance/AgentActor3D; 2.5D drag-drop Office Editor; Q-style worker meshes.
-- [ ] Composer file upload; close-with-active-runs prompt; App.tsx → features/* split.
-- [ ] Manual packaged verification of Computer click/type/shortcut + Docker command smoke.
-- [ ] Codesign + notarize for public distribution.
-- [ ] Split `apps/desktop/src/App.tsx` into `features/*` modules per spec §7.
-- [ ] Search, reasoning levels, composer file upload, and the close-with-active-runs prompt.
-- [ ] Pre-pull or configure the Docker sandbox image, then manually smoke a Docker command run to completion.
-- [ ] Move provider API key storage to macOS Keychain or an `apiKeyRef` design.
-- [ ] Add Workshop export and richer pack-management flows.
-- [ ] Expand Developer Mode with graph state, checkpoint view, database status, and tool traces.
-- [ ] Add focused frontend reducer/tests for Live Office state and desktop event handling.
-- [ ] Add release-side manual QA evidence to `docs/BUILD_AND_RELEASE.md`.
+_Clean list as of 2026-06-08. Completed work is in IMPLEMENTATION_LOG.md / CURRENT_STATUS.md._
+
+## Remaining product gaps
+
+- [ ] Office Editor: upgrade the numeric station-layout editor to a drag-drop 2D/2.5D canvas
+      (furniture/area/path/collision metadata; save/apply/export).
+- [ ] Live Office: replace procedural mechanical figures with modelled Q-style worker assets;
+      add more task-state/life animations.
+- [ ] Inject AgentProfile prompt/personality into every agent's execution (currently Manager + Browser).
+- [ ] Split `apps/desktop/src/App.tsx` into `features/*` + `components/*` per spec §7.
+
+## Manual verification (interactive / environment)
+
+- [ ] Grant macOS Accessibility to packaged `Yanshi.app`, verify Computer `click/type/shortcut`.
+- [ ] Pre-pull `alpine:3.20`, run a Docker sandbox command, confirm stdout/stderr + log artifact.
+- [ ] Verify tray actions, notifications, global shortcuts, and the close-with-active-runs prompt
+      in the packaged app; record results.
+
+## Release
+
+- [ ] Codesign (Developer ID) + notarize + staple for public distribution
+      (steps in docs/BUILD_AND_RELEASE.md).

@@ -1522,3 +1522,22 @@ button.list-row {
   resize: vertical;
   min-height: 64px;
 }
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-chip button {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  padding: 0;
+}
+
+.file-chip button:hover {
+  opacity: 1;
+}

@@ -157,6 +157,10 @@ class RuntimeGraph:
         task = state["task"]
         permission_mode = state.get("permission_mode", "default")
         decision = self.policy.decide(task, permission_mode)  # type: ignore[arg-type]
+        try:
+            self.storage.ensure_agent_team(self._project_id_for(run_id))
+        except Exception:  # noqa: BLE001
+            pass
         self.storage.append_event("run.started", run_id=run_id, payload={"task": task})
         manager_task = self.storage.enqueue_agent_task(
             run_id,
@@ -435,6 +439,8 @@ class RuntimeGraph:
             self._complete_agent_task(task_id, False, {"summary": disabled_result["summary"]})
             return disabled_result
 
+        self._update_actor(state["run_id"], agent_id, "working", current_task=str(assignment.get("task") or ""))
+
         if agent_id == "agent_file":
             result = self._execute_file_assignment(state, assignment)
         elif agent_id == "agent_browser":
@@ -463,6 +469,7 @@ class RuntimeGraph:
                 error=result["missing_requirement"],
             )
 
+        self._update_actor(state["run_id"], agent_id, "done" if result["ok"] else "failed", fatigue_delta=0.14)
         self._complete_agent_task(task_id, result["ok"], {"summary": result["summary"]})
         return result
 
@@ -1276,6 +1283,22 @@ class RuntimeGraph:
             cpus=settings.dockerCpus,
             pids_limit=settings.dockerPidsLimit,
         )
+
+    def _project_id_for(self, run_id: str) -> str | None:
+        return self.storage.get_run(run_id).projectId
+
+    def _update_actor(self, run_id: str, agent_id: str, status: str, *, current_task: str | None = None, fatigue_delta: float = 0.0) -> None:
+        """Persist the agent's instance + 3D actor state from real run events."""
+        try:
+            self.storage.update_agent_state(
+                self._project_id_for(run_id),
+                agent_id,
+                status=status,
+                current_task=current_task,
+                fatigue_delta=fatigue_delta,
+            )
+        except Exception:  # noqa: BLE001 - office state must never break a run
+            return
 
     def _workspace_for_run(self, run_id: str) -> Path:
         run = self.storage.get_run(run_id)

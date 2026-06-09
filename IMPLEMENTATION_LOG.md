@@ -598,3 +598,31 @@ Signature product features, all real (no mocks):
   2.5D drag-drop Office Editor; Q-style worker mesh upgrade; file upload; close-with-active-runs
   prompt; packaged click/type/shortcut manual verification; Docker command smoke; App.tsx split;
   codesign/notarization.
+
+## Phase: Instance/Actor persistence + upload + close-prompt + Q-style workers (2026-06-08)
+
+- AgentInstance + AgentActor3D persistence: `agent_instances` + `agent_actor3d` tables (UNIQUE per
+  profile×project), models, storage (`ensure_agent_team`, `list_agent_instances/actors`,
+  `update_agent_state` with status→animation/expression/motion mapping), endpoints
+  (`/agent-instances`, `/agent-actors`). Project create seeds the team; the graph updates instance/
+  actor state from real agent-task start/done/fail (fatigue accumulates). Frontend loads persisted
+  instances and seeds liveAgents (restored office shows last-known status/fatigue before events).
+  Survives restart (SQLite). Tests: persistence+update from a real run, restart survival.
+- File upload (Composer): `POST /uploads?projectId=` copies into `<workspace>/uploads/` with
+  basename sanitize (path-traversal guard) + 50 MB limit; returns input metadata. Files are real
+  workspace files the File Agent scans. Composer `+` menu → file input → chips with remove → run
+  task references `Uploaded files: …`. Tests: traversal sanitize, scannable, project-scoped.
+- Close-with-active-runs prompt: Rust tracks active run count (`update_active_runs`); on window
+  close with active runs it emits `desktop:close-prompt` + prevents close; the frontend shows a
+  modal — Pause and quit (real `pauseAllRuns` + `quit_app`), Keep running (`hide_main_window`),
+  Cancel. No active runs → hide to tray as before. New commands: update_active_runs/hide_main_window/quit_app.
+- Live Office Q-style workers: replaced capsules with procedural mechanical figures (cylindrical
+  torso + chest plate, boxy head with glowing status eyes, arms, feet, role props per station),
+  accent-colored, green glow when active. Verified in Full Office View.
+- Docs: rewrote CURRENT_STATUS.md and NEXT_STEPS.md as clean snapshots (removed stale "Search empty"/
+  "Workshop Create missing"/obsolete deferred claims).
+- Verification: pnpm lint/typecheck/build green; pytest 70 passed (+4); cargo check + test 10 passed;
+  desktop:release rebuilt sidecar (verified /agent-instances, /agent-actors, /uploads on the bundled
+  binary). No-mock audit clean.
+- Honestly deferred this session: drag-drop 2D/2.5D Office Editor; App.tsx → features/* split;
+  interactive packaged Computer click/type/shortcut + Docker smokes; codesign/notarization.

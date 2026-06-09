@@ -9,6 +9,8 @@ from typing import Any
 
 from .agents.profiles import DEFAULT_AGENT_PROFILES
 from .models import (
+    AgentActor3DSummary,
+    AgentInstanceSummary,
     AgentProfileSummary,
     AgentTaskSummary,
     AppSettings,
@@ -28,6 +30,44 @@ from .models import (
 from .secrets import SecretStore, default_secret_store
 
 PROVIDER_API_KEY_SECRET = "provider_api_key"
+
+# Default station floor positions (x, z), mirrored by the Live Office 3D scene.
+DEFAULT_STATION_POSITIONS: dict[str, tuple[float, float]] = {
+    "manager": (-2.4, -0.6),
+    "browser": (-0.9, -1.3),
+    "computer": (0.9, -1.3),
+    "file": (2.4, -0.6),
+    "reviewer": (0.0, 1.0),
+    "terminal": (2.2, 1.2),
+}
+
+
+def _station_position(station: str, layout: dict[str, list[float]]) -> tuple[float, float]:
+    override = layout.get(station)
+    if isinstance(override, list) and len(override) >= 2:
+        return float(override[0]), float(override[1])
+    return DEFAULT_STATION_POSITIONS.get(station, (0.0, 0.0))
+
+
+def _actor_visuals(station: str, status: str) -> tuple[str, str, str]:
+    """Map an agent status to (animation, expression, motionState) for the 3D actor."""
+    if status == "working":
+        animation = {
+            "browser": "using_browser",
+            "computer": "using_computer",
+            "file": "organizing_files",
+            "reviewer": "reviewing",
+            "terminal": "typing",
+            "manager": "thinking",
+        }.get(station, "typing")
+        return animation, "focused", "active"
+    if status == "waiting_approval":
+        return "waiting_approval", "expectant", "still"
+    if status in {"blocked", "failed"}:
+        return status, "concerned", "still"
+    if status == "done":
+        return "celebrating", "pleased", "settling"
+    return "idle", "neutral", "still"
 
 
 def locked_storage_method(method):
@@ -231,6 +271,36 @@ class Storage:
               behavior_mode TEXT NOT NULL DEFAULT 'balanced',
               camera_mode TEXT NOT NULL DEFAULT 'rear',
               station_layout_json TEXT NOT NULL DEFAULT '{}',
+              updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS agent_instances (
+              id TEXT PRIMARY KEY,
+              profile_id TEXT NOT NULL,
+              project_id TEXT,
+              status TEXT NOT NULL DEFAULT 'idle',
+              current_task TEXT,
+              queue_count INTEGER NOT NULL DEFAULT 0,
+              fatigue REAL NOT NULL DEFAULT 0,
+              behavior_mode TEXT NOT NULL DEFAULT 'balanced',
+              station TEXT NOT NULL,
+              accent TEXT NOT NULL DEFAULT '#1faa6a',
+              availability TEXT NOT NULL DEFAULT 'available',
+              updated_at TEXT NOT NULL,
+              UNIQUE (profile_id, project_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS agent_actor3d (
+              id TEXT PRIMARY KEY,
+              instance_id TEXT NOT NULL UNIQUE,
+              profile_id TEXT NOT NULL,
+              project_id TEXT,
+              x REAL NOT NULL DEFAULT 0,
+              z REAL NOT NULL DEFAULT 0,
+              station TEXT NOT NULL,
+              animation TEXT NOT NULL DEFAULT 'idle',
+              expression TEXT NOT NULL DEFAULT 'neutral',
+              motion_state TEXT NOT NULL DEFAULT 'still',
               updated_at TEXT NOT NULL
             );
             """
@@ -1050,6 +1120,126 @@ class Storage:
             behaviorMode=row["behavior_mode"],
             cameraMode=row["camera_mode"],
             stationLayout=json.loads(row["station_layout_json"] or "{}"),
+            updatedAt=row["updated_at"],
+        )
+
+    # --- Agent instances + 3D actors (persistent office state) -----------
+
+    @locked_storage_method
+    def ensure_agent_team(self, project_id: str | None) -> list[AgentInstanceSummary]:
+        """Create a persistent AgentInstance + AgentActor3D per profile for this project/standalone."""
+        profiles = self.conn.execute("SELECT * FROM agent_profiles ORDER BY task_priority DESC, name").fetchall()
+        layout = self.get_live_office_state(project_id).stationLayout
+        now = utc_now()
+        for profile in profiles:
+            existing = self.conn.execute(
+                "SELECT id FROM agent_instances WHERE profile_id = ? AND project_id IS ?",
+                (profile["id"], project_id),
+            ).fetchone()
+            if existing is not None:
+                continue
+            instance_id = new_id("inst")
+            self.conn.execute(
+                """
+                INSERT INTO agent_instances (id, profile_id, project_id, status, current_task, queue_count,
+                  fatigue, behavior_mode, station, accent, availability, updated_at)
+                VALUES (?, ?, ?, 'idle', NULL, 0, 0, ?, ?, ?, 'available', ?)
+                """,
+                (instance_id, profile["id"], project_id, profile["behavior_mode"], profile["station"], profile["accent"], now),
+            )
+            x, z = _station_position(profile["station"], layout)
+            self.conn.execute(
+                """
+                INSERT INTO agent_actor3d (id, instance_id, profile_id, project_id, x, z, station, animation, expression, motion_state, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'idle', 'neutral', 'still', ?)
+                """,
+                (new_id("actor"), instance_id, profile["id"], project_id, x, z, profile["station"], now),
+            )
+        self.conn.commit()
+        return self._list_agent_instances_inner(project_id)
+
+    def _list_agent_instances_inner(self, project_id: str | None) -> list[AgentInstanceSummary]:
+        rows = self.conn.execute(
+            """
+            SELECT i.*, p.name AS profile_name, p.role AS profile_role
+            FROM agent_instances i JOIN agent_profiles p ON p.id = i.profile_id
+            WHERE i.project_id IS ? ORDER BY p.task_priority DESC, p.name
+            """,
+            (project_id,),
+        ).fetchall()
+        return [self._instance_from_row(row) for row in rows]
+
+    @locked_storage_method
+    def list_agent_instances(self, project_id: str | None) -> list[AgentInstanceSummary]:
+        return self._list_agent_instances_inner(project_id)
+
+    @locked_storage_method
+    def list_agent_actors(self, project_id: str | None) -> list[AgentActor3DSummary]:
+        rows = self.conn.execute("SELECT * FROM agent_actor3d WHERE project_id IS ? ORDER BY profile_id", (project_id,)).fetchall()
+        return [self._actor_from_row(row) for row in rows]
+
+    @locked_storage_method
+    def update_agent_state(
+        self,
+        project_id: str | None,
+        profile_id: str,
+        *,
+        status: str,
+        current_task: str | None = None,
+        queue_delta: int = 0,
+        fatigue_delta: float = 0.0,
+    ) -> None:
+        row = self.conn.execute(
+            "SELECT * FROM agent_instances WHERE profile_id = ? AND project_id IS ?",
+            (profile_id, project_id),
+        ).fetchone()
+        if row is None:
+            return
+        now = utc_now()
+        queue_count = max(0, int(row["queue_count"]) + queue_delta)
+        fatigue = min(1.0, max(0.0, float(row["fatigue"]) + fatigue_delta))
+        task = current_task if current_task is not None else (row["current_task"] if status == "working" else None)
+        self.conn.execute(
+            "UPDATE agent_instances SET status = ?, current_task = ?, queue_count = ?, fatigue = ?, updated_at = ? WHERE id = ?",
+            (status, task, queue_count, fatigue, now, row["id"]),
+        )
+        animation, expression, motion = _actor_visuals(row["station"], status)
+        self.conn.execute(
+            "UPDATE agent_actor3d SET animation = ?, expression = ?, motion_state = ?, updated_at = ? WHERE instance_id = ?",
+            (animation, expression, motion, now, row["id"]),
+        )
+        self.conn.commit()
+
+    def _instance_from_row(self, row: sqlite3.Row) -> AgentInstanceSummary:
+        return AgentInstanceSummary(
+            id=row["id"],
+            profileId=row["profile_id"],
+            projectId=row["project_id"],
+            name=row["profile_name"],
+            role=row["profile_role"],
+            status=row["status"],
+            currentTask=row["current_task"],
+            queueCount=row["queue_count"],
+            fatigue=row["fatigue"],
+            behaviorMode=row["behavior_mode"],
+            station=row["station"],
+            accent=row["accent"],
+            availability=row["availability"],
+            updatedAt=row["updated_at"],
+        )
+
+    def _actor_from_row(self, row: sqlite3.Row) -> AgentActor3DSummary:
+        return AgentActor3DSummary(
+            id=row["id"],
+            instanceId=row["instance_id"],
+            profileId=row["profile_id"],
+            projectId=row["project_id"],
+            x=row["x"],
+            z=row["z"],
+            station=row["station"],
+            animation=row["animation"],
+            expression=row["expression"],
+            motionState=row["motion_state"],
             updatedAt=row["updated_at"],
         )
 

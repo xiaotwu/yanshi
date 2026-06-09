@@ -186,6 +186,37 @@ class UpdateLiveOfficeStateRequest(BaseModel):
     stationLayout: dict[str, list[float]] | None = None
 
 
+class AgentInstanceSummary(BaseModel):
+    id: str
+    profileId: str
+    projectId: str | None = None
+    name: str
+    role: str
+    status: str = "idle"
+    currentTask: str | None = None
+    queueCount: int = 0
+    fatigue: float = 0.0
+    behaviorMode: BehaviorMode = "balanced"
+    station: str
+    accent: str
+    availability: str = "available"
+    updatedAt: str
+
+
+class AgentActor3DSummary(BaseModel):
+    id: str
+    instanceId: str
+    profileId: str
+    projectId: str | None = None
+    x: float = 0.0
+    z: float = 0.0
+    station: str
+    animation: str = "idle"
+    expression: str = "neutral"
+    motionState: str = "still"
+    updatedAt: str
+
+
 ScheduleKind = Literal["manual", "interval"]
 
 

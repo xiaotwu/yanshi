@@ -83,4 +83,9 @@
 - [x] Project-scoped Live Office state (`live_office_state` table + project Live Office tab) and AgentProfile data model (`agent_profiles` table, seeded, editable).
 - [ ] Full drag-and-drop 3D Office Editor (current first version is a numeric station-layout editor per spec allowance).
 - [ ] AgentInstance / AgentActor3D persisted tables (Live Office actor state currently derived live from events).
+- [x] AgentInstance + AgentActor3D persisted (project-scoped + standalone), updated from real run events, survive app restart; tested.
+- [x] Composer file upload copies into the workspace safely (basename sanitize + size limit), shows chips, removable, File Agent can scan them; tested.
+- [x] Close-with-active-runs prompt (Pause and quit / Keep running / Cancel); pause is real, keep-running hides to tray, cancel aborts close.
+- [x] Live Office workers upgraded to Q-style mechanical figures with role props + status/life states.
+- [ ] Office Editor is a drag-drop visual 2D/2.5D editor (current: real numeric station-layout editor).
 - [ ] No user-facing incomplete core flow remains.

@@ -69,9 +69,55 @@ function targetPosition(agent: LiveAgentState, stationLayout: Record<string, num
   return STATIONS[area] ?? own;
 }
 
+// Small role props that sit on each worker's desk to make agents recognizable.
+const ROLE_PROP: Record<string, { color: string; shape: "screen" | "globe" | "box" | "clip" | "cube" | "antenna" }> = {
+  manager: { color: "#cfa94e", shape: "antenna" },
+  browser: { color: "#3f7fb0", shape: "globe" },
+  computer: { color: "#9a5b2d", shape: "screen" },
+  file: { color: "#5b8d55", shape: "box" },
+  reviewer: { color: "#b65c2f", shape: "clip" },
+  terminal: { color: "#6a6f86", shape: "cube" },
+};
+
+function RoleProp({ role }: { role: string }) {
+  const prop = ROLE_PROP[role] ?? ROLE_PROP.file;
+  if (prop.shape === "antenna") {
+    return (
+      <group position={[0, 0.96, 0]}>
+        <mesh>
+          <cylinderGeometry args={[0.012, 0.012, 0.14, 8]} />
+          <meshStandardMaterial color="#9aa3ad" metalness={0.6} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.09, 0]}>
+          <sphereGeometry args={[0.035, 12, 12]} />
+          <meshStandardMaterial color={prop.color} emissive={prop.color} emissiveIntensity={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+  const geometry =
+    prop.shape === "globe" ? (
+      <sphereGeometry args={[0.1, 16, 16]} />
+    ) : prop.shape === "screen" ? (
+      <boxGeometry args={[0.18, 0.12, 0.02]} />
+    ) : prop.shape === "cube" ? (
+      <boxGeometry args={[0.12, 0.12, 0.12]} />
+    ) : prop.shape === "clip" ? (
+      <boxGeometry args={[0.12, 0.16, 0.02]} />
+    ) : (
+      <boxGeometry args={[0.16, 0.1, 0.12]} />
+    );
+  return (
+    <mesh position={[0.32, 0.16, 0.18]} castShadow>
+      {geometry}
+      <meshStandardMaterial color={prop.color} roughness={0.6} metalness={0.2} />
+    </mesh>
+  );
+}
+
 function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLayout: Record<string, number[]> }) {
   const groupRef = useRef<Group>(null);
-  const bodyRef = useRef<Mesh>(null);
+  const bodyRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
 
   const statusColor = useMemo(() => {
@@ -111,27 +157,59 @@ function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLa
 
   return (
     <group ref={groupRef} position={[start[0], 0, start[1]]}>
-      <mesh
+      {/* Q-style mechanical worker: cylindrical torso, boxy head with glowing eyes, arms, feet. */}
+      <group
         ref={bodyRef}
-        castShadow
         onPointerOver={(event) => {
           event.stopPropagation();
           setHovered(true);
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <capsuleGeometry args={[0.18, 0.42, 8, 16]} />
-        <meshStandardMaterial color={agent.accent} roughness={0.55} metalness={0.18} emissive={statusColor} emissiveIntensity={agent.status === "working" ? 0.5 : 0.08} />
-      </mesh>
-      <mesh position={[0, 0.62, 0]} castShadow>
-        <sphereGeometry args={[0.16, 18, 18]} />
-        <meshStandardMaterial color="#f0d6bf" roughness={0.8} />
-      </mesh>
-      {/* Status dot */}
-      <mesh position={[0, 0.92, 0]}>
-        <sphereGeometry args={[0.05, 12, 12]} />
-        <meshStandardMaterial color={statusColor} emissive={statusColor} emissiveIntensity={0.6} />
-      </mesh>
+        {/* Torso */}
+        <mesh castShadow position={[0, 0.34, 0]}>
+          <cylinderGeometry args={[0.17, 0.19, 0.36, 18]} />
+          <meshStandardMaterial color={agent.accent} roughness={0.5} metalness={0.25} emissive={statusColor} emissiveIntensity={agent.status === "working" ? 0.45 : 0.06} />
+        </mesh>
+        {/* Chest plate */}
+        <mesh position={[0, 0.36, 0.16]}>
+          <boxGeometry args={[0.16, 0.12, 0.03]} />
+          <meshStandardMaterial color="#cdd3d8" metalness={0.5} roughness={0.4} />
+        </mesh>
+        {/* Arms */}
+        <mesh position={[0.21, 0.34, 0]} castShadow>
+          <boxGeometry args={[0.07, 0.26, 0.09]} />
+          <meshStandardMaterial color={agent.accent} roughness={0.55} metalness={0.2} />
+        </mesh>
+        <mesh position={[-0.21, 0.34, 0]} castShadow>
+          <boxGeometry args={[0.07, 0.26, 0.09]} />
+          <meshStandardMaterial color={agent.accent} roughness={0.55} metalness={0.2} />
+        </mesh>
+        {/* Head */}
+        <mesh position={[0, 0.62, 0]} castShadow>
+          <boxGeometry args={[0.27, 0.22, 0.22]} />
+          <meshStandardMaterial color="#d7dce0" roughness={0.5} metalness={0.35} />
+        </mesh>
+        {/* Eyes glow with status (green when working) */}
+        <mesh position={[0.06, 0.63, 0.12]}>
+          <sphereGeometry args={[0.028, 10, 10]} />
+          <meshStandardMaterial color={statusColor} emissive={statusColor} emissiveIntensity={0.9} />
+        </mesh>
+        <mesh position={[-0.06, 0.63, 0.12]}>
+          <sphereGeometry args={[0.028, 10, 10]} />
+          <meshStandardMaterial color={statusColor} emissive={statusColor} emissiveIntensity={0.9} />
+        </mesh>
+        {/* Feet */}
+        <mesh position={[0.08, 0.05, 0]} castShadow>
+          <boxGeometry args={[0.1, 0.1, 0.14]} />
+          <meshStandardMaterial color="#8b939b" metalness={0.4} roughness={0.5} />
+        </mesh>
+        <mesh position={[-0.08, 0.05, 0]} castShadow>
+          <boxGeometry args={[0.1, 0.1, 0.14]} />
+          <meshStandardMaterial color="#8b939b" metalness={0.4} roughness={0.5} />
+        </mesh>
+        <RoleProp role={agent.station} />
+      </group>
 
       {/* Queue bubble */}
       {agent.queueCount > 0 && (

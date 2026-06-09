@@ -22,6 +22,7 @@ pub struct RuntimeState {
     command_label: Mutex<Option<String>>,
     log_path: Mutex<Option<PathBuf>>,
     bridge: Mutex<Option<ComputerBridgeHandle>>,
+    pub active_runs: Mutex<u32>,
 }
 
 /// Connection details for the in-process localhost Computer Use bridge server.
@@ -1022,6 +1023,24 @@ pub fn open_runtime_logs(state: State<RuntimeState>) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|error| format!("Could not open runtime log: {error}"))
+}
+
+#[tauri::command]
+pub fn update_active_runs(count: u32, state: State<RuntimeState>) {
+    *state.active_runs.lock().expect("active runs mutex poisoned") = count;
+}
+
+#[tauri::command]
+pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window is not available.".to_string())?;
+    window.hide().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
 }
 
 #[tauri::command]
