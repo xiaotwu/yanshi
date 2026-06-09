@@ -679,3 +679,22 @@ Signature product features, all real (no mocks):
 - Verification: pnpm lint/typecheck/test/build green; pytest 73 passed; cargo check + test 10 passed;
   pnpm desktop:release built `.app` + `.dmg` (first DMG attempt hit a transient bundle_dmg flake;
   succeeded on retry after clearing the stale dmg). No-mock audit clean.
+
+## Phase: Final Acceptance + RC build (2026-06-09)
+
+- Automated: `pnpm install/lint/typecheck/test/build` green; `pytest` 73 passed; `cargo check` +
+  `cargo test` 10 passed; `pnpm desktop:release` built `.app` + `.dmg` (transient DMG flake on first
+  attempt, succeeded after clearing the stale dmg).
+- RC bundle verified self-contained: 63 MB sidecar at `Contents/Resources/resources/`, executable,
+  serves `/health` from a clean env (`env -i`), identifier `com.yanshi.desktop`, 67 MB dmg.
+- Packaged-app QA (this machine): all non-interactive items PASS (see ACCEPTANCE_CHECKLIST). Notably
+  a **real Docker command smoke** (daemon up: `alpine:3.20` pre-pulled, approved command completed,
+  stdout captured, settings applied, terminal log artifact). Computer `click/type/shortcut/screenshot`
+  return the honest macOS permission-required state (Accessibility/Screen Recording not granted in
+  this env); `open-app` works. Browser returns honest `playwright_browser_binaries` state.
+- Audits: no-mock grep clean; no hardcoded secrets; workshop + upload path-safety guards present;
+  no bridge-token logging; provider key absent from settings/SQLite/events/logs.
+- Signing: no Apple Developer ID Application identity available → unsigned/un-notarized. Documented
+  the full Developer ID + notarization + staple + Gatekeeper steps and a Public Distribution
+  Checklist in docs/BUILD_AND_RELEASE.md. Added docs/RELEASE_NOTES_RC.md.
+- Conclusion: **Final RC local build complete; public notarized release pending Apple signing.**

@@ -8,13 +8,14 @@ _Clean list as of 2026-06-09. Completed work is in IMPLEMENTATION_LOG.md / CURRE
 - [ ] Live Office: modelled Q-style worker art assets; more task-state/life animations.
 - [ ] Finer frontend split: `components/composer` and `components/ui` (feature-level split is done).
 
-## Manual verification (interactive / environment)
+## Manual verification (interactive — environment/human-only)
 
+- [x] Docker sandbox command smoke (alpine:3.20, daemon up) — verified 2026-06-09.
 - [ ] Grant macOS Accessibility to packaged `Yanshi.app`, verify Computer `click/type/shortcut`;
-      grant Screen Recording, verify `screenshot`.
-- [ ] Pre-pull `alpine:3.20`, run a Docker sandbox command, confirm stdout/stderr + log artifact.
-- [ ] Verify tray actions, notifications, global shortcuts, and the close-with-active-runs prompt
-      in the packaged app; record results.
+      grant Screen Recording, verify `screenshot`. (Honest permission-required state verified.)
+- [ ] `playwright install chromium` in the runtime, then verify real Browser navigation.
+- [ ] Human interactive pass: tray actions, notifications, global shortcuts, close-with-active-runs
+      prompt, Light/Dark/System switch in the packaged app.
 
 ## Release
 

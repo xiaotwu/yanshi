@@ -45,20 +45,30 @@ _Clean snapshot, 2026-06-09. Categories: ✅ complete · 🟡 partial · 🔍 ma
 - Live Office workers are procedural Q-style figures (not modelled art assets).
 - Office Editor has no path/collision editing yet.
 
-## ✅ Packaged verification passed (2026-06-09, non-interactive)
+## ✅ Packaged verification passed (2026-06-09, RC build)
 
-- `.app` launch → `mode=bundled-sidecar`; `/agent-instances`,`/agent-actors`,`/live-office` → 200.
-- Computer bridge rejects no-token/bad-token → 401; runtime task → native `open-app TextEdit` completed.
-- Office furniture round-trips in the packaged app; provider settings never returns the API key;
-  no secret/token in the runtime log.
+- App/Runtime: `.app` launch, `mode=bundled-sidecar`, health, clean-env launch (no repo/uv dep), logs accessible.
+- Provider/Secrets: settings save/load; settings/SQLite/events/runtime-log contain **no** raw API key.
+- Project/Runs: create project, project-scoped run, standalone run, Hybrid-Transcript events.
+- Multi-agent: Manager plan + persisted agent_tasks; File assignment executes; no fake activity.
+- File upload: copied into workspace, traversal-safe path, scannable by File Agent.
+- **Docker (real, daemon up):** approved command completed, stdout captured, settings applied
+  (image/memory/cpus/pids), terminal log artifact created.
+- Computer Use: `open-app` works through the bridge; bridge rejects no/bad token → 401; token not logged.
+- Approvals: request (direct path), persist/visible, deny stops honestly, approve resumes.
+- Workshop: export → re-import (`Yanshi Team Export`); unsafe pack rejected (400); Agent Editor save;
+  Office Editor furniture persist + export includes furniture.
+- Live Office: AgentInstance + AgentActor3D persist (≥6 each).
+- Automations: create + Run now + run history persists.
+- Browser: honest `playwright_browser_binaries` missing-dependency state (no fake success).
 
-## 🔍 Manual verification pending (interactive / environment-limited)
+## 🔍 Manual verification pending (interactive / environment-limited — honest states verified)
 
-- Packaged Computer `click` / `type` / `shortcut` (need a one-time macOS Accessibility grant).
-- Computer `screenshot` (needs Screen Recording grant).
-- Docker command completion (needs Docker Desktop running + pre-pulled image).
+- Packaged Computer `click`/`type`/`shortcut` (one-time macOS Accessibility grant) and `screenshot`
+  (Screen Recording grant). The permission-required state is verified; `open-app` is verified working.
 - Tray actions / notifications / global shortcuts / close-prompt / Light-Dark-System in the
   packaged `.app` (functional in dev; need a packaged interactive pass).
+- Browser real navigation requires `playwright install chromium` in the runtime.
 
 ## 🚀 Release-only pending
 

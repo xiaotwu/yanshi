@@ -2,6 +2,11 @@
 
 _Last updated: 2026-06-09. This is a clean snapshot; phase history lives in IMPLEMENTATION_LOG.md._
 
+> **RC status: Final RC local build complete. Public notarized release pending Apple Developer ID
+> signing/notarization.** Automated suite green (pytest 73, cargo 10, lint/typecheck/build);
+> packaged-app QA passed for all non-interactive items incl. a real Docker command smoke; see
+> docs/RELEASE_NOTES_RC.md.
+
 ## Complete (real, tested, no mocks)
 
 **Platform & runtime**
@@ -56,14 +61,18 @@ _Last updated: 2026-06-09. This is a clean snapshot; phase history lives in IMPL
 
 ## Packaged verification (2026-06-09, this machine)
 
-Non-interactive checks **passed** in the packaged `.app`: bundled runtime starts
-(`mode=bundled-sidecar`); Computer bridge rejects unauthorized requests (401); a runtime task drove
-native `open-app TextEdit` to completion through the bridge; 6 AgentInstances persisted.
+Non-interactive checks **passed** in the packaged `.app`: bundled-sidecar launch + health +
+clean-env launch; project/standalone/project-scoped runs; multi-agent plan + agent_tasks; Hybrid
+Transcript events; file upload (+ traversal/size safety); **real Docker command smoke** (daemon up:
+completed, stdout captured, settings applied, log artifact); Computer `open-app`; bridge 401 +
+no token in logs; approvals request/persist/deny/resume; Workshop export/re-import + unsafe-pack
+rejection; Agent Editor save; Office Editor furniture persist + export; AgentInstance/AgentActor3D
+persistence; automations run + history; secret audit (no API key in settings/SQLite/events/logs);
+Browser → honest `playwright_browser_binaries` missing-dependency state.
 
-Still pending (interactive / environment-limited):
+Still pending (interactive / environment-limited, honest states verified):
 - Computer `click/type/shortcut` (one-time macOS Accessibility grant) and `screenshot`
-  (Screen Recording grant).
-- Docker command smoke (needs Docker Desktop running + image pre-pulled).
+  (Screen Recording grant) — honest permission-required state verified; `open-app` verified working.
 - Tray actions / notifications / global shortcuts / close-prompt / Light-Dark-System in the
   packaged `.app` (functional in dev; need a packaged interactive pass).
 
