@@ -80,6 +80,42 @@ under tests) runs **enabled interval automations** when due (`run_due_automation
 lists those runs. Only the runtime process lifetime is covered — automations do not run while the
 app is closed (documented limitation; calendar/event triggers are future work).
 
+## Theme
+
+The UI is fully tokenized (`apps/desktop/src/styles.css` CSS variables) and supports **System /
+Light / Dark** (Settings → General → Theme; default System). Light is pure white, Dark is
+near-black, accent is a soft mint-green. The desktop resolves System via `prefers-color-scheme`
+and reacts to OS changes. The Live Office 3D scene adapts (floor/lighting/environment + green glow).
+
+## Codesign & Notarization (pending for public release)
+
+The current bundle is **unsigned and un-notarized** — functionally distributable locally, but
+Gatekeeper will block/warn on another Mac. To ship publicly:
+
+1. **Ad-hoc sign (local only, no Apple account):**
+   ```bash
+   codesign --deep --force -s - "apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app"
+   ```
+   Removes the "damaged" prompt on the build machine; not valid for distribution.
+
+2. **Developer ID signing** (requires an Apple Developer account + "Developer ID Application" cert):
+   Configure Tauri signing in `tauri.conf.json` (`bundle.macOS.signingIdentity`) or sign post-build:
+   ```bash
+   codesign --deep --force --options runtime --timestamp \
+     -s "Developer ID Application: <Your Name> (<TEAMID>)" Yanshi.app
+   ```
+
+3. **Notarize + staple:**
+   ```bash
+   xcrun notarytool submit Yanshi_0.1.0_aarch64.dmg \
+     --apple-id <id> --team-id <TEAMID> --password <app-specific-password> --wait
+   xcrun stapler staple Yanshi.app
+   xcrun stapler staple Yanshi_0.1.0_aarch64.dmg
+   ```
+
+Until steps 2–3 are completed, the release notes must state: a functionally distributable local
+build exists; a signed/notarized public release remains pending.
+
 ## Provider API Key Storage
 
 The provider API key is never stored inline in SQLite. `set_provider_settings` writes the

@@ -80,6 +80,12 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Artifacts: `/artifacts` API + Artifacts page with metadata + `reveal_path` Tauri command.
 - [x] Search: real grouped search across projects/runs/artifacts/packs.
 
+## Theme + Reasoning + Profile Injection (2026-06-08)
+
+- [x] Tokenized theme layer (System/Light/Dark, green accent, no beige); theme-aware Live Office.
+- [x] Reasoning levels persisted + per-run override, wired to Manager planning; Composer chip.
+- [x] AgentProfile personality/prompt injected into Manager/Browser execution prompts.
+
 ## Agent System + Live Office (2026-06-08)
 
 - [x] AgentProfile + LiveOfficeState data models, endpoints, migrations, tests.

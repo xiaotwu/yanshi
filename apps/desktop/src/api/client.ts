@@ -80,10 +80,17 @@ export const runtimeApi = {
     permissionMode: "default" | "auto_review" | "full_access",
     projectId?: string | null,
     planFirst?: boolean,
+    reasoning?: "low" | "medium" | "high" | "extra_high",
   ) =>
     request<RunSummary>("/runs", {
       method: "POST",
-      body: JSON.stringify({ task, permissionMode, ...(projectId ? { projectId } : {}), ...(planFirst ? { planFirst } : {}) }),
+      body: JSON.stringify({
+        task,
+        permissionMode,
+        ...(projectId ? { projectId } : {}),
+        ...(planFirst ? { planFirst } : {}),
+        ...(reasoning ? { reasoning } : {}),
+      }),
     }),
   projectFiles: (projectId: string) => request<ProjectFilesResult>(`/projects/${projectId}/files`),
   artifacts: (filters?: { projectId?: string | null; runId?: string | null }) => {

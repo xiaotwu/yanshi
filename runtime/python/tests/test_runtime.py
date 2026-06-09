@@ -1282,6 +1282,50 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
 
 
+def test_reasoning_level_and_profile_affect_manager_prompt(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    provider = SequencedProvider(
+        [
+            json.dumps({"steps": ["Understand", "Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer the question."}]}),
+            "Final answer.",
+        ]
+    )
+    service.provider = provider
+    service.graph.provider = provider
+    # Give the Manager profile a distinctive personality and pick Extra High reasoning.
+    client.put("/agent-profiles/agent_manager", json={"personality": "Zephyr-coordinator-signature"})
+
+    created = client.post("/runs", json={"task": "Write a concise hello", "reasoning": "extra_high"})
+    assert created.status_code == 200
+    run = client.get(f"/runs/{created.json()['id']}").json()
+    assert run["status"] == "completed"
+
+    planning_prompt = json.dumps(provider.calls[0])
+    assert "Zephyr-coordinator-signature" in planning_prompt
+    assert "Decompose thoroughly" in planning_prompt
+    assert "extra_high" in planning_prompt
+
+
+def test_reasoning_default_comes_from_settings(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    provider = SequencedProvider(
+        [
+            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer."}]}),
+            "Done.",
+        ]
+    )
+    service.provider = provider
+    service.graph.provider = provider
+    client.put("/settings", json={"reasoning": "low"})
+
+    created = client.post("/runs", json={"task": "Write a concise hello"})
+    assert created.status_code == 200
+    planning_prompt = json.dumps(provider.calls[0])
+    assert "Keep the plan short and direct" in planning_prompt
+
+
 def test_agent_profiles_seed_and_update(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 

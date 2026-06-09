@@ -28,6 +28,7 @@ class GraphState(TypedDict, total=False):
     task: str
     permission_mode: str
     plan_first: bool
+    reasoning: str
     risk_level: str
     plan: list[str]
     approval_required: bool
@@ -112,15 +113,40 @@ class RuntimeGraph:
         builder.add_edge("finalizer", END)
         return builder.compile(checkpointer=self.checkpointer)
 
-    def start(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False) -> dict[str, Any]:
+    def start(
+        self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium"
+    ) -> dict[str, Any]:
         config = {"configurable": {"thread_id": run_id}}
         state: GraphState = {
             "run_id": run_id,
             "task": task,
             "permission_mode": permission_mode,
             "plan_first": plan_first,
+            "reasoning": reasoning,
         }
         return self.graph.invoke(state, config=config)
+
+    def _agent_persona(self, agent_id: str) -> str:
+        """Inject the configured AgentProfile personality/prompt into the agent's system message."""
+        try:
+            profile = self.storage.get_agent_profile(agent_id)
+        except KeyError:
+            return ""
+        parts = []
+        if profile.personality:
+            parts.append(profile.personality.strip())
+        if profile.prompt:
+            parts.append(profile.prompt.strip())
+        return (" " + " ".join(parts)) if parts else ""
+
+    @staticmethod
+    def _reasoning_directive(reasoning: str) -> str:
+        return {
+            "low": "Keep the plan short and direct with minimal steps.",
+            "medium": "Create a normal, balanced plan.",
+            "high": "Decompose the task into detailed steps and assign agents carefully.",
+            "extra_high": "Decompose thoroughly, anticipate edge cases, and add a review step.",
+        }.get(reasoning, "Create a normal, balanced plan.")
 
     def resume(self, run_id: str, approved: bool) -> dict[str, Any]:
         config = {"configurable": {"thread_id": run_id}}
@@ -142,7 +168,7 @@ class RuntimeGraph:
         self.storage.start_agent_task(manager_task.id)
 
         try:
-            plan, assignments = self._build_agent_plan(task, decision.risk_level)
+            plan, assignments = self._build_agent_plan(task, decision.risk_level, state.get("reasoning", "medium"))
         except (ProviderCallError, ValueError, json.JSONDecodeError) as exc:
             summary = f"Manager could not create a structured plan: {exc}"
             action_id = self.storage.create_action(
@@ -630,7 +656,8 @@ class RuntimeGraph:
                     ChatMessage(
                         role="system",
                         content=(
-                            "You are Yanshi Browser Agent. Summarize the captured page text concisely. "
+                            "You are Yanshi Browser Agent." + self._agent_persona("agent_browser") + " "
+                            "Summarize the captured page text concisely. "
                             "Do not claim navigation beyond the provided browser observation."
                         ),
                     ),
@@ -844,7 +871,8 @@ class RuntimeGraph:
                     ChatMessage(
                         role="system",
                         content=(
-                            "You are Yanshi Manager Agent. Produce the final response from actual agent observations. "
+                            "You are Yanshi Manager Agent." + self._agent_persona("agent_manager") + " "
+                            "Produce the final response from actual agent observations. "
                             "Do not claim any browser, computer, file, or terminal action unless it appears in the provided observations."
                         ),
                     ),
@@ -1068,28 +1096,30 @@ class RuntimeGraph:
         self._complete_agent_task(queue_task_id, missing_requirement is None, {"summary": summary})
         return {**state, "tool_failed": missing_requirement is not None, "result_summary": summary}
 
-    def _build_agent_plan(self, task: str, risk_level: str) -> tuple[list[str], list[dict[str, Any]]]:
+    def _build_agent_plan(self, task: str, risk_level: str, reasoning: str = "medium") -> tuple[list[str], list[dict[str, Any]]]:
         direct_assignments = self._direct_assignments_for_task(task)
         if direct_assignments:
             return self._plan_for_task(task, risk_level), direct_assignments
         if self.provider.configured:
-            return self._provider_agent_plan(task, risk_level)
+            return self._provider_agent_plan(task, risk_level, reasoning)
         return self._plan_for_task(task, risk_level), []
 
-    def _provider_agent_plan(self, task: str, risk_level: str) -> tuple[list[str], list[dict[str, Any]]]:
+    def _provider_agent_plan(self, task: str, risk_level: str, reasoning: str = "medium") -> tuple[list[str], list[dict[str, Any]]]:
         response = self.provider.chat_completion(
             [
                 ChatMessage(
                     role="system",
                     content=(
-                        "You are Yanshi Manager Agent. Create a structured multi-agent plan as JSON only. "
+                        "You are Yanshi Manager Agent." + self._agent_persona("agent_manager") + " "
+                        "Create a structured multi-agent plan as JSON only. "
                         "Schema: {\"steps\":[string],\"tasks\":[{\"agentId\":string,\"task\":string}]}. "
                         "For general answer-writing tasks, assign agent_manager only. "
                         "Use only these agent IDs: agent_manager, agent_browser, agent_computer, agent_file, agent_reviewer, agent_terminal. "
-                        "Do not assign browser, computer, file, or terminal work unless the user explicitly requested that tool."
+                        "Do not assign browser, computer, file, or terminal work unless the user explicitly requested that tool. "
+                        + self._reasoning_directive(reasoning)
                     ),
                 ),
-                ChatMessage(role="user", content=f"Risk: {risk_level}\nTask: {task}"),
+                ChatMessage(role="user", content=f"Risk: {risk_level}\nReasoning: {reasoning}\nTask: {task}"),
             ]
         )
         payload = self._parse_json_object(response)

@@ -46,6 +46,7 @@ interface RuntimeStore {
     permissionMode: "default" | "auto_review" | "full_access",
     projectId?: string | null,
     planFirst?: boolean,
+    reasoning?: "low" | "medium" | "high" | "extra_high",
   ) => Promise<void>;
   createProject: (name: string, description?: string) => Promise<void>;
   updateProject: (projectId: string, update: { name?: string; description?: string; settings?: Record<string, unknown> }) => Promise<void>;
@@ -239,10 +240,10 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
-  createRun: async (task, permissionMode, projectId, planFirst) => {
+  createRun: async (task, permissionMode, projectId, planFirst, reasoning) => {
     set({ loading: true, error: null });
     try {
-      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst);
+      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning);
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
       set({
         activeRunId: run.id,

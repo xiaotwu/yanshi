@@ -49,11 +49,15 @@ class RunSummary(BaseModel):
     resultSummary: str | None = None
 
 
+ReasoningLevel = Literal["low", "medium", "high", "extra_high"]
+
+
 class CreateRunRequest(BaseModel):
     task: str
     projectId: str | None = None
     permissionMode: PermissionMode = "default"
     planFirst: bool = False
+    reasoning: ReasoningLevel | None = None
 
 
 class ProjectSummary(BaseModel):
@@ -281,7 +285,8 @@ class AppSettings(BaseModel):
     permissionModeDefault: PermissionMode = "default"
     developerMode: bool = False
     onboarded: bool = False
-    theme: Literal["light", "dark"] = "light"
+    theme: Literal["light", "dark", "system"] = "system"
+    reasoning: ReasoningLevel = "medium"
     liveOfficeAutoOpen: bool = True
     liveOfficeDefaultOpen: bool = False
     browserToolEnabled: bool = True
@@ -299,7 +304,8 @@ class AppSettingsUpdate(BaseModel):
     permissionModeDefault: PermissionMode | None = None
     developerMode: bool | None = None
     onboarded: bool | None = None
-    theme: Literal["light", "dark"] | None = None
+    theme: Literal["light", "dark", "system"] | None = None
+    reasoning: ReasoningLevel | None = None
     liveOfficeAutoOpen: bool | None = None
     liveOfficeDefaultOpen: bool | None = None
     browserToolEnabled: bool | None = None

@@ -15,7 +15,13 @@
 - [x] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, event-driven life animations.
 - [x] Data model: AgentProfile + LiveOfficeState tables + migrations.
 - [ ] Persist AgentInstance / AgentActor3D (positions/fatigue) instead of deriving live; full drag-drop 3D Office Editor.
-- [ ] Wire AgentProfile prompts/personality into runtime execution (currently configuration surfaced in editor + Live Office).
+- [x] Theme system (System/Light/Dark, tokenized, green accent, no beige).
+- [x] Reasoning levels wired to Manager planning + Composer chip.
+- [x] AgentProfile personality/prompt injected into runtime execution prompts.
+- [ ] Persist AgentInstance/AgentActor3D; 2.5D drag-drop Office Editor; Q-style worker meshes.
+- [ ] Composer file upload; close-with-active-runs prompt; App.tsx → features/* split.
+- [ ] Manual packaged verification of Computer click/type/shortcut + Docker command smoke.
+- [ ] Codesign + notarize for public distribution.
 - [ ] Split `apps/desktop/src/App.tsx` into `features/*` modules per spec §7.
 - [ ] Search, reasoning levels, composer file upload, and the close-with-active-runs prompt.
 - [ ] Pre-pull or configure the Docker sandbox image, then manually smoke a Docker command run to completion.

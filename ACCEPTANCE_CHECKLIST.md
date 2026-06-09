@@ -64,7 +64,9 @@
 - [x] Notifications are wired for runtime events.
 - [ ] Notifications are manually verified on macOS.
 - [ ] Global shortcuts are manually verified in the desktop app.
-- [ ] Light / Dark UI works.
+- [x] System / Light / Dark theme works (tokenized; no beige; green accent; OS detection); verified light + dark.
+- [x] Reasoning levels (Low/Medium/High/Extra) persist and affect Manager planning; shown in Composer.
+- [x] AgentProfile personality/prompt injected into Manager/Browser execution prompts (Agent Editor affects runtime).
 - [x] Standalone Python runtime sidecar (PyInstaller onefile) is bundled into `Yanshi.app/Contents/Resources/resources/` and launches the runtime from a clean environment (no uv, no repo, no venv). Not yet codesigned/notarized for Gatekeeper on a second machine.
 - [x] Provider API key moved out of SQLite to an `apiKeyRef` + off-DB secret store (file store default, opt-in macOS Keychain); legacy inline keys are migrated and VACUUMed from the DB file; settings responses never return the key.
 - [x] Composer has a real Plus menu (Plan first + tool directives) and a real voice button (honest disabled state).

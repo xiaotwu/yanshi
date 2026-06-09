@@ -78,6 +78,16 @@
 - Tray/global-shortcut/notification behavior still needs manual packaged-app verification.
 - Live Office office editor is not implemented.
 
+## Theme system + Reasoning + Profile injection (2026-06-08)
+
+- Theme: tokenized CSS variable layer (no beige). System / Light / Dark with OS detection; light is
+  pure white, dark is near-black, accent is soft mint-green with glow. All pages use tokens; Live
+  Office 3D is theme-aware. Verified light + dark visually.
+- Reasoning levels (Low/Medium/High/Extra): persisted in settings + per-run override; affect Manager
+  planning prompt depth. Composer shows a Reasoning chip.
+- AgentProfile personality/prompt is injected into Manager planning/synthesis + Browser summary
+  prompts (the Agent Editor now affects real execution). Raw prompts stay out of normal UI.
+
 ## Agent System + Live Office + Workshop Editors (2026-06-08)
 
 - AgentProfile data model (`agent_profiles`, seeded + editable) and project-scoped LiveOfficeState

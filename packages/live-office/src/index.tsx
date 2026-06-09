@@ -9,7 +9,10 @@ export interface LiveOfficeSceneProps {
   compact?: boolean;
   cameraMode?: CameraMode;
   stationLayout?: Record<string, number[]>;
+  dark?: boolean;
 }
+
+const ACTIVE_GLOW = "#2fc279";
 
 // Office areas (x, z on the floor). Work stations + rest/social areas (spec §17).
 const STATIONS: Record<string, [number, number]> = {
@@ -72,10 +75,10 @@ function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLa
   const [hovered, setHovered] = useState(false);
 
   const statusColor = useMemo(() => {
-    if (agent.status === "waiting_approval") return "#b65c2f";
-    if (agent.status === "blocked" || agent.status === "failed") return "#b43b40";
-    if (agent.status === "working") return "#278474";
-    if (agent.status === "done") return "#5b8d55";
+    if (agent.status === "waiting_approval") return "#d08a3a";
+    if (agent.status === "blocked" || agent.status === "failed") return "#d2655f";
+    if (agent.status === "working") return ACTIVE_GLOW;
+    if (agent.status === "done") return "#5fbf86";
     return "#94a0a8";
   }, [agent.status]);
 
@@ -118,7 +121,7 @@ function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLa
         onPointerOut={() => setHovered(false)}
       >
         <capsuleGeometry args={[0.18, 0.42, 8, 16]} />
-        <meshStandardMaterial color={agent.accent} roughness={0.6} metalness={0.12} emissive={statusColor} emissiveIntensity={agent.status === "working" ? 0.25 : 0.05} />
+        <meshStandardMaterial color={agent.accent} roughness={0.55} metalness={0.18} emissive={statusColor} emissiveIntensity={agent.status === "working" ? 0.5 : 0.08} />
       </mesh>
       <mesh position={[0, 0.62, 0]} castShadow>
         <sphereGeometry args={[0.16, 18, 18]} />
@@ -166,19 +169,22 @@ function AgentActor({ agent, stationLayout }: { agent: LiveAgentState; stationLa
   );
 }
 
-function Furniture() {
+function Furniture({ dark }: { dark: boolean }) {
+  const floor = dark ? "#1a1e20" : "#eef1f0";
+  const padWork = dark ? "#23282b" : "#d9e4de";
+  const padRest = dark ? "#2a2420" : "#e7ddd0";
   return (
     <group>
       {/* Floor */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[7, 5]} />
-        <meshStandardMaterial color="#f3eee5" roughness={0.95} />
+        <meshStandardMaterial color={floor} roughness={0.95} />
       </mesh>
       {/* Station pads */}
       {Object.entries(STATIONS).map(([name, [x, z]]) => (
         <mesh key={name} position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[0.4, 32]} />
-          <meshStandardMaterial color={name === "coffee" || name === "break" || name === "rest" ? "#e7d2bb" : "#d8c1a2"} roughness={0.8} />
+          <meshStandardMaterial color={name === "coffee" || name === "break" || name === "rest" ? padRest : padWork} roughness={0.8} />
         </mesh>
       ))}
       {/* Meeting table */}
@@ -200,28 +206,28 @@ function Furniture() {
   );
 }
 
-function Scene({ agents, stationLayout }: { agents: LiveAgentState[]; stationLayout: Record<string, number[]> }) {
+function Scene({ agents, stationLayout, dark }: { agents: LiveAgentState[]; stationLayout: Record<string, number[]>; dark: boolean }) {
   return (
     <>
-      <ambientLight intensity={1.15} />
-      <directionalLight castShadow position={[2, 5, 3]} intensity={1.5} />
-      <Furniture />
+      <ambientLight intensity={dark ? 0.7 : 1.15} />
+      <directionalLight castShadow position={[2, 5, 3]} intensity={dark ? 0.9 : 1.5} />
+      <Furniture dark={dark} />
       {agents.map((agent) => (
         <AgentActor key={agent.id} agent={agent} stationLayout={stationLayout} />
       ))}
-      <Environment preset="apartment" />
+      <Environment preset={dark ? "night" : "apartment"} />
       <OrbitControls enablePan={false} minDistance={4.5} maxDistance={9} maxPolarAngle={Math.PI / 2.2} />
     </>
   );
 }
 
-export function LiveOfficeScene({ agents, compact = false, cameraMode = "rear", stationLayout = {} }: LiveOfficeSceneProps) {
+export function LiveOfficeScene({ agents, compact = false, cameraMode = "rear", stationLayout = {}, dark = false }: LiveOfficeSceneProps) {
   const cameraPosition: [number, number, number] =
     cameraMode === "iso" ? [6, 6, 6] : compact ? [3.8, 3.4, 4.8] : [5, 4.6, 5.6];
   return (
     <Canvas camera={{ position: cameraPosition, fov: compact ? 42 : 38 }} dpr={[1, 1.5]} frameloop="always" shadows>
       <Suspense fallback={null}>
-        <Scene agents={agents} stationLayout={stationLayout} />
+        <Scene agents={agents} stationLayout={stationLayout} dark={dark} />
       </Suspense>
     </Canvas>
   );

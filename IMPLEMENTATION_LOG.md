@@ -573,3 +573,28 @@ Signature product features, all real (no mocks):
 - Still deferred (honest): full drag-drop 3D Office Editor (current is a practical numeric layout
   editor per spec's allowance); reasoning levels; composer file upload; codesign/notarization;
   `features/*` frontend split.
+
+## Phase: Theme system + reasoning + profile injection (2026-06-08)
+
+- Theme (headline override): replaced the warm ivory/beige palette with a tokenized theme layer.
+  `styles.css` now uses CSS variables (`--background/surface/surface-elevated/border/text-*/accent/
+  accent-glow/accent-soft/danger/warning/success/overlay/shadow`) for light (pure white) and dark
+  (near-black) with a soft mint-green accent. All ~70 hardcoded colors were migrated to tokens
+  (verified: no hardcoded hex outside the token block). Added System/Light/Dark setting
+  (`AppSettings.theme` default `system`); App resolves system via `matchMedia` and sets
+  `data-theme`, reacting to OS changes. Live Office 3D is theme-aware (floor/lighting/environment
+  by `dark`, green glow for active workers). Verified light (white) and dark (black) visually.
+- Reasoning levels (Problem 7): `AppSettings.reasoning` + per-run `CreateRunRequest.reasoning`
+  override; threaded run→graph→Manager planning. The planning system prompt + user message now carry
+  a reasoning directive (low=short, medium=balanced, high=detailed, extra_high=thorough+review).
+  Composer shows a Reasoning chip. Tests verify the level and settings default reach the prompt.
+- AgentProfile injection (Problem 2): the graph injects each agent's configured personality/prompt
+  into the Manager planning, Manager synthesis, and Browser summary system messages
+  (`_agent_persona`). The Agent Editor now has real runtime effect. Test verifies a profile's
+  personality string reaches the manager prompt. Raw prompts are never shown in normal UI.
+- Verification: pnpm lint/typecheck/build green; pytest 66 passed (+4); cargo 10 passed;
+  desktop:release rebuilt the sidecar and bundles. No-mock audit clean.
+- Honestly NOT done this session (documented): persistent AgentInstance/AgentActor3D tables;
+  2.5D drag-drop Office Editor; Q-style worker mesh upgrade; file upload; close-with-active-runs
+  prompt; packaged click/type/shortcut manual verification; Docker command smoke; App.tsx split;
+  codesign/notarization.

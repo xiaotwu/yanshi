@@ -172,7 +172,8 @@ export interface AppSettings {
   permissionModeDefault: PermissionMode;
   developerMode: boolean;
   onboarded: boolean;
-  theme: "light" | "dark";
+  theme: "light" | "dark" | "system";
+  reasoning: "low" | "medium" | "high" | "extra_high";
   liveOfficeAutoOpen: boolean;
   liveOfficeDefaultOpen: boolean;
   browserToolEnabled: boolean;

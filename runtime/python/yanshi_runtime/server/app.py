@@ -92,12 +92,13 @@ class RuntimeService:
             run = self.storage.create_run(request.task.strip(), request.projectId)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
+        reasoning = request.reasoning or self.storage.get_app_settings().reasoning
         self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
-        background_tasks.add_task(self.start_run, run.id, request.task.strip(), request.permissionMode, request.planFirst)
+        background_tasks.add_task(self.start_run, run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning)
         return run
 
-    def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False) -> None:
-        self.graph.start(run_id, task, permission_mode, plan_first)
+    def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium") -> None:
+        self.graph.start(run_id, task, permission_mode, plan_first, reasoning)
 
     def list_project_files(self, project_id: str) -> dict:
         try:

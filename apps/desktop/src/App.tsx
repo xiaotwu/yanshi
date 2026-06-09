@@ -22,6 +22,7 @@ import {
   Send,
   Settings,
   Shield,
+  Sparkles,
   TerminalSquare,
   X,
 } from "lucide-react";
@@ -53,7 +54,7 @@ export function App() {
   const officeTouchedRef = useRef(false);
   const { hydrate, connectEvents, approvals, activeRunId, events, appSettings } = useRuntimeStore();
   const developerEnabled = appSettings?.developerMode ?? false;
-  const theme = appSettings?.theme ?? "light";
+  const theme = appSettings?.theme ?? "system";
 
   useEffect(() => {
     void hydrate();
@@ -61,7 +62,16 @@ export function App() {
   }, [connectEvents, hydrate]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const resolved = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = resolved;
+    };
+    apply();
+    if (theme === "system") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -210,6 +220,7 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
   const [task, setTask] = useState("");
   const { createRun, loading, error, appSettings, projects, activeProjectId } = useRuntimeStore();
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(appSettings?.permissionModeDefault ?? "default");
+  const [reasoning, setReasoning] = useState<"low" | "medium" | "high" | "extra_high">(appSettings?.reasoning ?? "medium");
   const [selectedProjectId, setSelectedProjectId] = useState(activeProjectId ?? "standalone");
   const [planFirst, setPlanFirst] = useState(false);
   const [tools, setTools] = useState<string[]>([]);
@@ -233,7 +244,7 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
     if (!task.trim()) return;
     const directives = tools.map((tool) => TOOL_HINTS[tool]).join(" ");
     const composed = directives ? `${task.trim()} ${directives}` : task.trim();
-    await createRun(composed, permissionMode, selectedProjectId === "standalone" ? null : selectedProjectId, planFirst);
+    await createRun(composed, permissionMode, selectedProjectId === "standalone" ? null : selectedProjectId, planFirst, reasoning);
     setTask("");
     setTools([]);
     setPlanFirst(false);
@@ -283,6 +294,16 @@ function NewTaskView({ onRuns }: { onRuns: () => void }) {
             placeholder="Ask Yanshi to do anything..."
             rows={1}
           />
+          <label className="select-chip" title="Reasoning">
+            <Sparkles size={15} />
+            <select value={reasoning} onChange={(event) => setReasoning(event.target.value as typeof reasoning)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="extra_high">Extra</option>
+            </select>
+            <ChevronDown size={14} />
+          </label>
           <label className="select-chip" title="Permission">
             <Shield size={15} />
             <select value={permissionMode} onChange={(event) => setPermissionMode(event.target.value as PermissionMode)}>
@@ -789,7 +810,7 @@ function ProjectOffice({ projectId }: { projectId: string }) {
       </div>
       <div className="office-canvas" style={{ height: 320 }}>
         <Suspense fallback={<div className="scene-loading">Loading office</div>}>
-          <LiveOfficeScene agents={liveAgents} compact cameraMode={office.cameraMode} stationLayout={office.stationLayout} />
+          <LiveOfficeScene agents={liveAgents} compact cameraMode={office.cameraMode} stationLayout={office.stationLayout} dark={document.documentElement.dataset.theme === "dark"} />
         </Suspense>
       </div>
     </div>
@@ -1360,7 +1381,8 @@ function SettingsSectionView({ section }: { section: SettingsSection }) {
           <h3>General</h3>
           <label className="setting-row">
             <span>Theme</span>
-            <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" })}>
+            <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" | "system" })}>
+              <option value="system">System</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>
@@ -1687,6 +1709,7 @@ function LiveOfficePanel({
             compact={!full}
             cameraMode={officeState?.cameraMode ?? "rear"}
             stationLayout={officeState?.stationLayout ?? {}}
+            dark={document.documentElement.dataset.theme === "dark"}
           />
         </Suspense>
       </div>
