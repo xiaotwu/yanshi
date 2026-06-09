@@ -2,12 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::{
     env,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
+    net::{TcpListener, TcpStream},
     os::raw::{c_double, c_uchar, c_void},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_notification::NotificationExt;
@@ -19,6 +21,16 @@ pub struct RuntimeState {
     launch_mode: Mutex<Option<String>>,
     command_label: Mutex<Option<String>>,
     log_path: Mutex<Option<PathBuf>>,
+    bridge: Mutex<Option<ComputerBridgeHandle>>,
+}
+
+/// Connection details for the in-process localhost Computer Use bridge server.
+/// The token is a per-launch secret; the Python runtime must present it as a
+/// bearer token on every request.
+#[derive(Clone)]
+pub struct ComputerBridgeHandle {
+    url: String,
+    token: String,
 }
 
 #[derive(Serialize)]
@@ -153,6 +165,8 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
     }
     *state.log_path.lock().expect("runtime log mutex poisoned") = Some(log_path.clone());
 
+    let bridge = ensure_computer_bridge(state, &log_path);
+
     let resource_dir = app.path().resource_dir().ok();
     let launch = resolve_runtime_launch(resource_dir.as_deref());
     match launch {
@@ -175,6 +189,7 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 .arg(&data_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
+            inject_bridge_env(&mut command, bridge.as_ref());
             let command_label = format!(
                 "{} run --project {} yanshi-runtime --host 127.0.0.1 --port 8765 --data-dir {}",
                 uv_path.display(),
@@ -216,6 +231,7 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 .arg(&data_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
+            inject_bridge_env(&mut command, bridge.as_ref());
             let command_label = format!(
                 "{} --host 127.0.0.1 --port 8765 --data-dir {}",
                 binary_path.display(),
@@ -291,6 +307,10 @@ pub fn macos_permission_status() -> MacosPermissionStatus {
 
 #[tauri::command]
 pub fn computer_click(request: ComputerClickRequest) -> ComputerBridgeResult {
+    run_computer_click(request)
+}
+
+fn run_computer_click(request: ComputerClickRequest) -> ComputerBridgeResult {
     if !request.x.is_finite() || !request.y.is_finite() || request.x < 0.0 || request.y < 0.0 {
         return bridge_error(
             "Computer click needs finite non-negative screen coordinates.",
@@ -313,6 +333,10 @@ pub fn computer_click(request: ComputerClickRequest) -> ComputerBridgeResult {
 
 #[tauri::command]
 pub fn computer_type(request: ComputerTypeRequest) -> ComputerBridgeResult {
+    run_computer_type(request)
+}
+
+fn run_computer_type(request: ComputerTypeRequest) -> ComputerBridgeResult {
     if request.text.is_empty() {
         return bridge_error(
             "Computer type needs non-empty text.",
@@ -335,6 +359,10 @@ pub fn computer_type(request: ComputerTypeRequest) -> ComputerBridgeResult {
 
 #[tauri::command]
 pub fn computer_shortcut(request: ComputerShortcutRequest) -> ComputerBridgeResult {
+    run_computer_shortcut(request)
+}
+
+fn run_computer_shortcut(request: ComputerShortcutRequest) -> ComputerBridgeResult {
     if request.keys.is_empty() {
         return bridge_error(
             "Computer shortcut needs at least one key.",
@@ -357,6 +385,10 @@ pub fn computer_shortcut(request: ComputerShortcutRequest) -> ComputerBridgeResu
 
 #[tauri::command]
 pub fn computer_open_app(request: ComputerOpenAppRequest) -> ComputerBridgeResult {
+    run_computer_open_app(request)
+}
+
+fn run_computer_open_app(request: ComputerOpenAppRequest) -> ComputerBridgeResult {
     let app_name = request.app_name.trim();
     if app_name.is_empty() {
         return bridge_error(
@@ -399,6 +431,259 @@ pub fn computer_open_app(request: ComputerOpenAppRequest) -> ComputerBridgeResul
             serde_json::json!({"error": error.to_string()}),
         ),
     }
+}
+
+fn ensure_computer_bridge(state: &State<RuntimeState>, log_path: &Path) -> Option<ComputerBridgeHandle> {
+    let mut guard = state.bridge.lock().expect("runtime bridge mutex poisoned");
+    if let Some(handle) = guard.as_ref() {
+        return Some(handle.clone());
+    }
+    match start_computer_bridge() {
+        Ok(handle) => {
+            append_runtime_log(log_path, &format!("computer bridge listening at {}", handle.url));
+            *guard = Some(handle.clone());
+            Some(handle)
+        }
+        Err(error) => {
+            append_runtime_log(log_path, &format!("computer bridge failed to start: {error}"));
+            None
+        }
+    }
+}
+
+fn inject_bridge_env(command: &mut Command, bridge: Option<&ComputerBridgeHandle>) {
+    if let Some(bridge) = bridge {
+        command.env("YANSHI_COMPUTER_BRIDGE_URL", &bridge.url);
+        command.env("YANSHI_COMPUTER_BRIDGE_TOKEN", &bridge.token);
+    }
+}
+
+/// Start a localhost-only HTTP server that performs native Computer Use actions.
+/// The Python runtime reaches it via `YANSHI_COMPUTER_BRIDGE_URL` and must
+/// present the per-launch bearer token. Binding to `127.0.0.1:0` lets the OS
+/// pick a free port that we report back to the runtime.
+fn start_computer_bridge() -> std::io::Result<ComputerBridgeHandle> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    let token = random_bridge_token();
+    let handle = ComputerBridgeHandle {
+        url: format!("http://127.0.0.1:{port}"),
+        token: token.clone(),
+    };
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let token = token.clone();
+            thread::spawn(move || {
+                let _ = serve_bridge_connection(stream, &token);
+            });
+        }
+    });
+    Ok(handle)
+}
+
+fn serve_bridge_connection(mut stream: TcpStream, token: &str) -> std::io::Result<()> {
+    let mut reader = BufReader::new(stream.try_clone()?);
+
+    let mut request_line = String::new();
+    reader.read_line(&mut request_line)?;
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or("").to_string();
+    let target = parts.next().unwrap_or("").to_string();
+
+    let mut content_length = 0usize;
+    let mut authorization: Option<String> = None;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = trimmed.split_once(':') {
+            match name.trim().to_ascii_lowercase().as_str() {
+                "content-length" => content_length = value.trim().parse().unwrap_or(0),
+                "authorization" => authorization = Some(value.trim().to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    let mut body_bytes = vec![0u8; content_length];
+    if content_length > 0 {
+        reader.read_exact(&mut body_bytes)?;
+    }
+
+    if !authorize_bridge_request(token, authorization.as_deref()) {
+        return write_bridge_response(
+            &mut stream,
+            401,
+            &serde_json::json!({
+                "ok": false,
+                "summary": "Computer bridge rejected an unauthorized request.",
+                "missingRequirement": "computer_use_control_bridge_unauthorized",
+                "structuredOutput": {},
+            }),
+        );
+    }
+
+    if method != "POST" {
+        return write_bridge_response(
+            &mut stream,
+            405,
+            &serde_json::json!({
+                "ok": false,
+                "summary": "Computer bridge only accepts POST requests.",
+                "missingRequirement": "computer_use_method_not_allowed",
+                "structuredOutput": {"method": method},
+            }),
+        );
+    }
+
+    let Some(operation) = operation_from_path(&target) else {
+        return write_bridge_response(
+            &mut stream,
+            404,
+            &serde_json::json!({
+                "ok": false,
+                "summary": "Computer bridge does not recognize that path.",
+                "missingRequirement": "computer_use_unknown_operation",
+                "structuredOutput": {"path": target},
+            }),
+        );
+    };
+
+    let body_value: serde_json::Value = if body_bytes.is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::from_slice(&body_bytes).unwrap_or_else(|_| serde_json::json!({}))
+    };
+
+    match dispatch_bridge_operation(operation, &body_value) {
+        Some(result) => write_bridge_response(
+            &mut stream,
+            200,
+            &serde_json::to_value(&result).unwrap_or_else(|_| serde_json::json!({})),
+        ),
+        None => write_bridge_response(
+            &mut stream,
+            404,
+            &serde_json::json!({
+                "ok": false,
+                "summary": format!("Computer bridge does not support operation: {operation}."),
+                "missingRequirement": "computer_use_unknown_operation",
+                "structuredOutput": {"operation": operation},
+            }),
+        ),
+    }
+}
+
+fn authorize_bridge_request(expected_token: &str, header: Option<&str>) -> bool {
+    let Some(value) = header else {
+        return false;
+    };
+    let provided = value
+        .strip_prefix("Bearer ")
+        .or_else(|| value.strip_prefix("bearer "));
+    match provided {
+        Some(token) => constant_time_eq(token.trim().as_bytes(), expected_token.as_bytes()),
+        None => false,
+    }
+}
+
+fn operation_from_path(target: &str) -> Option<&str> {
+    let path = target.split('?').next().unwrap_or(target);
+    let operation = path.strip_prefix("/computer/")?;
+    match operation {
+        "click" | "type" | "shortcut" | "open-app" => Some(operation),
+        _ => None,
+    }
+}
+
+fn dispatch_bridge_operation(operation: &str, body: &serde_json::Value) -> Option<ComputerBridgeResult> {
+    match operation {
+        "click" => Some(parse_bridge_body(body).map_or_else(|err| err, run_computer_click)),
+        "type" => Some(parse_bridge_body(body).map_or_else(|err| err, run_computer_type)),
+        "shortcut" => Some(parse_bridge_body(body).map_or_else(|err| err, run_computer_shortcut)),
+        "open-app" => Some(parse_bridge_body(body).map_or_else(|err| err, run_computer_open_app)),
+        _ => None,
+    }
+}
+
+fn parse_bridge_body<T: serde::de::DeserializeOwned>(
+    body: &serde_json::Value,
+) -> Result<T, ComputerBridgeResult> {
+    serde_json::from_value(body.clone()).map_err(|error| {
+        bridge_error(
+            "Computer bridge received an invalid request body.",
+            "computer_use_invalid_request",
+            serde_json::json!({"error": error.to_string()}),
+        )
+    })
+}
+
+fn write_bridge_response(stream: &mut TcpStream, status: u16, body: &serde_json::Value) -> std::io::Result<()> {
+    let payload = serde_json::to_vec(body).unwrap_or_else(|_| b"{}".to_vec());
+    let reason = match status {
+        200 => "OK",
+        401 => "Unauthorized",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        _ => "OK",
+    };
+    let header = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        payload.len()
+    );
+    stream.write_all(header.as_bytes())?;
+    stream.write_all(&payload)?;
+    stream.flush()
+}
+
+fn random_bridge_token() -> String {
+    let mut bytes = [0u8; 32];
+    if read_random_bytes(&mut bytes).is_ok() {
+        return hex_encode(&bytes);
+    }
+    // Fallback when /dev/urandom is unavailable: still unique per launch.
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    for (index, slot) in bytes.iter_mut().enumerate() {
+        let mixed = nanos
+            .wrapping_add((index as u128).wrapping_mul(0x9E37_79B9))
+            .wrapping_add(pid as u128);
+        *slot = (mixed >> ((index % 16) * 4)) as u8 ^ (pid as u8).wrapping_add(index as u8);
+    }
+    hex_encode(&bytes)
+}
+
+fn read_random_bytes(buffer: &mut [u8]) -> std::io::Result<()> {
+    let mut file = File::open("/dev/urandom")?;
+    file.read_exact(buffer)
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 fn permission_state(granted: bool) -> String {
@@ -1081,5 +1366,109 @@ mod tests {
         assert_eq!(mouse_button_from_request(Some("right")), Some(MouseButton::Right));
         assert_eq!(mouse_button_from_request(Some("middle")), Some(MouseButton::Center));
         assert_eq!(mouse_button_from_request(Some("side")), None);
+    }
+
+    #[test]
+    fn authorizes_only_matching_bearer_tokens() {
+        assert!(authorize_bridge_request("secret", Some("Bearer secret")));
+        assert!(authorize_bridge_request("secret", Some("bearer secret")));
+        assert!(!authorize_bridge_request("secret", Some("Bearer nope")));
+        assert!(!authorize_bridge_request("secret", Some("secret")));
+        assert!(!authorize_bridge_request("secret", None));
+    }
+
+    #[test]
+    fn maps_only_supported_bridge_operations() {
+        assert_eq!(operation_from_path("/computer/click"), Some("click"));
+        assert_eq!(operation_from_path("/computer/open-app?x=1"), Some("open-app"));
+        assert_eq!(operation_from_path("/computer/teleport"), None);
+        assert_eq!(operation_from_path("/computer/click/extra"), None);
+        assert_eq!(operation_from_path("/health"), None);
+    }
+
+    #[test]
+    fn dispatch_validates_body_before_native_action() {
+        // Unknown operation -> no result (server answers 404).
+        assert!(dispatch_bridge_operation("teleport", &serde_json::json!({})).is_none());
+
+        // Validation failures are deterministic and happen before any permission/native call.
+        let click = dispatch_bridge_operation("click", &serde_json::json!({"x": -1, "y": 5}))
+            .expect("known operation returns a result");
+        assert!(!click.ok);
+        assert_eq!(click.missing_requirement.as_deref(), Some("computer_click_coordinates"));
+
+        let empty_type = dispatch_bridge_operation("type", &serde_json::json!({"text": ""}))
+            .expect("known operation returns a result");
+        assert!(!empty_type.ok);
+        assert_eq!(empty_type.missing_requirement.as_deref(), Some("computer_type_text"));
+
+        let bad_body = dispatch_bridge_operation("type", &serde_json::json!({"text": 5}))
+            .expect("known operation returns a result");
+        assert!(!bad_body.ok);
+        assert_eq!(bad_body.missing_requirement.as_deref(), Some("computer_use_invalid_request"));
+    }
+
+    #[test]
+    fn random_tokens_are_hex_and_unique() {
+        let first = random_bridge_token();
+        let second = random_bridge_token();
+        assert_eq!(first.len(), 64);
+        assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn bridge_server_authorizes_and_dispatches_end_to_end() {
+        let handle = start_computer_bridge().expect("bridge should start");
+        let addr = handle.url.strip_prefix("http://").expect("http url").to_string();
+
+        // Authorized request hits a deterministic validation branch (empty text)
+        // and returns 200 with an honest missing-requirement body.
+        let (status, body) = bridge_test_request(&addr, "POST", "/computer/type", Some(&handle.token), "{\"text\":\"\"}");
+        assert!(status.starts_with("HTTP/1.1 200"), "status was {status}");
+        assert!(body.contains("computer_type_text"), "body was {body}");
+
+        // Missing token is rejected.
+        let (unauth, _) = bridge_test_request(&addr, "POST", "/computer/type", None, "{\"text\":\"hi\"}");
+        assert!(unauth.starts_with("HTTP/1.1 401"), "status was {unauth}");
+
+        // Wrong token is rejected.
+        let (wrong, _) = bridge_test_request(&addr, "POST", "/computer/type", Some("not-the-token"), "{\"text\":\"hi\"}");
+        assert!(wrong.starts_with("HTTP/1.1 401"), "status was {wrong}");
+
+        // Unknown operation -> 404 even when authorized.
+        let (unknown, _) = bridge_test_request(&addr, "POST", "/computer/teleport", Some(&handle.token), "{}");
+        assert!(unknown.starts_with("HTTP/1.1 404"), "status was {unknown}");
+
+        // Wrong method -> 405.
+        let (method, _) = bridge_test_request(&addr, "GET", "/computer/type", Some(&handle.token), "");
+        assert!(method.starts_with("HTTP/1.1 405"), "status was {method}");
+    }
+
+    fn bridge_test_request(
+        addr: &str,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+        body: &str,
+    ) -> (String, String) {
+        let mut stream = TcpStream::connect(addr).expect("connect to bridge");
+        let mut request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n",
+            body.len()
+        );
+        if let Some(token) = token {
+            request.push_str(&format!("Authorization: Bearer {token}\r\n"));
+        }
+        request.push_str("Connection: close\r\n\r\n");
+        request.push_str(body);
+        stream.write_all(request.as_bytes()).expect("write request");
+        let mut response = String::new();
+        stream.read_to_string(&mut response).expect("read response");
+        let mut split = response.splitn(2, "\r\n\r\n");
+        let head = split.next().unwrap_or("");
+        let body = split.next().unwrap_or("").to_string();
+        let status_line = head.lines().next().unwrap_or("").to_string();
+        (status_line, body)
     }
 }

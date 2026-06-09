@@ -1,3 +1,0 @@
-[      53ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/chunk-YWWOIWN2.js?v=ae268a4b:19834
-[     152ms] [ERROR] Access to fetch at 'http://127.0.0.1:8877/settings/provider' from origin 'http://localhost:5173' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:5173/:0
-[     152ms] [ERROR] Failed to load resource: net::ERR_FAILED @ http://127.0.0.1:8877/settings/provider:0

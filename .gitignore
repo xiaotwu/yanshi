@@ -19,3 +19,6 @@ runtime/python/.venv/
 runtime/python/.coverage
 data/
 logs/
+.playwright-mcp/
+yanshi-smoke*.png
+yanshi-ui-run-smoke.png

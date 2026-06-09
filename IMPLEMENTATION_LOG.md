@@ -410,3 +410,42 @@
   - WebSocket shutdown needed cancellation handling.
 - Next action:
   - Implement real model provider client and project CRUD, then expand tools from readiness checks to real execution.
+
+## Phase: Computer Use bridge connected end-to-end + repo cleanup (2026-06-08)
+
+- Context reconstructed from repo docs/code after a lost Codex chat (no chat history assumed).
+- P0 #1 (Computer bridge end-to-end) implemented in `apps/desktop/src-tauri/src/runtime.rs`:
+  - Added `ComputerBridgeHandle { url, token }` and a `bridge` slot on `RuntimeState`.
+  - `start_computer_bridge()` binds `127.0.0.1:0`, generates a per-launch random bearer
+    token (`/dev/urandom`, 32 bytes, hex; deterministic time+pid fallback), and serves on a
+    background thread. `ensure_computer_bridge()` starts it once and reuses it across restarts.
+  - `inject_bridge_env()` adds `YANSHI_COMPUTER_BRIDGE_URL`/`YANSHI_COMPUTER_BRIDGE_TOKEN` to
+    both the `uv` and bundled-sidecar `Command` builders before spawn.
+  - Minimal dependency-free HTTP/1.1 handler (`serve_bridge_connection`): parses request line +
+    headers + Content-Length body, constant-time bearer auth (`authorize_bridge_request`),
+    routes `/computer/{click,type,shortcut,open-app}` (`operation_from_path`), and dispatches to
+    the existing native action functions (`dispatch_bridge_operation`). Refactored the four
+    `#[tauri::command]` bodies into reusable `run_computer_*` functions.
+  - Responses: 200 for handled ops (ok may be false with honest `missingRequirement`), 401 for
+    missing/invalid token, 404 for unknown op, 405 for non-POST. Token is never logged.
+- Tests:
+  - Rust (`runtime::tests`): bearer auth matrix, path mapping, dispatch body validation,
+    token shape/uniqueness, and a real localhost end-to-end test (raw TcpStream → 200/401/404/405).
+    10 Rust tests pass.
+  - Python (`tests/test_runtime.py`): `DesktopHttpComputerBridge` sends `Authorization: Bearer`
+    to `/computer/<op>` and returns the bridge result; a 401 maps to `computer_use_control_bridge`;
+    empty base URL is unavailable. 46 Python tests pass.
+- P0 #6 repo cleanup: untracked + ignored `.playwright-mcp/`, moved root smoke PNGs to
+  `docs/assets/`, updated `.gitignore`.
+- Verification (all green on 2026-06-08):
+  - `pnpm install`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (no JS test files), `pnpm build`.
+  - `uv run --project runtime/python pytest`: 46 passed.
+  - `cargo check` + `cargo test`: 10 passed.
+  - `pnpm --filter @yanshi/desktop tauri build`: passed; produced `Yanshi.app` and
+    `Yanshi_0.1.0_aarch64.dmg`.
+- Still blocked / not done this phase: standalone runtime sidecar bundling (P0 #2),
+  Docker settings wiring into TerminalTool (P0 #3), tool-availability enforcement (P0 #4),
+  Keychain/apiKeyRef key storage (P0 #5), and manual packaged-app verification of the bridge
+  control path with Accessibility granted.
+- Next action: wire persisted Docker settings into per-run `TerminalTool` and enforce
+  tool-availability toggles with honest `tool_disabled` observations (P0 #3 + #4).

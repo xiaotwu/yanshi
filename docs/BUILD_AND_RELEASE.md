@@ -30,6 +30,23 @@ Supported current launch paths:
 
 Do not claim the app is fully distributable until the standalone runtime sidecar is included and tested from a clean machine.
 
+## Computer Use Bridge
+
+The desktop app starts an in-process localhost HTTP bridge server before it spawns
+the Python runtime:
+
+- Binds `127.0.0.1:0` (OS-assigned random port); never listens on a public interface.
+- Generates a per-launch random bearer token (32 bytes from `/dev/urandom`, hex-encoded).
+- Injects `YANSHI_COMPUTER_BRIDGE_URL` and `YANSHI_COMPUTER_BRIDGE_TOKEN` into the
+  runtime process environment for both the `uv` and bundled-sidecar launch paths.
+- Authenticates every request with a constant-time bearer-token check. Missing or
+  invalid tokens return HTTP 401; unknown operations return 404; non-POST returns 405.
+- Exposes `POST /computer/{click,type,shortcut,open-app}`, dispatching to the native
+  macOS CoreGraphics action functions (which still enforce Accessibility permission).
+
+The token is never logged, persisted, or returned in any API response. The runtime
+log only records the bridge URL (host/port), not the token.
+
 ## External Requirements
 
 - macOS with Tauri prerequisites and Xcode Command Line Tools.

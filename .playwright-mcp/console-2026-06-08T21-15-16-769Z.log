@@ -1,5 +1,0 @@
-[     439ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/chunk-YWWOIWN2.js?v=ae268a4b:19834
-[    7956ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:5175/:0
-[  173519ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5175/@vite/client:864
-[  173563ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5175/node_modules/.vite/deps/chunk-YWWOIWN2.js?v=ae268a4b:19834
-[  235950ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5175/@vite/client:864

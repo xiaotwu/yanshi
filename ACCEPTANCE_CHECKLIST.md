@@ -52,7 +52,8 @@
 - [x] Manager performs provider-backed structured planning for general provider tasks.
 - [x] Agent queues are persisted and project/agent filterable.
 - [x] Manager executes queued multi-agent plans with several live tool agents in one run.
-- [ ] Packaged runtime injects a concrete Computer bridge transport URL for runtime control actions.
+- [x] Runtime launch injects a concrete Computer bridge transport URL + bearer token for runtime control actions (localhost server, random port, per-launch token; Rust + Python tests).
+- [x] Computer bridge rejects missing/invalid bearer tokens (HTTP 401) and unknown operations (404).
 - [ ] Computer Use click/type/shortcut/open-app actions have been manually verified in the packaged app with macOS Accessibility permission.
 - [ ] Docker-backed sandbox has been manually smoked to successful command completion with the configured image available.
 - [ ] Workshop exports valid packs.

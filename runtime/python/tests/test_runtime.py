@@ -14,7 +14,7 @@ from yanshi_runtime.config import RuntimeSettings
 from yanshi_runtime.models import ToolResult
 from yanshi_runtime.server import create_app
 from yanshi_runtime.tools import BrowserTool, ComputerTool, TerminalTool
-from yanshi_runtime.tools.computer_tool import MacosPermissionStatus
+from yanshi_runtime.tools.computer_tool import DesktopHttpComputerBridge, MacosPermissionStatus
 from yanshi_runtime.workshop import WorkshopPackValidator
 
 
@@ -214,6 +214,95 @@ class FakeComputerBridge:
     def run(self, operation: str, payload: dict[str, object]) -> ToolResult:
         self.calls.append((operation, payload))
         return self.result
+
+
+class BridgeRecordingHandler(BaseHTTPRequestHandler):
+    received_authorization: str | None = None
+    received_path: str | None = None
+    received_payload: dict[str, object] | None = None
+    status_code: int = 200
+
+    def do_POST(self) -> None:  # noqa: N802
+        length = int(self.headers.get("content-length", "0"))
+        BridgeRecordingHandler.received_authorization = self.headers.get("authorization")
+        BridgeRecordingHandler.received_path = self.path
+        BridgeRecordingHandler.received_payload = (
+            json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        )
+        if BridgeRecordingHandler.status_code != 200:
+            self._json(BridgeRecordingHandler.status_code, {"error": "unauthorized"})
+            return
+        self._json(
+            200,
+            {
+                "ok": True,
+                "summary": "Computer bridge clicked.",
+                "missingRequirement": None,
+                "structuredOutput": {"operation": "click"},
+            },
+        )
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+    def _json(self, status: int, body: dict[str, object]) -> None:
+        payload = json.dumps(body).encode("utf-8")
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
+class BridgeRecordingServer:
+    def __init__(self, status_code: int = 200) -> None:
+        self.status_code = status_code
+
+    def __enter__(self) -> str:
+        BridgeRecordingHandler.received_authorization = None
+        BridgeRecordingHandler.received_path = None
+        BridgeRecordingHandler.received_payload = None
+        BridgeRecordingHandler.status_code = self.status_code
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), BridgeRecordingHandler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        return f"http://127.0.0.1:{self.server.server_port}"
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.server.shutdown()
+        self.thread.join(timeout=5)
+
+
+def test_desktop_bridge_sends_bearer_token_and_runs_operation() -> None:
+    with BridgeRecordingServer() as base_url:
+        bridge = DesktopHttpComputerBridge(base_url=base_url, token="bridge-secret")
+        assert bridge.available() is True
+        result = bridge.run("click", {"x": 10, "y": 20, "button": "left"})
+
+    assert result.ok is True
+    assert result.summary == "Computer bridge clicked."
+    assert result.structuredOutput == {"operation": "click"}
+    assert BridgeRecordingHandler.received_authorization == "Bearer bridge-secret"
+    assert BridgeRecordingHandler.received_path == "/computer/click"
+    assert BridgeRecordingHandler.received_payload == {"x": 10, "y": 20, "button": "left"}
+
+
+def test_desktop_bridge_reports_missing_bridge_when_token_rejected() -> None:
+    with BridgeRecordingServer(status_code=401) as base_url:
+        bridge = DesktopHttpComputerBridge(base_url=base_url, token="wrong-token")
+        result = bridge.run("click", {"x": 1, "y": 2, "button": "left"})
+
+    assert result.ok is False
+    assert result.missingRequirement == "computer_use_control_bridge"
+    assert BridgeRecordingHandler.received_authorization == "Bearer wrong-token"
+
+
+def test_desktop_bridge_without_url_is_not_available() -> None:
+    bridge = DesktopHttpComputerBridge(base_url="", token=None)
+    assert bridge.available() is False
+    result = bridge.run("click", {"x": 1, "y": 2})
+    assert result.ok is False
+    assert result.missingRequirement == "computer_use_control_bridge"
 
 
 def test_health_and_status_report_missing_model(tmp_path: Path) -> None:

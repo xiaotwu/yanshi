@@ -57,13 +57,17 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Tauri CSP is no longer disabled.
 - [x] Developer Mode settings persist Docker image and resource-limit preferences.
 - [x] Build/release docs and setup-required runtime packaging status are documented.
+- [x] Tauri runs a secure localhost Computer bridge HTTP server (random port + per-launch random bearer token) and injects `YANSHI_COMPUTER_BRIDGE_URL`/`YANSHI_COMPUTER_BRIDGE_TOKEN` into the spawned runtime process so Computer Use control actions are connected end-to-end. Missing/invalid tokens are rejected (401); unknown ops 404; non-POST 405. Covered by Rust unit + end-to-end tests and Python bridge-client tests.
+- [x] Repository cleanup: `.playwright-mcp/` untracked and ignored; root smoke screenshots moved to `docs/assets/`; `.gitignore` updated.
 
 ## Pending
 
 - [ ] Bundle a standalone Python runtime sidecar for truly distributable `.app` packages.
 - [ ] Manual Docker command smoke after the required image is available locally or image pull can complete.
 - [ ] Wire persisted Docker Developer Mode settings into per-run TerminalTool construction.
-- [ ] Implement a concrete desktop bridge transport from Tauri to runtime for packaged Computer Use control actions; runtime already supports bridge calls when a bridge URL is configured.
+- [ ] Enforce `browserToolEnabled`/`computerToolEnabled`/`terminalToolEnabled` settings so disabled tools return honest `tool_disabled` observations.
+- [ ] Move provider API key storage to macOS Keychain or an `apiKeyRef` design.
+- [ ] Manually verify the Computer bridge click/type/shortcut/open-app path in the packaged `.app` with macOS Accessibility granted.
 - [ ] Manually verify menubar/tray actions and notification delivery in the packaged desktop app.
 - [ ] Workshop export and richer pack management.
 - [ ] Live Office office editor.

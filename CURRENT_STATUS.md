@@ -32,7 +32,9 @@
 - Runtime Computer Tool probes macOS permission state with native APIs and reports missing permission, unsupported platform, or missing action bridge honestly.
 - Runtime Computer Tool can capture the screen through real macOS `screencapture` for explicit screenshot tasks and saves a PNG artifact.
 - Tauri exposes real macOS Computer bridge commands for click, type, shortcut, and open app.
-- Runtime Computer Tool can call a configured desktop bridge URL for click/type/shortcut/open-app; missing bridge remains an honest `computer_use_control_bridge` state.
+- Tauri runs an in-process localhost Computer bridge HTTP server on an OS-assigned random port with a per-launch random bearer token, and injects `YANSHI_COMPUTER_BRIDGE_URL`/`YANSHI_COMPUTER_BRIDGE_TOKEN` into the spawned Python runtime process (both `uv` and bundled-sidecar launch paths).
+- The bridge server authenticates every request with a constant-time bearer-token check, rejects missing/invalid tokens with HTTP 401, rejects unknown operations with 404 and non-POST with 405, and dispatches `/computer/{click,type,shortcut,open-app}` to the native CoreGraphics action functions.
+- Runtime Computer Tool calls the injected desktop bridge URL with the bearer token for click/type/shortcut/open-app; a rejected token or missing bridge remains an honest `computer_use_control_bridge` state.
 - Docker readiness state is real.
 - Docker sandbox command execution path is implemented with workspace bind mount, no network, resource limits, timeout, resource-lock metadata, and terminal log artifact output.
 - Terminal Tool can execute read-only allowlisted commands in the run workspace without a shell.
@@ -63,7 +65,7 @@
 
 ## What Does Not Work Yet
 
-- Runtime Computer Use control actions require a configured desktop bridge transport URL; Tauri commands exist, but packaged runtime launch does not yet inject a bridge endpoint.
+- Runtime Computer Use control actions are now wired end-to-end (localhost bridge server + token + env injection, covered by Rust and Python tests), but the click/type/shortcut/open-app path has not yet been manually verified in the packaged `.app` with real macOS Accessibility permission granted.
 - Manual Docker command smoke did not complete because the required `alpine:3.20` image pull timed out in this environment.
 - Persisted Docker Developer Mode settings are not yet wired into per-run TerminalTool construction.
 - Terminal Tool does not support local shell pipelines; mutating commands are limited to the Docker sandbox path.
@@ -78,11 +80,11 @@
 
 ## Current Branch
 
-- This directory is not currently a Git repository.
+- `main` (Git repository initialized; single `initial commit` plus in-progress working tree).
 
 ## Current App Start Command
 
-`node_modules` was removed during repository cleanup. Run `pnpm install` before using pnpm scripts again.
+Workspace dependencies are installed (`pnpm install` run this session). If `node_modules` is ever cleared, run `pnpm install` again before using pnpm scripts.
 
 ```bash
 pnpm desktop:dev
