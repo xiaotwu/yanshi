@@ -50,7 +50,7 @@ interface RuntimeStore {
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
   ) => Promise<void>;
-  createProject: (name: string, description?: string) => Promise<void>;
+  createProject: (name: string, description?: string, icon?: string) => Promise<void>;
   updateProject: (projectId: string, update: { name?: string; description?: string; settings?: Record<string, unknown> }) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   setActiveProject: (projectId: string | null) => void;
@@ -277,10 +277,13 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
-  createProject: async (name, description) => {
+  createProject: async (name, description, icon) => {
     set({ loading: true, error: null });
     try {
       const project = await runtimeApi.createProject(name, description);
+      if (icon) {
+        await runtimeApi.updateProject(project.id, { settings: { ...project.settings, icon } });
+      }
       const projects = await runtimeApi.projects();
       set({ projects, activeProjectId: project.id, loading: false });
     } catch (error) {

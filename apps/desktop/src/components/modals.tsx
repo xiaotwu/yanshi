@@ -1,4 +1,3 @@
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import iconUrl from "../../../../icon.png";
@@ -38,32 +37,20 @@ export function CloseRunsModal({ count, onClose }: { count: number; onClose: () 
   );
 }
 
-export function Onboarding({ onStart }: { onStart: () => void }) {
-  const { saveAppSettings, createRun } = useRuntimeStore();
-  const [busy, setBusy] = useState(false);
-
-  const dismiss = () => void saveAppSettings({ onboarded: true });
-  const tryDemo = async () => {
-    setBusy(true);
-    await saveAppSettings({ onboarded: true });
-    await createRun("List workspace files", "default", null);
-    setBusy(false);
-    onStart();
-  };
-
+// Presentational only. App owns the (non-blocking) demo + dismiss logic so a slow/unreachable
+// runtime can never freeze this modal.
+export function Onboarding({ onTryDemo, onDismiss }: { onTryDemo: () => void; onDismiss: () => void }) {
   return (
-    <div className="modal-overlay">
-      <div className="onboarding-card">
+    <div className="modal-overlay" onMouseDown={onDismiss}>
+      <div className="onboarding-card" onMouseDown={(event) => event.stopPropagation()}>
         <img src={iconUrl} alt="" />
         <h2>Welcome to Yanshi</h2>
         <p>Give a task in plain words. Virtual workers plan, act, and show their progress.</p>
         <div className="onboarding-actions">
-          <button className="primary" onClick={() => void tryDemo()} disabled={busy}>
-            {busy ? <Loader2 className="spin" size={16} /> : "Try a demo"}
+          <button className="primary" onClick={onTryDemo}>
+            Try a demo
           </button>
-          <button onClick={dismiss} disabled={busy}>
-            Not now
-          </button>
+          <button onClick={onDismiss}>Not now</button>
         </div>
       </div>
     </div>

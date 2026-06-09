@@ -698,3 +698,37 @@ Signature product features, all real (no mocks):
   the full Developer ID + notarization + staple + Gatekeeper steps and a Public Distribution
   Checklist in docs/BUILD_AND_RELEASE.md. Added docs/RELEASE_NOTES_RC.md.
 - Conclusion: **Final RC local build complete; public notarized release pending Apple signing.**
+
+## Phase: UI/UX refinement pass — ChatGPT/Codex-style desktop shell (2026-06-09)
+
+Frontend-only refinement (no runtime/packaging behavior changed; all features stay real).
+- Composer (A): more title↔composer spacing; removed homepage suggestion chips; Effort + Permission
+  are now icon-only popover controls (Gauge / Shield-ShieldCheck-ShieldAlert) with tooltips and a
+  mode-reflective permission color (default neutral, auto-review warning, full-access danger);
+  project destination moved out of the row into the `+` menu as "Add to Project" (project list with
+  emoji + name, multi-project list, "New project…" with emoji+name create, auto-selected); the whole
+  `+` menu is left-aligned and now drops downward with a scroll cap.
+- Search (B): converted the standalone Search page into a centered floating modal (overlay, autofocus,
+  ESC + click-outside close, ⌘K), with a New Task quick action and All/Projects/Runs/Artifacts/
+  Workshop/Automations filters over real data (automations fetched live).
+- Sidebar (C): new icons (New Task→SquarePen, Projects→Folder, Workshop→LayoutGrid); Settings moved
+  to a bottom account block (avatar + "Yanshi") with a menu (Profile / Personalization / Settings /
+  Help — no Plan/Logout); removed the brand header and the top-level Search/Settings/Artifacts nav
+  (artifacts remain task-centric in the run transcript).
+- Onboarding/bugfix (D): "Try a demo" is now non-blocking — it opens the (real, animated) Live Office
+  immediately and starts a real file-scan run in the background, so a slow/unreachable runtime can
+  never freeze the modal; dismissal is optimistic + persisted in the background. Right-panel launch
+  flash fixed: auto-open now requires a *fresh* run.started (timestamp < 8s), so replayed historical
+  events no longer pop the office open on launch.
+- Titlebar (E): `tauri.conf.json` window set to `titleBarStyle: "Overlay"` + `hiddenTitle: true`
+  (native traffic lights preserved, content inset 84px). New chrome bar: sidebar collapse/expand,
+  back/forward (real view-history stack), Full Office View, and right-panel (Live Office) toggle.
+- Settings (F): redesigned to grouped left-nav (Personal: General/Appearance/Profile/Personalization;
+  Tools: Models/Permissions/Workshop/Help; Developer: Runtime/Sandbox/Database), deep-linkable from
+  the account menu; **About removed** (folded into Profile/Help). Theme moved to Appearance; Live
+  Office + notifications under Personalization.
+- New store/client: `createProject(name, description?, icon?)` persists an emoji in `project.settings.icon`.
+- Verification: pnpm lint/typecheck/test/build green; pytest 73; cargo check + test 10; UI smoke
+  confirmed homepage, `+` menu/project create, search modal, account menu, settings (no About),
+  permission color, sidebar collapse + Live Office toggle; `pnpm desktop:release` rebuilt `.app`+`.dmg`;
+  packaged app launches cleanly with the overlay titlebar.

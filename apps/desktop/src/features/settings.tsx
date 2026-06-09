@@ -5,46 +5,71 @@ import { permissionLabel } from "../lib/shared";
 import type { PermissionMode } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
-export type SettingsSection = "general" | "models" | "permissions" | "live-office" | "workshop" | "notifications" | "about" | "runtime" | "sandbox" | "database";
+export type SettingsSection =
+  | "general"
+  | "appearance"
+  | "profile"
+  | "personalization"
+  | "models"
+  | "permissions"
+  | "workshop"
+  | "help"
+  | "runtime"
+  | "sandbox"
+  | "database";
 
-export function SettingsView() {
-  const store = useRuntimeStore();
-  const { appSettings } = store;
+const SHORTCUTS: Array<[string, string]> = [
+  ["Open / hide Yanshi", "⌘Y"],
+  ["New task", "⌘N"],
+  ["Open Search", "⌘K"],
+  ["Open Live Office", "⌘L"],
+];
+
+export function SettingsView({ initialSection = "general" }: { initialSection?: SettingsSection }) {
+  const { appSettings } = useRuntimeStore();
   const developer = appSettings?.developerMode ?? false;
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [section, setSection] = useState<SettingsSection>(initialSection);
 
-  const normalSections: Array<{ id: SettingsSection; label: string }> = [
-    { id: "general", label: "General" },
-    { id: "models", label: "Models" },
-    { id: "permissions", label: "Permissions" },
-    { id: "live-office", label: "Live Office" },
-    { id: "workshop", label: "Workshop" },
-    { id: "notifications", label: "Notifications" },
-    { id: "about", label: "About" },
+  useEffect(() => setSection(initialSection), [initialSection]);
+
+  const groups: Array<{ label: string; items: Array<{ id: SettingsSection; label: string }> }> = [
+    {
+      label: "Personal",
+      items: [
+        { id: "general", label: "General" },
+        { id: "appearance", label: "Appearance" },
+        { id: "profile", label: "Profile" },
+        { id: "personalization", label: "Personalization" },
+      ],
+    },
+    {
+      label: "Tools",
+      items: [
+        { id: "models", label: "Models" },
+        { id: "permissions", label: "Permissions" },
+        { id: "workshop", label: "Workshop" },
+        { id: "help", label: "Help" },
+      ],
+    },
   ];
-  const devSections: Array<{ id: SettingsSection; label: string }> = [
-    { id: "runtime", label: "Runtime" },
-    { id: "sandbox", label: "Sandbox" },
-    { id: "database", label: "Database" },
-  ];
-  const sections = developer ? [...normalSections, ...devSections] : normalSections;
-  const active = sections.some((item) => item.id === section) ? section : "general";
+  if (developer) groups.push({ label: "Developer", items: [{ id: "runtime", label: "Runtime" }, { id: "sandbox", label: "Sandbox" }, { id: "database", label: "Database" }] });
+
+  const allIds = groups.flatMap((g) => g.items.map((i) => i.id));
+  const active = allIds.includes(section) ? section : "general";
 
   return (
     <section className="settings-layout">
       <nav className="settings-nav">
-        {normalSections.map((item) => (
-          <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
-            {item.label}
-          </button>
+        {groups.map((group) => (
+          <div key={group.label}>
+            <div className="settings-nav-label">{group.label}</div>
+            {group.items.map((item) => (
+              <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
+                {item.label}
+              </button>
+            ))}
+          </div>
         ))}
-        {developer && <div className="settings-nav-label">Developer</div>}
-        {developer &&
-          devSections.map((item) => (
-            <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
-              {item.label}
-            </button>
-          ))}
       </nav>
       <div className="settings-content">
         <SettingsSectionView section={active} />
@@ -98,14 +123,6 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
         <div className="settings-panel">
           <h3>General</h3>
           <label className="setting-row">
-            <span>Theme</span>
-            <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" | "system" })}>
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
-          <label className="setting-row">
             <span>Default permission</span>
             <select
               value={appSettings.permissionModeDefault}
@@ -117,6 +134,43 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
             </select>
           </label>
           {toggle("developerMode", "Developer Mode", "Show runtime internals and raw events.")}
+        </div>
+      );
+    case "appearance":
+      return (
+        <div className="settings-panel">
+          <h3>Appearance</h3>
+          <label className="setting-row">
+            <span>Theme</span>
+            <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" | "system" })}>
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+        </div>
+      );
+    case "profile":
+      return (
+        <div className="settings-panel">
+          <h3>Profile</h3>
+          <dl className="runtime-details">
+            <dt>Workspace</dt>
+            <dd>Yanshi</dd>
+            <dt>Version</dt>
+            <dd>0.1.0</dd>
+            <dt>Runtime</dt>
+            <dd>{desktopStatus?.launchMode ?? "—"}</dd>
+          </dl>
+        </div>
+      );
+    case "personalization":
+      return (
+        <div className="settings-panel">
+          <h3>Personalization</h3>
+          {toggle("liveOfficeAutoOpen", "Open Live Office when a task starts")}
+          {toggle("liveOfficeDefaultOpen", "Keep Live Office open by default")}
+          {toggle("notificationsEnabled", "Desktop notifications")}
         </div>
       );
     case "models":
@@ -183,14 +237,6 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
           </div>
         </div>
       );
-    case "live-office":
-      return (
-        <div className="settings-panel">
-          <h3>Live Office</h3>
-          {toggle("liveOfficeAutoOpen", "Auto-open on task start")}
-          {toggle("liveOfficeDefaultOpen", "Open by default")}
-        </div>
-      );
     case "workshop":
       return (
         <div className="settings-panel">
@@ -198,25 +244,30 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
           <p className="muted">{workshopPacks.length} pack{workshopPacks.length === 1 ? "" : "s"} installed.</p>
         </div>
       );
-    case "notifications":
+    case "help":
       return (
         <div className="settings-panel">
-          <h3>Notifications</h3>
-          {toggle("notificationsEnabled", "Desktop notifications")}
-        </div>
-      );
-    case "about":
-      return (
-        <div className="settings-panel">
-          <h3>About</h3>
+          <h3>Help</h3>
           <dl className="runtime-details">
             <dt>Yanshi</dt>
             <dd>0.1.0</dd>
             <dt>Runtime</dt>
-            <dd>{desktopStatus?.launchMode ?? "—"}</dd>
-            <dt>Status</dt>
-            <dd>{status?.details ?? desktopStatus?.detail ?? "—"}</dd>
+            <dd>{status?.status ?? desktopStatus?.launchMode ?? "—"}</dd>
           </dl>
+          <h4 className="settings-subhead">Keyboard shortcuts</h4>
+          <dl className="runtime-details">
+            {SHORTCUTS.map(([name, key]) => (
+              <div key={name} style={{ display: "contents" }}>
+                <dt>{name}</dt>
+                <dd>{key}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="settings-actions">
+            <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus?.logPath}>
+              Open logs
+            </button>
+          </div>
         </div>
       );
     case "runtime":
@@ -312,4 +363,3 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
       return null;
   }
 }
-
