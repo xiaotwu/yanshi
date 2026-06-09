@@ -78,6 +78,15 @@
 - Tray/global-shortcut/notification behavior still needs manual packaged-app verification.
 - Live Office office editor is not implemented.
 
+## Automations / Search / Artifacts (2026-06-08, Final Completion Pass)
+
+- Automations: real project-scoped automations (create, enable/disable, Run now, delete, run
+  history) with a real background scheduler that fires due interval automations. Endpoints under
+  `/automations`; `automations` + `automation_runs` tables. Verified the scheduler firing in smoke.
+- Artifacts: real `/artifacts` listing with metadata; "Reveal in Finder" via the `reveal_path`
+  Tauri command (desktop-only, honest web fallback).
+- Search: real grouped search across projects/runs/artifacts/packs (replaces the empty placeholder).
+
 ## Product Surfaces Progress (2026-06-08, toward full spec)
 
 - Composer: real `+` menu (Plan first + Use Browser/Computer/Terminal directives), real voice

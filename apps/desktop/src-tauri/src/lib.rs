@@ -3,7 +3,8 @@ mod runtime;
 use runtime::{
     computer_click, computer_open_app, computer_shortcut, computer_type, desktop_notify,
     macos_permission_status, open_live_office, open_runtime_logs, open_yanshi, restart_runtime,
-    pop_out_live_office, runtime_status, show_main_window, start_runtime, stop_runtime, RuntimeState,
+    pop_out_live_office, reveal_path, runtime_status, show_main_window, start_runtime, stop_runtime,
+    RuntimeState,
 };
 use tauri::{
     menu::{Menu, MenuItem},
@@ -44,7 +45,8 @@ pub fn run() {
             open_yanshi,
             open_live_office,
             pop_out_live_office,
-            desktop_notify
+            desktop_notify,
+            reveal_path
         ])
         .setup(|app| {
             let shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyY);

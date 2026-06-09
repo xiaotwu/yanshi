@@ -122,6 +122,39 @@ class AgentTaskSummary(BaseModel):
     completedAt: str | None = None
 
 
+ScheduleKind = Literal["manual", "interval"]
+
+
+class AutomationSummary(BaseModel):
+    id: str
+    projectId: str | None = None
+    name: str
+    task: str
+    permissionMode: PermissionMode = "default"
+    planFirst: bool = False
+    enabled: bool = True
+    scheduleKind: ScheduleKind = "manual"
+    intervalMinutes: int | None = None
+    createdAt: str
+    updatedAt: str
+    lastRunAt: str | None = None
+
+
+class CreateAutomationRequest(BaseModel):
+    name: str
+    task: str
+    projectId: str | None = None
+    permissionMode: PermissionMode = "default"
+    planFirst: bool = False
+    scheduleKind: ScheduleKind = "manual"
+    intervalMinutes: int | None = None
+
+
+class UpdateAutomationRequest(BaseModel):
+    enabled: bool | None = None
+    name: str | None = None
+
+
 class WorkshopPackSummary(BaseModel):
     id: str
     name: str

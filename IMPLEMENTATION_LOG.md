@@ -513,3 +513,30 @@ Source of truth: docs/Yanshi_Product_Design_Spec.md. Large refactors allowed; no
 - Deferred (documented, NOT shipped as shells): Automations, Workshop Create/Agent Editor/Office
   Editor/export, Live Office life-animations/hover-cards/fatigue/stations/project-scoped state,
   Search, reasoning levels, file upload, close-behavior prompt, codesign/notarization.
+
+## Phase: Automations + Search + Artifacts (Final Completion Pass, 2026-06-08)
+
+- Automations (spec §8/§12) — REAL, not a placeholder:
+  - SQLite `automations` + `automation_runs` tables (CREATE IF NOT EXISTS; backward-compatible).
+  - Models AutomationSummary/Create/Update; storage CRUD + record/list automation runs.
+  - Endpoints: GET/POST `/automations`, PUT/DELETE `/automations/{id}`, POST `/automations/{id}/run`,
+    GET `/automations/{id}/runs`.
+  - Manual "Run now" launches a real run and links it; run history lists those runs.
+  - Real background scheduler (`start_automation_scheduler`, started in `main()` only) runs due
+    interval automations via `run_due_automations` + `is_automation_due`. Verified firing in smoke.
+  - UI: project Automations tab (create with optional interval, enable/disable, Run now, delete,
+    last-run time). Events automation.created/updated/deleted/started.
+- Artifacts (spec §14) — real `GET /artifacts?projectId=&runId=` backed by the artifacts table;
+  `list_artifacts` + `_artifact_from_row`. UI Artifacts page shows real artifacts with metadata
+  (agent, created, path) and a "Reveal in Finder" action via a new Tauri `reveal_path` command
+  (`open -R`); Reveal is shown only in the desktop app (honest web fallback).
+- Search (spec §6) — replaced the empty placeholder with a real grouped search over projects, runs,
+  artifacts, and workshop packs; clicking a result navigates; "No results." empty state.
+- Tests: +4 (artifacts list, automation CRUD + manual run, interval due/run, interval validation).
+  pytest 60 passed; cargo 10 passed; lint/typecheck/build green; desktop:release rebuilt sidecar
+  (verified /automations + /artifacts on the bundled binary) and `.app`/`.dmg`.
+- No-mock audit: clean (the web Reveal button is correctly hidden, not faked).
+- Still deferred (no shells): Live Office life-system/hover-cards/fatigue/stations/project-scoped
+  office state; Workshop Create/Agent Editor/Office Editor/export; AgentProfile/Instance/Actor3D +
+  LiveOfficeState models; reasoning levels; composer file upload; close-with-active-runs prompt;
+  codesign/notarization; `features/*` frontend split.

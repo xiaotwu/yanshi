@@ -52,6 +52,11 @@ export type EventType =
   | "workshop.pack.imported"
   | "workshop.pack.enabled"
   | "workshop.pack.disabled"
+  | "automation.created"
+  | "automation.updated"
+  | "automation.deleted"
+  | "automation.started"
+  | "automation.completed"
   | "liveOffice.state.updated"
   | "runtime.status.changed";
 
@@ -193,6 +198,37 @@ export interface WorkshopPackSummary {
   suggestedPermissions: string[];
   securityStatus: string;
   createdAt: string;
+}
+
+export interface ArtifactSummary {
+  id: string;
+  runId: string;
+  projectId?: string | null;
+  agentId?: string | null;
+  actionId?: string | null;
+  kind: string;
+  title: string;
+  summary: string;
+  path: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export type ScheduleKind = "manual" | "interval";
+
+export interface AutomationSummary {
+  id: string;
+  projectId?: string | null;
+  name: string;
+  task: string;
+  permissionMode: PermissionMode;
+  planFirst: boolean;
+  enabled: boolean;
+  scheduleKind: ScheduleKind;
+  intervalMinutes?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string | null;
 }
 
 export interface WorkspaceFile {

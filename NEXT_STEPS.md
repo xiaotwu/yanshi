@@ -8,7 +8,9 @@
 - [x] Move provider API key to an off-DB `apiKeyRef` secret store with migration.
 - [ ] Grant Accessibility to packaged `Yanshi.app` and verify Computer bridge `click/type/shortcut`; also verify tray actions, close behavior, notifications, Cmd+Y.
 - [ ] Codesign + notarize the bundle for distribution beyond the build machine.
-- [ ] Build Automations (real create/enable-disable/run-history + at least one real trigger; honest not-configured for scheduled triggers).
+- [x] Automations (real create/enable-disable/run-history + interval scheduler + Run now).
+- [x] Search (real grouped results) and Artifacts page (real data + Reveal in Finder).
+- [ ] Automation triggers beyond interval (calendar/event-based); composer "Create automation" entry.
 - [ ] Workshop: Create flow, Agent Editor, Office Editor, and pack export (real saved data, no shells).
 - [ ] Live Office: project-scoped office state, hover cards, queue bubbles, fatigue, behavior modes, stations, and event-driven life animations.
 - [ ] Data model: AgentProfile / AgentInstance / AgentActor3D / LiveOfficeState tables + migrations.

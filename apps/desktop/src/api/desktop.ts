@@ -38,3 +38,12 @@ export async function popOutLiveOffice(): Promise<void> {
   if (!("__TAURI_INTERNALS__" in window)) return;
   await invoke("pop_out_live_office");
 }
+
+export function canRevealFiles(): boolean {
+  return "__TAURI_INTERNALS__" in window;
+}
+
+export async function revealPath(path: string): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  await invoke("reveal_path", { path });
+}

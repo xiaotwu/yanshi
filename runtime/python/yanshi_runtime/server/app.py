@@ -4,7 +4,10 @@ import argparse
 import asyncio
 import re
 import shutil
+import threading
+import time
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 import uvicorn
@@ -19,6 +22,9 @@ from yanshi_runtime.models import (
     ApprovalDecisionRequest,
     ApprovalSummary,
     AgentTaskSummary,
+    ArtifactSummary,
+    AutomationSummary,
+    CreateAutomationRequest,
     CreateProjectRequest,
     CreateRunRequest,
     ProjectSummary,
@@ -27,6 +33,7 @@ from yanshi_runtime.models import (
     ProviderSettingsUpdate,
     RuntimeHealth,
     RuntimeStatus,
+    UpdateAutomationRequest,
     UpdateProjectRequest,
     WorkshopPackEnableRequest,
     WorkshopPackSummary,
@@ -94,6 +101,79 @@ class RuntimeService:
 
         result = FileTool(Path(project.workspacePath)).list_files(".")
         return result.model_dump()
+
+    def list_artifacts(self, project_id: str | None, run_id: str | None) -> list[ArtifactSummary]:
+        return self.storage.list_artifacts(project_id=project_id, run_id=run_id)
+
+    def create_automation(self, request: CreateAutomationRequest) -> AutomationSummary:
+        name = request.name.strip()
+        task = request.task.strip()
+        if not name or not task:
+            raise HTTPException(status_code=400, detail="Automation name and task are required.")
+        if request.projectId is not None:
+            try:
+                self.storage.get_project(request.projectId)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="Project not found.") from exc
+        if request.scheduleKind == "interval" and (request.intervalMinutes is None or request.intervalMinutes < 1):
+            raise HTTPException(status_code=400, detail="Interval automations need intervalMinutes >= 1.")
+        automation = self.storage.create_automation(
+            name=name,
+            task=task,
+            project_id=request.projectId,
+            permission_mode=request.permissionMode,
+            plan_first=request.planFirst,
+            schedule_kind=request.scheduleKind,
+            interval_minutes=request.intervalMinutes,
+        )
+        self.storage.append_event("automation.created", project_id=automation.projectId, payload=automation.model_dump())
+        return automation
+
+    def update_automation(self, automation_id: str, request: UpdateAutomationRequest) -> AutomationSummary:
+        try:
+            automation = self.storage.update_automation(automation_id, enabled=request.enabled, name=request.name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Automation not found.") from exc
+        self.storage.append_event("automation.updated", project_id=automation.projectId, payload=automation.model_dump())
+        return automation
+
+    def delete_automation(self, automation_id: str) -> None:
+        try:
+            self.storage.delete_automation(automation_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Automation not found.") from exc
+        self.storage.append_event("automation.deleted", payload={"automationId": automation_id})
+
+    def run_automation(self, automation_id: str, background_tasks: BackgroundTasks | None) -> dict:
+        try:
+            automation = self.storage.get_automation(automation_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Automation not found.") from exc
+        return self._launch_automation(automation, background_tasks)
+
+    def _launch_automation(self, automation: AutomationSummary, background_tasks: BackgroundTasks | None) -> dict:
+        run = self.storage.create_run(automation.task, automation.projectId)
+        self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
+        self.storage.record_automation_run(automation.id, run.id)
+        self.storage.append_event(
+            "automation.started",
+            run_id=run.id,
+            project_id=automation.projectId,
+            payload={"automationId": automation.id, "name": automation.name, "runId": run.id},
+        )
+        if background_tasks is not None:
+            background_tasks.add_task(self.start_run, run.id, automation.task, automation.permissionMode, automation.planFirst)
+        else:
+            self.start_run(run.id, automation.task, automation.permissionMode, automation.planFirst)
+        return run.model_dump()
+
+    def run_due_automations(self, now: datetime) -> int:
+        launched = 0
+        for automation in self.storage.list_automations():
+            if is_automation_due(automation, now):
+                self._launch_automation(automation, background_tasks=None)
+                launched += 1
+        return launched
 
     def decide_approval(self, approval_id: str, decision: str) -> ApprovalSummary:
         approval = self.storage.decide_approval(approval_id, decision)
@@ -278,6 +358,18 @@ def get_service(app: FastAPI) -> RuntimeService:
     return app.state.runtime_service
 
 
+def is_automation_due(automation: AutomationSummary, now: datetime) -> bool:
+    if not automation.enabled or automation.scheduleKind != "interval" or not automation.intervalMinutes:
+        return False
+    if automation.lastRunAt is None:
+        return True
+    try:
+        last = datetime.fromisoformat(automation.lastRunAt)
+    except ValueError:
+        return True
+    return (now - last).total_seconds() >= automation.intervalMinutes * 60
+
+
 def safe_upload_basename(filename: str | None) -> str:
     raw = (filename or "pack.zip").replace("\\", "/")
     basename = raw.rsplit("/", 1)[-1].strip()
@@ -368,6 +460,43 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.get("/projects/{project_id}/files")
     def list_project_files(project_id: str, service: RuntimeService = Depends(service_dep)):
         return service.list_project_files(project_id)
+
+    @app.get("/artifacts", response_model=list[ArtifactSummary])
+    def list_artifacts(
+        projectId: str | None = None,
+        runId: str | None = None,
+        service: RuntimeService = Depends(service_dep),
+    ):
+        return service.list_artifacts(projectId, runId)
+
+    @app.get("/automations", response_model=list[AutomationSummary])
+    def list_automations(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.storage.list_automations(project_id=projectId)
+
+    @app.post("/automations", response_model=AutomationSummary)
+    def create_automation(request: CreateAutomationRequest, service: RuntimeService = Depends(service_dep)):
+        return service.create_automation(request)
+
+    @app.put("/automations/{automation_id}", response_model=AutomationSummary)
+    def update_automation(automation_id: str, request: UpdateAutomationRequest, service: RuntimeService = Depends(service_dep)):
+        return service.update_automation(automation_id, request)
+
+    @app.delete("/automations/{automation_id}", status_code=204)
+    def delete_automation(automation_id: str, service: RuntimeService = Depends(service_dep)):
+        service.delete_automation(automation_id)
+        return None
+
+    @app.post("/automations/{automation_id}/run")
+    def run_automation(automation_id: str, background_tasks: BackgroundTasks, service: RuntimeService = Depends(service_dep)):
+        return service.run_automation(automation_id, background_tasks)
+
+    @app.get("/automations/{automation_id}/runs")
+    def list_automation_runs(automation_id: str, service: RuntimeService = Depends(service_dep)):
+        try:
+            service.storage.get_automation(automation_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Automation not found.") from exc
+        return service.storage.list_automation_runs(automation_id)
 
     @app.put("/projects/{project_id}", response_model=ProjectSummary)
     def update_project(project_id: str, request: UpdateProjectRequest, service: RuntimeService = Depends(service_dep)):
@@ -484,6 +613,22 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     return app
 
 
+def start_automation_scheduler(app: FastAPI, interval_seconds: int = 30) -> threading.Thread:
+    """Run due interval automations on a background daemon thread (real sidecar only)."""
+
+    def loop() -> None:
+        while True:
+            time.sleep(interval_seconds)
+            try:
+                get_service(app).run_due_automations(datetime.now(UTC))
+            except Exception:  # noqa: BLE001 - scheduler must never crash the runtime
+                continue
+
+    thread = threading.Thread(target=loop, name="yanshi-automation-scheduler", daemon=True)
+    thread.start()
+    return thread
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Yanshi Runtime sidecar.")
     parser.add_argument("--host", default=None)
@@ -495,7 +640,9 @@ def main() -> None:
         settings.host = args.host
     if args.port:
         settings.port = args.port
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
+    app = create_app(settings)
+    start_automation_scheduler(app)
+    uvicorn.run(app, host=settings.host, port=settings.port)
 
 
 if __name__ == "__main__":

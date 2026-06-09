@@ -71,6 +71,15 @@ warning until codesigning + notarization are added.
 - Pending interactive step: grant **System Settings → Privacy & Security → Accessibility →
   Yanshi** to verify `click`/`type`/`shortcut` (these require Accessibility; `open-app` does not).
 
+## Automations
+
+The runtime persists automations (`automations` + `automation_runs` tables). A background
+scheduler thread (`start_automation_scheduler`, started only by the real sidecar `main()`, not
+under tests) runs **enabled interval automations** when due (`run_due_automations` /
+`is_automation_due`). "Run now" launches a real run and links it to the automation; run history
+lists those runs. Only the runtime process lifetime is covered — automations do not run while the
+app is closed (documented limitation; calendar/event triggers are future work).
+
 ## Provider API Key Storage
 
 The provider API key is never stored inline in SQLite. `set_provider_settings` writes the

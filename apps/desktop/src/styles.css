@@ -1218,3 +1218,133 @@ button.list-row {
   color: #ad3f42;
   padding: 8px 0;
 }
+
+/* Search */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #ddd2c2;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: #6a7682;
+}
+
+.search-box input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1d2830;
+}
+
+.search-results {
+  display: grid;
+  gap: 14px;
+}
+
+.search-group-label {
+  margin-bottom: 4px;
+  color: #9a8a72;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: #36444c;
+  text-align: left;
+}
+
+.search-row:hover {
+  background: #eef4f0;
+}
+
+/* Artifacts */
+.artifact-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: #eef4f0;
+  color: #1d6b5d;
+  font-size: 13px;
+}
+
+.ghost-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Automations */
+.automations {
+  display: grid;
+  gap: 14px;
+}
+
+.automation-form {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 0.9fr auto;
+  gap: 8px;
+}
+
+.automation-form input {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #e2d7c7;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #1d2830;
+}
+
+.automation-form button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #277f71;
+  color: #fff;
+}
+
+.automation-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.automation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid #efe7db;
+}
+
+.automation-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.automation-main small {
+  color: #8a7a64;
+  font-size: 12px;
+}

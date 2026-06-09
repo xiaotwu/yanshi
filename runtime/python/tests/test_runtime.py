@@ -1281,6 +1281,95 @@ def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> Non
     assert client.get("/settings").json()["dockerImage"] == "python:3.12-alpine"
 
 
+def test_artifacts_endpoint_lists_created_artifacts(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "a.txt").write_text("x", encoding="utf-8")
+    client = make_client(tmp_path)
+
+    created = client.post("/runs", json={"task": "List workspace files"})
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    artifacts = client.get("/artifacts").json()
+    assert any(a["runId"] == run_id and a["kind"] == "JSON" for a in artifacts)
+    by_run = client.get("/artifacts", params={"runId": run_id}).json()
+    assert len(by_run) >= 1
+    assert all(a["runId"] == run_id for a in by_run)
+
+
+def test_automation_crud_and_manual_run(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "note.txt").write_text("x", encoding="utf-8")
+    client = make_client(tmp_path)
+
+    created = client.post("/automations", json={"name": "Nightly scan", "task": "List workspace files"})
+    assert created.status_code == 200
+    automation = created.json()
+    automation_id = automation["id"]
+    assert automation["enabled"] is True
+    assert automation["scheduleKind"] == "manual"
+
+    listed = client.get("/automations").json()
+    assert [a["id"] for a in listed] == [automation_id]
+
+    run = client.post(f"/automations/{automation_id}/run")
+    assert run.status_code == 200
+    run_id = run.json()["id"]
+    history = client.get(f"/automations/{automation_id}/runs").json()
+    assert [r["id"] for r in history] == [run_id]
+    assert client.get(f"/runs/{run_id}").json()["status"] == "completed"
+
+    disabled = client.put(f"/automations/{automation_id}", json={"enabled": False})
+    assert disabled.json()["enabled"] is False
+
+    events = [e["event"]["type"] for e in client.get("/events").json()]
+    assert "automation.created" in events
+    assert "automation.started" in events
+
+    deleted = client.delete(f"/automations/{automation_id}")
+    assert deleted.status_code == 204
+    assert client.get("/automations").json() == []
+
+
+def test_interval_automation_is_due_and_runs(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from yanshi_runtime.server.app import is_automation_due
+
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "note.txt").write_text("x", encoding="utf-8")
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    created = client.post(
+        "/automations",
+        json={"name": "Every 15m", "task": "List workspace files", "scheduleKind": "interval", "intervalMinutes": 15},
+    )
+    assert created.status_code == 200
+    automation_id = created.json()["id"]
+
+    now = datetime.now(UTC)
+    launched = service.run_due_automations(now)
+    assert launched == 1
+    assert len(service.storage.list_automation_runs(automation_id)) == 1
+
+    # Immediately after running it is no longer due.
+    assert service.run_due_automations(now) == 0
+    refreshed = service.storage.get_automation(automation_id)
+    assert is_automation_due(refreshed, now) is False
+    # After the interval elapses it is due again.
+    assert is_automation_due(refreshed, now + timedelta(minutes=16)) is True
+
+
+def test_interval_automation_requires_minutes(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    response = client.post("/automations", json={"name": "Bad", "task": "x", "scheduleKind": "interval"})
+    assert response.status_code == 400
+
+
 def test_plan_first_forces_approval_then_resumes(tmp_path: Path) -> None:
     workspace = tmp_path / "workspaces" / "default"
     workspace.mkdir(parents=True)

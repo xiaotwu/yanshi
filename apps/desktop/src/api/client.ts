@@ -2,6 +2,9 @@ import type {
   AgentTaskSummary,
   AppSettings,
   ApprovalSummary,
+  ArtifactSummary,
+  AutomationSummary,
+  PermissionMode,
   ProjectFilesResult,
   ProjectSummary,
   ProviderHealth,
@@ -80,6 +83,29 @@ export const runtimeApi = {
       body: JSON.stringify({ task, permissionMode, ...(projectId ? { projectId } : {}), ...(planFirst ? { planFirst } : {}) }),
     }),
   projectFiles: (projectId: string) => request<ProjectFilesResult>(`/projects/${projectId}/files`),
+  artifacts: (filters?: { projectId?: string | null; runId?: string | null }) => {
+    const params = new URLSearchParams();
+    if (filters?.projectId) params.set("projectId", filters.projectId);
+    if (filters?.runId) params.set("runId", filters.runId);
+    const query = params.toString();
+    return request<ArtifactSummary[]>(query ? `/artifacts?${query}` : "/artifacts");
+  },
+  automations: (projectId?: string | null) =>
+    request<AutomationSummary[]>(projectId ? `/automations?projectId=${encodeURIComponent(projectId)}` : "/automations"),
+  createAutomation: (body: {
+    name: string;
+    task: string;
+    projectId?: string | null;
+    permissionMode?: PermissionMode;
+    planFirst?: boolean;
+    scheduleKind?: "manual" | "interval";
+    intervalMinutes?: number | null;
+  }) => request<AutomationSummary>("/automations", { method: "POST", body: JSON.stringify(body) }),
+  updateAutomation: (automationId: string, update: { enabled?: boolean; name?: string }) =>
+    request<AutomationSummary>(`/automations/${automationId}`, { method: "PUT", body: JSON.stringify(update) }),
+  deleteAutomation: (automationId: string) => request<void>(`/automations/${automationId}`, { method: "DELETE" }),
+  runAutomation: (automationId: string) => request<RunSummary>(`/automations/${automationId}/run`, { method: "POST", body: "{}" }),
+  automationRuns: (automationId: string) => request<RunSummary[]>(`/automations/${automationId}/runs`),
   pauseRun: (runId: string) =>
     request<RunSummary>(`/runs/${runId}/pause`, {
       method: "POST",

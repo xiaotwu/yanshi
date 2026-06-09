@@ -29,7 +29,7 @@ import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "
 
 import iconUrl from "../../../icon.png";
 import { runtimeApi } from "./api/client";
-import { openDesktopRuntimeLogs, popOutLiveOffice } from "./api/desktop";
+import { canRevealFiles, openDesktopRuntimeLogs, popOutLiveOffice, revealPath } from "./api/desktop";
 import { useRuntimeStore } from "./stores/runtimeStore";
 
 type View = "new-task" | "search" | "projects" | "runs" | "workshop" | "settings" | "approvals" | "artifacts" | "developer";
@@ -134,7 +134,7 @@ export function App() {
 
       <main className="main-pane">
         {view === "new-task" && <NewTaskView onRuns={() => setView("runs")} />}
-        {view === "search" && <EmptyView title="Search" text="No indexed projects yet." />}
+        {view === "search" && <SearchView onNavigate={setView} />}
         {view === "projects" && <ProjectsView />}
         {view === "runs" && <RunsView />}
         {view === "workshop" && <WorkshopView />}
@@ -477,7 +477,7 @@ function ProjectsView() {
   );
 }
 
-type ProjectTab = "overview" | "runs" | "files" | "artifacts" | "activity" | "settings";
+type ProjectTab = "overview" | "runs" | "files" | "artifacts" | "automations" | "activity" | "settings";
 
 function ProjectWorkspace({
   project,
@@ -510,6 +510,7 @@ function ProjectWorkspace({
     { id: "runs", label: "Runs" },
     { id: "files", label: "Files" },
     { id: "artifacts", label: "Artifacts" },
+    { id: "automations", label: "Automations" },
     { id: "activity", label: "Activity" },
     { id: "settings", label: "Settings" },
   ];
@@ -565,6 +566,8 @@ function ProjectWorkspace({
       )}
 
       {tab === "files" && <ProjectFiles projectId={project.id} />}
+
+      {tab === "automations" && <AutomationsPanel projectId={project.id} />}
 
       {tab === "artifacts" && (
         <div className="event-feed">
@@ -623,6 +626,118 @@ function ProjectWorkspace({
         </>
       )}
     </>
+  );
+}
+
+function AutomationsPanel({ projectId }: { projectId: string }) {
+  const [automations, setAutomations] = useState<import("@yanshi/shared").AutomationSummary[] | null>(null);
+  const [name, setName] = useState("");
+  const [task, setTask] = useState("");
+  const [interval, setIntervalValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = () => runtimeApi.automations(projectId).then(setAutomations).catch(() => setAutomations([]));
+
+  useEffect(() => {
+    let cancelled = false;
+    runtimeApi
+      .automations(projectId)
+      .then((items) => !cancelled && setAutomations(items))
+      .catch(() => !cancelled && setAutomations([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const create = async () => {
+    if (!name.trim() || !task.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const minutes = interval.trim() ? Number(interval.trim()) : null;
+      await runtimeApi.createAutomation({
+        name: name.trim(),
+        task: task.trim(),
+        projectId,
+        scheduleKind: minutes ? "interval" : "manual",
+        intervalMinutes: minutes,
+      });
+      setName("");
+      setTask("");
+      setIntervalValue("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create automation.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="automations">
+      <div className="automation-form">
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" />
+        <input value={task} onChange={(event) => setTask(event.target.value)} placeholder="Task" />
+        <input value={interval} onChange={(event) => setIntervalValue(event.target.value)} placeholder="Every N min (optional)" inputMode="numeric" />
+        <button onClick={() => void create()} disabled={busy || !name.trim() || !task.trim()}>
+          <Plus size={15} /> Add
+        </button>
+      </div>
+      {error && <p className="inline-error">{error}</p>}
+      {!automations ? (
+        <p className="muted">Loading…</p>
+      ) : automations.length === 0 ? (
+        <p className="transcript-empty">No automations yet.</p>
+      ) : (
+        <div className="file-list">
+          {automations.map((automation) => (
+            <AutomationRow key={automation.id} automation={automation} onChanged={refresh} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AutomationRow({ automation, onChanged }: { automation: import("@yanshi/shared").AutomationSummary; onChanged: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState(false);
+  const schedule = automation.scheduleKind === "interval" ? `every ${automation.intervalMinutes}m` : "manual";
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+      await onChanged();
+    }
+  };
+
+  return (
+    <div className="automation-row">
+      <div className="automation-main">
+        <strong>{automation.name}</strong>
+        <small>
+          {schedule}
+          {automation.lastRunAt ? ` · last ${new Date(automation.lastRunAt).toLocaleTimeString()}` : ""}
+        </small>
+      </div>
+      <button className="ghost-button" disabled={busy} title="Run now" onClick={() => void act(() => runtimeApi.runAutomation(automation.id))}>
+        <Play size={15} /> Run
+      </button>
+      <label className="switch" title={automation.enabled ? "Enabled" : "Disabled"}>
+        <input
+          type="checkbox"
+          checked={automation.enabled}
+          disabled={busy}
+          onChange={(event) => void act(() => runtimeApi.updateAutomation(automation.id, { enabled: event.target.checked }))}
+        />
+      </label>
+      <button className="ghost-button danger-text" disabled={busy} title="Delete" onClick={() => void act(() => runtimeApi.deleteAutomation(automation.id))}>
+        <X size={15} />
+      </button>
+    </div>
   );
 }
 
@@ -1184,18 +1299,62 @@ function DeveloperView() {
 }
 
 function ArtifactsView() {
-  const artifacts = useRuntimeStore((state) => state.events.filter((entry) => entry.event.type === "artifact.created"));
+  const events = useRuntimeStore((state) => state.events);
+  const [artifacts, setArtifacts] = useState<import("@yanshi/shared").ArtifactSummary[] | null>(null);
+  const artifactCount = events.filter((entry) => entry.event.type === "artifact.created").length;
+
+  useEffect(() => {
+    let cancelled = false;
+    runtimeApi
+      .artifacts()
+      .then((items) => !cancelled && setArtifacts(items))
+      .catch(() => !cancelled && setArtifacts([]));
+    return () => {
+      cancelled = true;
+    };
+    // Re-fetch when new artifacts stream in.
+  }, [artifactCount]);
+
+  if (!artifacts) return <EmptyView title="Artifacts" text="Loading…" />;
   if (artifacts.length === 0) return <EmptyView title="Artifacts" text="No artifacts yet." />;
+
   return (
     <section className="content-stack">
       <h2>Artifacts</h2>
-      {artifacts.map(({ seq, event }) => (
-        <article key={seq} className="event-card">
-          <strong>{String(event.payload.title ?? "Artifact")}</strong>
-          <p>{String(event.payload.summary ?? "")}</p>
-        </article>
+      {artifacts.map((artifact) => (
+        <ArtifactCard key={artifact.id} artifact={artifact} />
       ))}
     </section>
+  );
+}
+
+function ArtifactCard({ artifact }: { artifact: import("@yanshi/shared").ArtifactSummary }) {
+  return (
+    <article className="event-card artifact-card">
+      <div className="artifact-head">
+        <div>
+          <span>{artifact.kind}</span>
+          <strong>{artifact.title}</strong>
+        </div>
+        {canRevealFiles() && (
+          <button className="ghost-button" title="Reveal in Finder" onClick={() => void revealPath(artifact.path)}>
+            <FolderOpen size={15} /> Reveal
+          </button>
+        )}
+      </div>
+      <p>{artifact.summary}</p>
+      <details className="msg-details">
+        <summary>Details</summary>
+        <dl className="runtime-details">
+          <dt>Agent</dt>
+          <dd>{agentLabel(artifact.agentId)}</dd>
+          <dt>Created</dt>
+          <dd>{new Date(artifact.createdAt).toLocaleString()}</dd>
+          <dt>Path</dt>
+          <dd>{artifact.path}</dd>
+        </dl>
+      </details>
+    </article>
   );
 }
 
@@ -1276,6 +1435,78 @@ function TranscriptMessage({ event, developerMode }: { event: import("@yanshi/sh
         </details>
       )}
     </article>
+  );
+}
+
+function SearchView({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { projects, runs, workshopPacks, events, setActiveProject, setActiveRun } = useRuntimeStore();
+  const [query, setQuery] = useState("");
+  const term = query.trim().toLowerCase();
+
+  const artifactEvents = events.filter((entry) => entry.event.type === "artifact.created");
+  const projectHits = term ? projects.filter((p) => p.name.toLowerCase().includes(term) || (p.description ?? "").toLowerCase().includes(term)) : [];
+  const runHits = term ? runs.filter((r) => r.task.toLowerCase().includes(term)) : [];
+  const artifactHits = term
+    ? artifactEvents.filter((entry) => String(entry.event.payload.title ?? "").toLowerCase().includes(term) || String(entry.event.payload.summary ?? "").toLowerCase().includes(term))
+    : [];
+  const packHits = term ? workshopPacks.filter((p) => p.name.toLowerCase().includes(term)) : [];
+  const total = projectHits.length + runHits.length + artifactHits.length + packHits.length;
+
+  return (
+    <section className="content-stack">
+      <div className="search-box">
+        <Search size={18} />
+        <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects, runs, artifacts…" />
+      </div>
+      {!term ? (
+        <p className="transcript-empty">Type to search.</p>
+      ) : total === 0 ? (
+        <p className="transcript-empty">No results.</p>
+      ) : (
+        <div className="search-results">
+          {projectHits.length > 0 && (
+            <div className="search-group">
+              <div className="search-group-label">Projects</div>
+              {projectHits.map((p) => (
+                <button key={p.id} className="search-row" onClick={() => { setActiveProject(p.id); onNavigate("projects"); }}>
+                  <Boxes size={15} /> {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {runHits.length > 0 && (
+            <div className="search-group">
+              <div className="search-group-label">Runs</div>
+              {runHits.map((r) => (
+                <button key={r.id} className="search-row" onClick={() => { setActiveRun(r.id); onNavigate("runs"); }}>
+                  <Play size={15} /> {r.task}
+                </button>
+              ))}
+            </div>
+          )}
+          {artifactHits.length > 0 && (
+            <div className="search-group">
+              <div className="search-group-label">Artifacts</div>
+              {artifactHits.map(({ seq, event }) => (
+                <button key={seq} className="search-row" onClick={() => onNavigate("artifacts")}>
+                  <FileSearch size={15} /> {String(event.payload.title ?? "Artifact")}
+                </button>
+              ))}
+            </div>
+          )}
+          {packHits.length > 0 && (
+            <div className="search-group">
+              <div className="search-group-label">Workshop</div>
+              {packHits.map((p) => (
+                <button key={p.id} className="search-row" onClick={() => onNavigate("workshop")}>
+                  <Archive size={15} /> {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -73,7 +73,9 @@
 - [x] Runs support grouping (time/project/status) and per-message detail expanders; raw events in Developer Mode only.
 - [x] Projects have a tabbed workspace (Overview/Runs/Files/Artifacts/Activity/Settings) on real data; `/projects/{id}/files` lists the real workspace.
 - [x] First-run onboarding modal with a real demo run; `onboarded` persists.
-- [ ] Automations implemented (create/enable/disable/run history/trigger).
+- [x] Automations implemented (create/enable/disable/Run now/run history/interval trigger + real scheduler), tested.
+- [x] Search is a real grouped search across projects/runs/artifacts/packs (no placeholder).
+- [x] Artifacts page lists real artifacts with metadata; Reveal-in-Finder via Tauri (desktop-only).
 - [ ] Workshop Create / Agent Editor / Office Editor / pack export.
 - [ ] Live Office hover cards, fatigue, behavior modes, stations, and life animations.
 - [ ] Project-scoped Live Office state + AgentProfile/Instance/Actor3D data models.

@@ -994,6 +994,22 @@ fn key_code_for(key: &str) -> Option<u16> {
 }
 
 #[tauri::command]
+pub fn reveal_path(path: String) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("A file path is required.".into());
+    }
+    if !Path::new(&path).exists() {
+        return Err("That file is no longer on disk.".into());
+    }
+    Command::new("open")
+        .arg("-R")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("Could not reveal file: {error}"))
+}
+
+#[tauri::command]
 pub fn open_runtime_logs(state: State<RuntimeState>) -> Result<(), String> {
     let log_path = state
         .log_path

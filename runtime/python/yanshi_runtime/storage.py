@@ -13,6 +13,7 @@ from .models import (
     AppSettingsUpdate,
     ApprovalSummary,
     ArtifactSummary,
+    AutomationSummary,
     ProjectSummary,
     ProviderSettingsPublic,
     RuntimeEvent,
@@ -178,6 +179,28 @@ class Storage:
               key TEXT PRIMARY KEY,
               value_json TEXT NOT NULL,
               updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS automations (
+              id TEXT PRIMARY KEY,
+              project_id TEXT,
+              name TEXT NOT NULL,
+              task TEXT NOT NULL,
+              permission_mode TEXT NOT NULL,
+              plan_first INTEGER NOT NULL DEFAULT 0,
+              enabled INTEGER NOT NULL DEFAULT 1,
+              schedule_kind TEXT NOT NULL DEFAULT 'manual',
+              interval_minutes INTEGER,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              last_run_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS automation_runs (
+              automation_id TEXT NOT NULL,
+              run_id TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              PRIMARY KEY (automation_id, run_id)
             );
             """
         )
@@ -678,6 +701,139 @@ class Storage:
         )
         self.append_event("artifact.created", run_id=run_id, agent_id=agent_id, payload=artifact.model_dump())
         return artifact
+
+    @locked_storage_method
+    def list_artifacts(self, *, project_id: str | None = None, run_id: str | None = None) -> list[ArtifactSummary]:
+        query = "SELECT * FROM artifacts"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if project_id:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if run_id:
+            clauses.append("run_id = ?")
+            params.append(run_id)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY created_at DESC"
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._artifact_from_row(row) for row in rows]
+
+    def _artifact_from_row(self, row: sqlite3.Row) -> ArtifactSummary:
+        return ArtifactSummary(
+            id=row["id"],
+            runId=row["run_id"],
+            projectId=row["project_id"],
+            agentId=row["agent_id"],
+            actionId=row["action_id"],
+            kind=row["kind"],
+            title=row["title"],
+            summary=row["summary"],
+            path=row["path"],
+            metadata=json.loads(row["metadata_json"] or "{}"),
+            createdAt=row["created_at"],
+        )
+
+    @locked_storage_method
+    def create_automation(
+        self,
+        *,
+        name: str,
+        task: str,
+        project_id: str | None,
+        permission_mode: str,
+        plan_first: bool,
+        schedule_kind: str,
+        interval_minutes: int | None,
+    ) -> "AutomationSummary":
+        automation_id = new_id("auto")
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO automations (
+              id, project_id, name, task, permission_mode, plan_first, enabled,
+              schedule_kind, interval_minutes, created_at, updated_at, last_run_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, NULL)
+            """,
+            (automation_id, project_id, name, task, permission_mode, 1 if plan_first else 0, schedule_kind, interval_minutes, now, now),
+        )
+        self.conn.commit()
+        return self.get_automation(automation_id)
+
+    @locked_storage_method
+    def list_automations(self, *, project_id: str | None = None) -> list["AutomationSummary"]:
+        if project_id:
+            rows = self.conn.execute("SELECT * FROM automations WHERE project_id = ? ORDER BY created_at DESC", (project_id,)).fetchall()
+        else:
+            rows = self.conn.execute("SELECT * FROM automations ORDER BY created_at DESC").fetchall()
+        return [self._automation_from_row(row) for row in rows]
+
+    @locked_storage_method
+    def get_automation(self, automation_id: str) -> "AutomationSummary":
+        row = self.conn.execute("SELECT * FROM automations WHERE id = ?", (automation_id,)).fetchone()
+        if row is None:
+            raise KeyError(automation_id)
+        return self._automation_from_row(row)
+
+    @locked_storage_method
+    def update_automation(self, automation_id: str, *, enabled: bool | None = None, name: str | None = None) -> "AutomationSummary":
+        current = self.get_automation(automation_id)
+        next_enabled = current.enabled if enabled is None else enabled
+        next_name = current.name if name is None else name
+        self.conn.execute(
+            "UPDATE automations SET enabled = ?, name = ?, updated_at = ? WHERE id = ?",
+            (1 if next_enabled else 0, next_name, utc_now(), automation_id),
+        )
+        self.conn.commit()
+        return self.get_automation(automation_id)
+
+    @locked_storage_method
+    def delete_automation(self, automation_id: str) -> None:
+        cursor = self.conn.execute("DELETE FROM automations WHERE id = ?", (automation_id,))
+        self.conn.execute("DELETE FROM automation_runs WHERE automation_id = ?", (automation_id,))
+        self.conn.commit()
+        if cursor.rowcount == 0:
+            raise KeyError(automation_id)
+
+    @locked_storage_method
+    def record_automation_run(self, automation_id: str, run_id: str) -> None:
+        now = utc_now()
+        self.conn.execute(
+            "INSERT OR IGNORE INTO automation_runs (automation_id, run_id, created_at) VALUES (?, ?, ?)",
+            (automation_id, run_id, now),
+        )
+        self.conn.execute("UPDATE automations SET last_run_at = ? WHERE id = ?", (now, automation_id))
+        self.conn.commit()
+
+    @locked_storage_method
+    def list_automation_runs(self, automation_id: str) -> list[RunSummary]:
+        rows = self.conn.execute(
+            """
+            SELECT r.* FROM automation_runs ar
+            JOIN runs r ON r.id = ar.run_id
+            WHERE ar.automation_id = ?
+            ORDER BY ar.created_at DESC
+            """,
+            (automation_id,),
+        ).fetchall()
+        return [self._run_from_row(row) for row in rows]
+
+    def _automation_from_row(self, row: sqlite3.Row) -> "AutomationSummary":
+        return AutomationSummary(
+            id=row["id"],
+            projectId=row["project_id"],
+            name=row["name"],
+            task=row["task"],
+            permissionMode=row["permission_mode"],
+            planFirst=bool(row["plan_first"]),
+            enabled=bool(row["enabled"]),
+            scheduleKind=row["schedule_kind"],
+            intervalMinutes=row["interval_minutes"],
+            createdAt=row["created_at"],
+            updatedAt=row["updated_at"],
+            lastRunAt=row["last_run_at"],
+        )
 
     def install_workshop_pack(
         self,
