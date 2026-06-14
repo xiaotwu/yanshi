@@ -1,6 +1,6 @@
 # Current QA Status
 
-_Updated 2026-06-13 (repository cleanup + docs consolidation pass)._
+_Updated 2026-06-13 (spec alignment audit pass)._
 
 ## Active workflow
 
@@ -14,11 +14,20 @@ _Updated 2026-06-13 (repository cleanup + docs consolidation pass)._
 
 ## Latest passing validation
 
+- **Claude full validation** (2026-06-13, `claude-full-validation/`) — **PASS** for the v0.1 Local
+  Final Candidate, performed independently by Claude (not Codex) at the user's direction. Covered
+  automated suites, packaged-app lifecycle (0 orphans), no-mock audit (Provider/Browser/File/ACP/
+  MCP — real work or honest blocker), secret audit (key only in the 0600 store), and a real run
+  end-to-end. Only remaining items are external/human (Apple Developer ID + host grants). See
+  `claude-full-validation/FULL_VALIDATION_REPORT.md`.
 - **Codex global review** (2026-06-12) — **Passed** for the v0.1 Local Final Candidate review;
   **no active P0/P1/P2 product bugs**. See `codex-global-review/GLOBAL_REVIEW_REPORT.md` and
   `codex-global-review/BUGS_FOR_CLAUDE.md`.
 - **Codex docs-site review** (`codex-docs-site-review/DOCS_SITE_REVIEW.md`) and **README update**
   (`codex-readme-update/README_UPDATE_REPORT.md`) — both completed.
+- **Spec alignment audit** (2026-06-13, `claude-spec-alignment/`) — product aligned with all
+  latest product decisions across 33 areas; no P0/P1/P2 mismatches; only repair was a dead-i18n-key
+  cleanup.
 - Full automated suite green: `pnpm lint` / `typecheck` / `test`, `pnpm docs:build` (+ base-path
   build), `pytest`, `cargo check`/`test`.
 
@@ -31,7 +40,8 @@ see `CURRENT_STATUS.md` ("Active known blockers") and `NEXT_STEPS.md`.
 
 | Directory | Status | Content |
 |---|---|---|
-| `claude-repo-cleanup/` | current | this cleanup pass report |
+| `claude-spec-alignment/` | current | spec alignment matrix + repair report |
+| `claude-repo-cleanup/` | current | repository cleanup report |
 | `docs-site-pass/` | current | docs-site build pass report + screenshots |
 | `codex-global-review/` | **active validation reference** | latest Codex global review (no active bugs) |
 | `codex-docs-site-review/` | current | Codex review of the docs site |

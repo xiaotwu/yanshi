@@ -1,4 +1,75 @@
-# README Update Report (2026-06-13)
+# README Update Report (2026-06-13 — Hermes-inspired rewrite)
+
+_Latest pass on top. The prior Codex README-update report is preserved below the divider._
+
+## 1. Verdict
+
+**PASS.** `README.md` rewritten into a polished, public-facing product README; all checks green;
+no app/runtime/docs-site source changed.
+
+## 2. README rewrite summary
+
+The previous README (preserved below) was accurate but reference-heavy (dense tables, an internal
+"Workflow Notes / Junie" section). It was rewritten with more product energy and skimmability
+while keeping every claim honest and unchanged in substance:
+
+- A centered **hero** (`# Yanshi · 偃师`, tagline, short story paragraph) with static,
+  non-breaking badges and a quick-links row.
+- A punchy **"What Yanshi does"** bullet list.
+- A visible **Current status** block (✅/⚠️) — validated app/docs/error-toasts, no active
+  P0/P1/P2; signing/notarization + setup/permissions pending.
+- **Quick start**, **Build the macOS app** (artifact paths + Gatekeeper note), **Architecture**
+  (paths table + runtime flow), concise **Core features** subsections, **Providers and secrets**,
+  **Documentation site** (`DOCS_BASE_PATH`), **Verification** matrix, **Known limitations**
+  table, and a curated **Links** section.
+- Removed the internal "Workflow Notes" + Junie reference and the QA-report links from the body
+  (kept docs links only).
+
+## 3. Hermes-inspired structure used
+
+Structural/tone reference only (no content copied): strong top hero → short memorable
+description → badges/links → quick start → crisp feature bullets → practical command references →
+docs links → honest status, told with Yanshi's own product story and facts.
+
+## 4. Commands run
+
+| Command | Result |
+|---|---|
+| `pnpm lint` | PASS |
+| `pnpm typecheck` | PASS |
+| `pnpm test` | PASS (41 tests, 7 files) |
+| `pnpm docs:build` | PASS |
+
+## 5. Link check result
+
+All 16 local relative links resolve (`docs/*`, `apps/docs`). External links are the GitHub Pages
+docs site and `img.shields.io` static badges (no repo-state dependency).
+
+## 6. Honesty checks
+
+- **No License badge** — repo has no `LICENSE` file or `license` field, so none was claimed.
+- **Only real scripts** referenced; the non-existent `pnpm dev` was avoided and clarified.
+- **No overclaiming**: 0 uses of "complete"; ACP = foundation, MCP = config + planned client,
+  native providers = planned, workers = 2D SVG real / 3D future, public release = pending.
+- **0 Junie references**; no internal QA-dump tone.
+
+## 7. Files changed
+
+- `README.md` (rewritten).
+- `qa/codex-readme-update/README_UPDATE_REPORT.md` (this report; prior report preserved below).
+
+No `apps/desktop`, `apps/docs` source, `runtime/python`, `packages/*`, or config files changed.
+
+## 8. Remaining README gaps
+
+- No CI build-status badge (no public CI status to point at — a static status badge is used).
+- No license badge/section until a `LICENSE` is added.
+- Screenshots/GIFs could further lift the hero later; the live docs site carries the visual story
+  for now.
+
+---
+
+# (Previous) README Update Report (2026-06-13)
 
 ## 1. PASS / FAIL
 
@@ -45,36 +116,15 @@ did not affect app packaging behavior.
 Checked all local Markdown links in `README.md` with a Node script. Result: **12 local links
 checked, 0 missing targets**.
 
-Key linked targets checked:
-
-- `docs/BUILD_AND_RELEASE.md`
-- `docs/AI_INTEGRATIONS.md`
-- `docs/ERROR_CATALOG.md`
-- `docs/UI_INTERACTION_MODEL.md`
-- `docs/YANSHI_ATELIER_WORKER_DESIGN.md`
-- `docs/KEYBOARD_SHORTCUTS.md`
-- `docs/FINAL_PRODUCT_GAPS.md`
-- `apps/docs`
-- `qa/codex-docs-site-review/DOCS_SITE_REVIEW.md`
-- `qa/codex-global-review/GLOBAL_REVIEW_REPORT.md`
-
 ## 5. Assumptions
 
 - Public README can mention "Codex global review passed" because the update request required that
   status, but it should avoid dumping QA history or raw implementation logs.
 - The README should keep the public release status conservative: local final candidate is ready,
   public notarized distribution remains blocked by external signing/notarization requirements.
-- Existing workspace/package changes from prior phases are treated as current repository state;
-  this pass did not attempt to review or modify product behavior.
 
 ## 6. Remaining README gaps
 
-No blocking README gaps remain.
-
-Future refreshes should update the README when:
-
-- Developer ID signing/notarization completes.
-- ACP prompt/session routing ships.
-- MCP runtime client/tool discovery ships.
-- Native Anthropic/Gemini adapters or multi-provider routing ship.
-- Richer Atelier animation/3D assets replace the current SVG standees.
+No blocking README gaps remain. Future refreshes should update the README when Developer ID
+signing/notarization completes, ACP prompt/session routing ships, the MCP runtime client ships,
+native adapters ship, or richer Atelier assets replace the current SVG standees.

@@ -1,5 +1,22 @@
 # Yanshi Implementation Log
 
+## 2026-06-13 - Spec alignment audit + minimal repair
+
+- Audited the original product design spec (docs/Yanshi_Product_Design_Spec.md) against the latest
+  product decisions and the current implementation across 33 areas
+  (qa/claude-spec-alignment/SPEC_ALIGNMENT_MATRIX.md). Result: product already aligned with every
+  latest decision; no P0/P1/P2 mismatches.
+- Confirmed obsolete old-spec items are intentionally overridden (New Task->New Chat, Runs->Library,
+  Artifacts->Files/Outputs, Live Office->Yanshi Atelier, ivory->white/black+mint) and NOT reverted.
+- Only repair: removed 4 dead old-terminology i18n keys (nav.runs, project.tabRuns,
+  project.tabArtifacts, progress.tabArtifacts) with zero UI references; en/zh parity preserved.
+- Verified: lint / typecheck / test (41) / build / pytest (79) / cargo check / cargo test (11) /
+  docs:build (+ base-path). Live smoke: sidebar terms, Atelier open/close/reopen, right panel,
+  YANSHI_PROVIDER_002 error toast, zh-CN 偃师 naming, dark mode. No desktop/runtime/Tauri change.
+- Reports: qa/claude-spec-alignment/SPEC_ALIGNMENT_MATRIX.md +
+  qa/claude-spec-alignment/SPEC_ALIGNMENT_REPAIR_REPORT.md.
+
+
 ## 2026-06-13 - Repository cleanup + docs consolidation (docs/QA hygiene only)
 
 - Removed QA run debris (no source/runtime/desktop behavior changed): all `runtime-data/`,
