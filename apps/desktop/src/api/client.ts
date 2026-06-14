@@ -2,6 +2,7 @@ import type {
   AgentInstanceSummary,
   AgentProfileSummary,
   AgentTaskSummary,
+  AiIntegrationsConfig,
   AppSettings,
   ApprovalSummary,
   ArtifactSummary,
@@ -17,6 +18,7 @@ import type {
   RuntimeHealth,
   RuntimeStatus,
   WorkshopPackSummary,
+  YanshiEvent,
 } from "@yanshi/shared";
 
 const runtimeUrl = import.meta.env.VITE_RUNTIME_URL || "http://127.0.0.1:8765";
@@ -47,6 +49,16 @@ export const runtimeApi = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  aiIntegrations: () => request<AiIntegrationsConfig>("/settings/integrations"),
+  updateAiIntegrations: (update: Partial<AiIntegrationsConfig>) =>
+    request<AiIntegrationsConfig>("/settings/integrations", {
+      method: "PUT",
+      body: JSON.stringify(update),
+    }),
+  connectExternalAgent: (agentId: string) =>
+    request<AiIntegrationsConfig>(`/settings/integrations/agents/${agentId}/connect`, { method: "POST", body: "{}" }),
+  disconnectExternalAgent: (agentId: string) =>
+    request<AiIntegrationsConfig>(`/settings/integrations/agents/${agentId}/disconnect`, { method: "POST", body: "{}" }),
   providerSettings: () => request<ProviderSettingsPublic>("/settings/provider"),
   updateProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) =>
     request<ProviderSettingsPublic>("/settings/provider", {
@@ -162,7 +174,10 @@ export const runtimeApi = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
-  eventsUrl: () => `${runtimeUrl.replace(/^http/, "ws")}/events`,
+  eventsUrl: (after = 0) => `${runtimeUrl.replace(/^http/, "ws")}/events${after > 0 ? `?after=${after}` : ""}`,
+  /** REST view of the same event log as the WebSocket (`{seq, event}` rows after a cursor) —
+   *  used as the polling fallback when ws:// is blocked (packaged WKWebView secure context). */
+  events: (after = 0) => request<Array<{ seq: number; event: YanshiEvent }>>(`/events?after=${after}`),
   validatePack: async (file: File) => {
     const form = new FormData();
     form.append("pack", file);

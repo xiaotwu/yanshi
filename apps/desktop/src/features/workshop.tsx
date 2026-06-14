@@ -1,60 +1,93 @@
-import { Archive, Plus, X } from "lucide-react";
+import { Archive, Download, Plus, Power, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { runtimeApi } from "../api/client";
+import { useContextMenu } from "../components/context-menu";
+import { Modal, ModalHeader } from "../components/modal";
+import { Switch } from "../components/switch";
+import { useT } from "../i18n";
+import { reportError } from "../lib/errors";
+import type { TKey } from "../i18n/en";
 import { BEHAVIOR_OPTIONS, STATION_OPTIONS } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 export type WorkshopTab = "installed" | "agents" | "office" | "export";
 
-export function WorkshopView() {
+/** Workshop as a centered floating window (like Search/Settings) — same real functionality
+ *  (install/enable/disable, Agent Editor, Office Editor, export), roomier layout. */
+export function WorkshopModal({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
   const [tab, setTab] = useState<WorkshopTab>("installed");
-  const tabs: Array<{ id: WorkshopTab; label: string }> = [
-    { id: "installed", label: "Installed" },
-    { id: "agents", label: "Agent Editor" },
-    { id: "office", label: "Office Editor" },
-    { id: "export", label: "Create / Export" },
+  const tabs: Array<{ id: WorkshopTab; key: TKey }> = [
+    { id: "installed", key: "workshop.tabInstalled" },
+    { id: "agents", key: "workshop.tabAgents" },
+    { id: "office", key: "workshop.tabOffice" },
+    { id: "export", key: "workshop.tabExport" },
   ];
   return (
-    <section className="content-stack">
-      <h2>Workshop</h2>
-      <div className="project-tabs">
-        {tabs.map((item) => (
-          <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
-            {item.label}
-          </button>
-        ))}
+    <Modal onClose={onClose} size="xl" className="workshop-modal" labelledBy="workshop-title">
+      <ModalHeader title={t("nav.workshop")} id="workshop-title" onClose={onClose}>
+        <div className="group-toggle workshop-tabs">
+          {tabs.map((item) => (
+            <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+              {t(item.key)}
+            </button>
+          ))}
+        </div>
+      </ModalHeader>
+      <div className="modal-body workshop-body">
+        {tab === "installed" && <WorkshopInstalled />}
+        {tab === "agents" && <AgentEditor />}
+        {tab === "office" && <OfficeEditor />}
+        {tab === "export" && <WorkshopExport />}
       </div>
-      {tab === "installed" && <WorkshopInstalled />}
-      {tab === "agents" && <AgentEditor />}
-      {tab === "office" && <OfficeEditor />}
-      {tab === "export" && <WorkshopExport />}
-    </section>
+    </Modal>
   );
 }
 
 export function WorkshopInstalled() {
+  const { t } = useT();
   const [result, setResult] = useState<string>("");
-  const { workshopPacks, importWorkshopPack, setWorkshopPackEnabled, loading, error } = useRuntimeStore();
+  const { workshopPacks, importWorkshopPack, setWorkshopPackEnabled, loading } = useRuntimeStore();
+  const { openContextMenu, contextMenu } = useContextMenu();
   const importPack = async (file: File | undefined) => {
     if (!file) return;
     await importWorkshopPack(file);
     setResult(`Imported ${file.name}.`);
   };
+  const packMenu = (pack: (typeof workshopPacks)[number]) => [
+    {
+      id: "toggle",
+      label: pack.enabled ? t("workshop.disable") : t("workshop.enable"),
+      icon: Power,
+      onSelect: () => void setWorkshopPackEnabled(pack.id, !pack.enabled),
+    },
+    { id: "export", label: t("workshop.exportPack"), icon: Download, onSelect: () => window.open(runtimeApi.exportPackUrl(), "_blank") },
+    "divider" as const,
+    {
+      id: "remove",
+      label: t("common.remove"),
+      icon: Trash2,
+      danger: true,
+      disabled: true,
+      disabledReason: t("menu.notSupported"),
+      onSelect: () => undefined,
+    },
+  ];
   return (
     <>
       <label className="drop-zone">
         <Archive size={22} />
-        <span>{loading ? "Importing…" : "Import pack"}</span>
+        <span>{loading ? t("workshop.importing") : t("workshop.importPack")}</span>
         <input type="file" accept=".zip" onChange={(event) => void importPack(event.target.files?.[0])} />
       </label>
-      {(error || result) && <p className={error ? "inline-error" : "muted"}>{error ?? result}</p>}
+      {result && <p className="muted">{result}</p>}
       <div className="event-feed">
         {workshopPacks.length === 0 ? (
-          <p className="transcript-empty">No packs installed.</p>
+          <p className="transcript-empty">{t("workshop.noPacks")}</p>
         ) : (
           workshopPacks.map((pack) => (
-            <article key={pack.id} className="workshop-pack-row">
+            <article key={pack.id} className="workshop-pack-row" onContextMenu={(event) => openContextMenu(event, packMenu(pack))}>
               <Archive size={18} />
               <div>
                 <strong>
@@ -62,23 +95,23 @@ export function WorkshopInstalled() {
                 </strong>
                 <span>{pack.securityStatus}</span>
               </div>
-              <label title={pack.enabled ? "Disable" : "Enable"}>
-                <input
-                  type="checkbox"
-                  checked={pack.enabled}
-                  onChange={(event) => void setWorkshopPackEnabled(pack.id, event.target.checked)}
-                  disabled={loading}
-                />
-              </label>
+              <Switch
+                checked={pack.enabled}
+                onChange={(enabled) => void setWorkshopPackEnabled(pack.id, enabled)}
+                disabled={loading}
+                ariaLabel={pack.enabled ? t("workshop.disable") : t("workshop.enable")}
+              />
             </article>
           ))
         )}
       </div>
+      {contextMenu}
     </>
   );
 }
 
 export function AgentEditor() {
+  const { t } = useT();
   const { agentProfiles, saveAgentProfile, createAgentProfile, deleteAgentProfile, loadAgentProfiles } = useRuntimeStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +124,7 @@ export function AgentEditor() {
   const [draft, setDraft] = useState(selected);
   useEffect(() => setDraft(selected), [selected?.id]);
 
-  if (agentProfiles.length === 0 || !draft) return <p className="muted">Loading agents…</p>;
+  if (agentProfiles.length === 0 || !draft) return <p className="muted">{t("workshop.loadingAgents")}</p>;
 
   const save = async () => {
     setBusy(true);
@@ -124,16 +157,16 @@ export function AgentEditor() {
             void createAgentProfile({ name: "New Agent", station: "manager", behaviorMode: "balanced", accent: "#7a6f86" })
           }
         >
-          <Plus size={14} /> New
+          <Plus size={14} /> {t("workshop.newAgent")}
         </button>
       </div>
       <div className="agent-fields">
         <label>
-          Name
+          {t("workshop.agentName")}
           <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
         </label>
         <label>
-          Station
+          {t("workshop.agentStation")}
           <select value={draft.station} onChange={(event) => setDraft({ ...draft, station: event.target.value })}>
             {STATION_OPTIONS.map((station) => (
               <option key={station} value={station}>
@@ -143,7 +176,7 @@ export function AgentEditor() {
           </select>
         </label>
         <label>
-          Behavior
+          {t("workshop.behavior")}
           <select value={draft.behaviorMode} onChange={(event) => setDraft({ ...draft, behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode })}>
             {BEHAVIOR_OPTIONS.map((mode) => (
               <option key={mode} value={mode}>
@@ -153,11 +186,11 @@ export function AgentEditor() {
           </select>
         </label>
         <label>
-          Accent
+          {t("workshop.agentAccent")}
           <input type="color" value={draft.accent} onChange={(event) => setDraft({ ...draft, accent: event.target.value })} />
         </label>
         <label>
-          Task priority ({draft.taskPriority})
+          {t("workshop.agentPriority", { value: String(draft.taskPriority) })}
           <input
             type="range"
             min={1}
@@ -167,20 +200,20 @@ export function AgentEditor() {
           />
         </label>
         <label>
-          Personality
+          {t("workshop.agentPersonality")}
           <input value={draft.personality} onChange={(event) => setDraft({ ...draft, personality: event.target.value })} />
         </label>
         <label>
-          Prompt
+          {t("workshop.agentPrompt")}
           <textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} />
         </label>
         <div className="settings-actions">
           <button onClick={() => void save()} disabled={busy}>
-            Save
+            {t("common.save")}
           </button>
           {draft.id.startsWith("agent_") === false && (
             <button className="danger-text" onClick={() => void deleteAgentProfile(draft.id)} disabled={busy}>
-              Delete
+              {t("menu.delete")}
             </button>
           )}
         </div>
@@ -361,6 +394,7 @@ export function OfficeLayoutCanvas({
 }
 
 export function OfficeEditor() {
+  const { t } = useT();
   const { officeState, saveOfficeState, loadOfficeState } = useRuntimeStore();
   const [snap, setSnap] = useState(true);
 
@@ -368,7 +402,7 @@ export function OfficeEditor() {
     if (!officeState) void loadOfficeState(null);
   }, [officeState, loadOfficeState]);
 
-  if (!officeState) return <p className="muted">Loading office…</p>;
+  if (!officeState) return <p className="muted">{t("workshop.loadingOffice")}</p>;
 
   const furniture = officeState.furniture ?? [];
   const commit = (station: string, pos: [number, number]) =>
@@ -384,7 +418,7 @@ export function OfficeEditor() {
     <div className="office-editor">
       <div className="office-editor-grid">
         <label className="setting-row">
-          <span>Behavior</span>
+          <span>{t("workshop.behavior")}</span>
           <select value={officeState.behaviorMode} onChange={(event) => void saveOfficeState(null, { behaviorMode: event.target.value as import("@yanshi/shared").BehaviorMode })}>
             {BEHAVIOR_OPTIONS.map((mode) => (
               <option key={mode} value={mode}>
@@ -394,26 +428,26 @@ export function OfficeEditor() {
           </select>
         </label>
         <label className="setting-row">
-          <span>Camera</span>
+          <span>{t("workshop.camera")}</span>
           <select value={officeState.cameraMode} onChange={(event) => void saveOfficeState(null, { cameraMode: event.target.value as import("@yanshi/shared").CameraMode })}>
-            <option value="rear">Rear</option>
-            <option value="iso">Isometric</option>
+            <option value="rear">{t("workshop.cameraRear")}</option>
+            <option value="iso">{t("workshop.cameraIso")}</option>
           </select>
         </label>
       </div>
       <div className="office-editor-toolbar">
-        <span className="muted">Drag stations and furniture to lay out the office.</span>
+        <span className="muted">{t("workshop.dragHint")}</span>
         <div className="office-editor-actions">
           <button className={snap ? "ghost-button on" : "ghost-button"} onClick={() => setSnap((value) => !value)}>
-            Snap {snap ? "on" : "off"}
+            {t("workshop.snap")} {snap ? "✓" : "—"}
           </button>
           <button className="ghost-button" onClick={() => void saveOfficeState(null, { stationLayout: {}, furniture: [] })}>
-            Reset layout
+            {t("workshop.resetLayout")}
           </button>
         </div>
       </div>
       <div className="office-editor-toolbar">
-        <span className="muted">Add furniture</span>
+        <span className="muted">{t("workshop.addFurniture")}</span>
         <div className="office-editor-actions">
           {["desk", "plant", "shelf", "couch", "table", "lamp"].map((type) => (
             <button key={type} className="ghost-button" onClick={() => addFurniture(type)}>
@@ -440,9 +474,10 @@ export function OfficeEditor() {
 }
 
 export function WorkshopExport() {
+  const { t } = useT();
   const [status, setStatus] = useState<string | null>(null);
   const download = async () => {
-    setStatus("Exporting…");
+    setStatus(t("workshop.exporting"));
     try {
       const response = await fetch(runtimeApi.exportPackUrl());
       if (!response.ok) throw new Error(await response.text());
@@ -457,14 +492,15 @@ export function WorkshopExport() {
       URL.revokeObjectURL(url);
       setStatus("Exported yanshi-team.zip");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Export failed.");
+      reportError("YANSHI_WORKSHOP_001", error);
+      setStatus(null);
     }
   };
   return (
     <div className="content-stack" style={{ padding: 0 }}>
-      <p className="muted">Export your agent team and office theme as a pack. The file re-imports under Installed.</p>
+      <p className="muted">{t("workshop.exportDesc")}</p>
       <div className="settings-actions">
-        <button onClick={() => void download()}>Export pack</button>
+        <button onClick={() => void download()}>{t("workshop.exportPack")}</button>
       </div>
       {status && <p className="muted">{status}</p>}
     </div>

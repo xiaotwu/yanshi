@@ -1,5 +1,230 @@
 # Yanshi Implementation Log
 
+## 2026-06-13 - Repository cleanup + docs consolidation (docs/QA hygiene only)
+
+- Removed QA run debris (no source/runtime/desktop behavior changed): all `runtime-data/`,
+  `regression-runtime-data/`, and `regression-packaged-home/` directories (SQLite `yanshi.db` /
+  `langgraph-checkpoints.db`, dummy `provider_api_key.secret` files — non-real test values,
+  workspaces) plus raw process artifacts (`*.log/.json/.txt/.zip/.pid/.err/.out/.stderr/.stdout/
+  .html`) inside `codex-final-product-audit`, `codex-ux-refinement-review`, and
+  `codex-global-review`. Kept every report `.md`, every screenshot `.png`, and the 3 historical
+  regression scripts. QA dirs dropped from ~28 MB to ~18 MB (human-readable history intact).
+- Cleared working-tree caches (`__pycache__`, `.pytest_cache`, `.ruff_cache`, `.DS_Store`,
+  `.playwright-mcp/` — all already gitignored).
+- `.gitignore`: added `runtime-data/`, `regression-*` run dirs, `*.secret`, and `qa/**` log/zip/pid
+  patterns so future QA runs never re-commit machine state or secret stores.
+- Fixed broken `qa/junie-archive/` links in active docs (the archive directory no longer exists —
+  Junie is historical only). Rewrote `qa/CURRENT_QA_STATUS.md` to current reality: Codex global
+  review passed with no active P0/P1/P2; Codex is the active validation agent.
+- Verified active docs ↔ README agreement (docs site `apps/docs`, `DOCS_BASE_PATH`, GitHub Pages
+  source). Report: `qa/claude-repo-cleanup/CLEANUP_REPORT.md`.
+
+## 2026-06-13 - Progress reconciliation for README/docs task
+
+- Reconciled unchecked progress items that were visible after the README/docs task completed.
+- Codex-side goal/progress API reported no active goal; repository scan found unchecked task-list
+  syntax in `NEXT_STEPS.md`, `docs/BUILD_AND_RELEASE.md`, and historical `IMPLEMENTATION_PLAN.md`.
+- Converted global release blockers, human-only checks, deferred roadmap work, and stale historical
+  plan items from unchecked markdown tasks into status tables/classified notes.
+- Left real blockers open: Developer ID signing/notarization/Gatekeeper, macOS Accessibility /
+  Screen Recording grants, Browser Chromium provisioning, packaged human checks, and real provider
+  credentials.
+- No desktop/runtime behavior changed. Report: qa/codex-progress-reconciliation/PROGRESS_RECONCILIATION_REPORT.md.
+
+## 2026-06-13 - README public overview update
+
+- Replaced the old Codex Start Kit README framing with a public Yanshi project overview based on
+  current repo code/status: product identity, v0.1 Local Final Candidate status, feature list,
+  architecture, requirements, development commands, docs-site deployment, build/release status,
+  provider secret handling, known limitations, and useful links.
+- Verified README links (12 local links, 0 missing) and ran `pnpm lint`, `pnpm typecheck`,
+  `pnpm test`, and `pnpm docs:build` successfully.
+- No app/runtime source changed. Report: qa/codex-readme-update/README_UPDATE_REPORT.md.
+
+## 2026-06-13 - GitHub Pages documentation site (apps/docs)
+
+- Added a VitePress docs site in `apps/docs/` (black/white + mint-glow theme; left sidebar,
+  ⌘K local search, right "On this page" TOC, dark/light, responsive). 34 markdown pages covering
+  Getting Started, Core Concepts, AI Integrations, Desktop App, Customization, Reference, Release
+  — rewritten from internal docs into public-facing language with honest status badges.
+- Additional requirements pass: configurable GitHub Pages base path via `DOCS_BASE_PATH`
+  (workflow derives `/<repo>/`), README + release docs explain repo-name changes; homepage
+  replaced with a custom Vue landing component featuring a desktop shell mock, Atelier mini
+  preview, green glow accent, and CTAs Get Started / Install on macOS / Read the Architecture.
+- Public honesty pass: ACP/MCP/providers/Browser Chromium/Computer Use/signing pages now use
+  Available now / Foundation implemented / Setup required / Planned / Blocked-by-external
+  requirement language; public pages swept for internal QA/log tone.
+- Root scripts `docs:dev` / `docs:build` / `docs:preview` (docs excluded from recursive
+  build/lint/typecheck/test so the desktop pipeline is unchanged). `.github/workflows/deploy-docs.yml`
+  deploys to GitHub Pages; README documents it + the one-time Pages source setting.
+- Assets: original `yanshi-mark.svg`, puppet SVGs from worker-art.ts, real app screenshots from QA.
+- Verification: `pnpm docs:build` PASS; root typecheck/test/build PASS (desktop unaffected); live
+  preview smoke (home, sidebar, TOC, search 23 results, theme toggle, mobile 375px no overflow).
+  Additional verification: `DOCS_BASE_PATH=/new-repo-name/ pnpm docs:build` PASS; generated HTML
+  path audit found no unprefixed local paths; preview smoke at `http://localhost:4400/yanshi/`
+  confirmed desktop/mobile no horizontal overflow, final screenshots
+  `qa/docs-site-pass/SCREENSHOTS/docs-home-final-desktop.png`,
+  `qa/docs-site-pass/SCREENSHOTS/docs-home-final-mobile.png`, and
+  `qa/docs-site-pass/SCREENSHOTS/docs-acp-final-desktop.png`.
+  Report: qa/docs-site-pass/DOCS_SITE_REPORT.md.
+
+## 2026-06-12 - v0.1 Local Final Candidate freeze (docs-only)
+
+- Codex global validation: PASS WITH MINOR ISSUES, no active P0/P1/P2; error toast system
+  accepted; packaged smoke passed; no-mock + secret audits passed (qa/codex-global-review/).
+- Status docs marked frozen: ready for local final-candidate use; not a public notarized
+  release; remaining blockers are codesign/notarization/Gatekeeper + manual macOS permission
+  grants. No product behavior changed in this pass.
+- Verification: pnpm typecheck + pnpm test re-run green.
+
+## 2026-06-12 - Global error-display cleanup
+
+- Removed every duplicate inline red error from normal mode; toasts are the single error
+  surface. Composer no longer renders the global store error (the persistent "Event stream
+  unavailable." text) or upload errors inline; Library/Automations inline duplicates dropped;
+  Project Files -> neutral retry state + FILE_002 toast; Workshop export failures toast;
+  Shortcuts global-failure -> neutral badge; ACP lastError + provider health -> status badge +
+  muted .error-detail line. Kept: form validation, chat content, Developer diagnostics.
+- docs/ERROR_CATALOG.md UI_001 note; styles .load-retry/.error-detail.
+- Verification: pytest 79 / vitest 41+10 / cargo 11 / lint / build / desktop:release; live smoke
+  (runtime kill -> one transition toast + zero inline reds + clean recovery; provider failure ->
+  toast + badge + detail, zh-CN). Report: qa/claude-error-toast-cleanup/.
+
+## 2026-06-12 - Error toasts + macOS close confirm + worker stations
+
+- Error system: lib/errors.ts (24-code registry, toast queue with 8s expiry/dedupe/cap),
+  components/error-toasts.tsx, wiring across runtimeStore (15 catch sites + stream transition +
+  missing-requirement events + provider ok=false), Atelier/root boundaries, library, composer
+  upload, shortcuts, automations; docs/ERROR_CATALOG.md; errors.test.ts (7 tests).
+- Close behavior: lib.rs CloseRequested always prompts; CloseRunsModal -> Cancel / Hide to menu
+  bar / Quit (quit pauses chats, then canonical full-quit); close.* i18n reworked (en/zh).
+- Stations: packages/live-office/src/stations.ts (assignments, movement reasons, occupancy
+  guard, shared-area slots) + stations.test.ts (10 tests); index.tsx targetPosition delegates
+  to the module.
+- Verification: pytest 79 / vitest 41+10 / cargo 11 / lint / build / desktop:release; live smoke
+  (real provider-failure toast zh-CN, stacking/dismiss/expiry/a11y, stations visual); packaged
+  launch + orphan-free quit. Report: qa/claude-close-station-pass/CLOSE_AND_STATION_REPORT.md.
+
+## 2026-06-11 - Yanshi Puppets worker visual redesign
+
+- Phase: product identity — new authored 2D chibi worker art for the Atelier (Endfield-adjacent
+  mood per user reference, original design: mechanical puppet-ear fins + red mechanism-seal pin).
+- Created: `packages/live-office/src/worker-art.ts` (palette, six role variants, six
+  expressions, layered SVG builder, data-URL cache, runtime-state→expression mapping);
+  qa/atelier-worker-redesign-pass/ (proof sheets + in-app screenshots).
+- Changed: `packages/live-office/src/index.tsx` (procedural figures → cached billboard standee
+  sprites; screen-plane sway + bob; alpha-tested depth; toneMapped off; reduced-motion static),
+  `packages/live-office/src/characters.ts` (registry assetType "svg", honest comments),
+  `packages/live-office/package.json` (./worker-art subpath export),
+  `apps/desktop/src/features/live-office.tsx` + `styles.css` (2D fallback uses the same art).
+- Verification: pytest 79 / vitest 34 / cargo 11 / lint / build / desktop:release; live smoke
+  (36-combination proof grid, in-scene light + dark, hover raycast with zh-CN cards); packaged
+  launch healthy + clean quit.
+
+## 2026-06-11 - Project cleanup pass (workflow transition)
+
+- Phase: repository cleanup before the next development phase. New workflow: **Claude Code =
+  implementation, Codex = validation, Junie = archived/no longer active.**
+- Archived: `qa/junie-global-acceptance/` and `qa/junie-atelier-worker-review/` ->
+  `qa/junie-archive/`; all three stale `BUGS_FOR_CLAUDE.md` files (Junie + two Codex) got
+  "Archived / Resolved" headers; doc references updated to the new paths.
+- Deleted (gitignored generated/temp only): `.DS_Store` x9, `runtime/python` `__pycache__` +
+  `.pytest_cache`, `.playwright-mcp/` scratch (81 session files; report evidence already lives
+  in `qa/*/SCREENSHOTS`).
+- Docs: CURRENT_STATUS.md consolidated from 8 stacked banners into one Final-Product-Candidate
+  snapshot; NEXT_STEPS.md rewritten around the new workflow sequence; ACCEPTANCE_CHECKLIST.md
+  restructured (Passed / Needs human / Blocked external / Deferred / Archived historical);
+  AGENTS.md workflow + terminology section (Claude/Codex roles, Chat/Files/Yanshi Atelier/偃师);
+  IMPLEMENTATION_PLAN.md marked historical; RELEASE_NOTES_RC.md marked Final Product Candidate;
+  README Live Office -> Yanshi Atelier wording; new `qa/CURRENT_QA_STATUS.md` index.
+- No source-code behavior changed. Suite re-run green (lint/typecheck/test/build).
+
+## 2026-06-11 - Worker Character Design System pass
+
+- Phase: product identity — Atelier worker design system + first implementation.
+- Created: docs/YANSHI_ATELIER_WORKER_DESIGN.md (full design system),
+  packages/live-office/assets/workers/README.md (future asset layout),
+  qa/atelier-worker-design-pass/ (report + screenshots).
+- Changed: packages/live-office/src/characters.ts (six ROLE_DESIGNS + honest all-procedural
+  WorkerCharacterAsset registry), packages/live-office/src/index.tsx (per-role headwear
+  monocle/headset/beanie, pose variants for blocked/waiting/celebrating, reduced-motion static
+  mode + demand frameloop, localized `labels` prop, Developer-only debug labels),
+  apps/desktop/src/features/live-office.tsx (label map, developer flag, localized simplified
+  view), i18n en/zh (+13 state/life/queue keys).
+- Verification: pytest 79 / vitest 34 / cargo 11 / lint / build / desktop:release; live smoke
+  (six roles distinguishable, hover cards zh-localized on all six, 0 labels normal / 6 labels +
+  meta dev, dark + light, reopen ×3); packaged launch + clean quit.
+
+## 2026-06-11 - UI/UX + naming + Atelier reliability refinement (A–F pass)
+
+- Phase: focused refinement (titlebar, profile, icon buttons, Atelier reopen bug, 偃师 naming,
+  first-pass chibi worker design).
+- Root cause fixed: WebGL context leak in `webglAvailable()` (context per call, per render,
+  never released → WKWebView cap exhaustion → Atelier unopenable until force quit).
+- Files changed: `components/error-boundary.tsx`, `features/settings.tsx`,
+  `features/ai-integrations.tsx`, `features/live-office.tsx`, `features/runs.tsx`,
+  `components/account-menu.tsx`, `lib/shared.tsx`, `stores/runtimeStore.ts`, `i18n/en.ts`,
+  `i18n/zh.ts`, `styles.css`, `packages/live-office/src/characters.ts` (+archetype design
+  system), `packages/live-office/src/index.tsx` (chibi figures, station desks, context release).
+- Verification: pytest 79 / vitest 34 / cargo 11 / lint / build / desktop:release; live smoke
+  (reopen ×6, context-loss confirmation, zh-CN checks, profile/icon-button checks); packaged
+  launch + clean quit. Report: qa/atelier-refinement-pass/REFINEMENT_REPORT.md.
+
+## 2026-06-11 - Junie global-acceptance fix pass (BUG-01/02/05)
+
+- Phase: focused acceptance fixes from qa/junie-archive/junie-global-acceptance/BUGS_FOR_CLAUDE.md.
+- Files changed:
+  - `apps/desktop/src/lib/shared.tsx` (+`outputFileName`), `lib/shared.test.ts` (+5 assertions)
+  - `apps/desktop/src/features/progress-panel.tsx` (real file name primary, title·path secondary,
+    disabled only without a path)
+  - `apps/desktop/src/features/library.tsx` (refactor onto the shared helper)
+  - `apps/desktop/src/lib/modal-stack.ts` (new) + `lib/modal-stack.test.ts` (new)
+  - `apps/desktop/src/components/modal.tsx` (stable per-modal stack token; ESC only when topmost)
+  - `apps/desktop/src/features/settings.tsx` (Permissions bridge-unavailable row)
+  - `apps/desktop/src/i18n/en.ts` / `zh.ts` (3 new keys), `styles.css` (file-output two-line row)
+  - Docs: CURRENT_STATUS, NEXT_STEPS, ACCEPTANCE_CHECKLIST,
+    qa/junie-archive/junie-global-acceptance/CLAUDE_FIX_RESULTS.md
+- Verification: pytest 79 / vitest 34 / cargo check+test 11 / lint / build / desktop:release;
+  live smoke (right panel, Library, nested ESC ×2 modals, backdrop nesting, Permissions en+zh);
+  packaged launch healthy + clean quit, no orphan sidecar.
+
+## 2026-06-11 - Manual UI/UX + Settings + ACP refinement pass
+
+- Phase: post-RC manual QA fixes (11 screenshot findings) + real ACP foundation.
+- Files changed:
+  - `runtime/python/yanshi_runtime/acp.py` (new — stdio JSON-RPC ACP client: launch, initialize
+    handshake, capability flattening, lifecycle, shutdown)
+  - `runtime/python/yanshi_runtime/models.py` (UserProfileSettings; AppSettings.profile +
+    preferredActions; ExternalAgentConfig args/env/lastError; IntegrationStatus
+    configured/starting/connected)
+  - `runtime/python/yanshi_runtime/storage.py` (honest baseline statuses incl. ACP "configured";
+    validated app-settings merge)
+  - `runtime/python/yanshi_runtime/server/app.py` (AcpManager wiring, live-state overlay on read,
+    connect/disconnect endpoints, ACP shutdown hook)
+  - `runtime/python/tests/test_runtime.py` (+3: ACP handshake/disconnect with a real fixture
+    agent process, honest error paths, profile/preferredActions persistence)
+  - `packages/shared/src/index.ts`, `apps/desktop/src/api/client.ts`,
+    `apps/desktop/src/stores/runtimeStore.ts` (types, connect/disconnect API, optimistic
+    settings merge, Atelier-context-follows-chat in createRun/setActiveRun)
+  - `apps/desktop/src/features/settings.tsx` (fixed title + independent scroll, Profile editor,
+    icon-only permission refresh + status badges)
+  - `apps/desktop/src/features/ai-integrations.tsx` (full card+modal redesign for
+    Providers/Agents/MCP/Skills; split Save vs Set-as-preferred; preferred-for chips; ACP
+    connect UI; Skills detail modal)
+  - `apps/desktop/src/features/shortcuts-settings.tsx` (wide panel, icon-only reset)
+  - `apps/desktop/src/features/live-office.tsx` (pop-out removed, dev-only meta)
+  - `packages/live-office/src/index.tsx` (drei `<Environment>` network HDR → local hemisphere
+    light; fixes blank Atelier offline/packaged)
+  - `apps/desktop/src/features/library.tsx` (real file names, collapsible persisted groups)
+  - `apps/desktop/src/components/account-menu.tsx` (profile avatar/name)
+  - `apps/desktop/src-tauri/tauri.conf.json` (`trafficLightPosition` 14/14)
+  - `apps/desktop/src/i18n/en.ts` / `zh.ts` (~30 new keys; 2 obsolete removed)
+  - `apps/desktop/src/styles.css`; docs (CURRENT_STATUS, NEXT_STEPS, ACCEPTANCE_CHECKLIST,
+    AI_INTEGRATIONS, UI_INTERACTION_MODEL, FINAL_PRODUCT_GAPS, RELEASE_NOTES_RC)
+- Verification: pytest 79 / vitest 29 / cargo 11 / lint / typecheck / build / desktop:release;
+  packaged .app launch + clean quit re-verified; live UI smoke (en/zh, 1200×818 + 960×680) with
+  secret audit — evidence in `qa/manual-uiux-acp-pass/`.
+
 ## 2026-06-08 - Queue Executor, Computer Bridge, Desktop Product Shell
 
 - Phase: P0 final-product continuation.
@@ -732,3 +957,173 @@ Frontend-only refinement (no runtime/packaging behavior changed; all features st
   confirmed homepage, `+` menu/project create, search modal, account menu, settings (no About),
   permission color, sidebar collapse + Live Office toggle; `pnpm desktop:release` rebuilt `.app`+`.dmg`;
   packaged app launches cleanly with the overlay titlebar.
+
+## Phase: Final Product pass — i18n, Yanshi Atelier, Progress panel, multi-adapter Providers (2026-06-09)
+
+Large product-alignment pass toward the full final vision (not RC-only). All real, no mocks.
+- **i18n**: new `src/i18n` (typed en-US source + `Record<TKey,string>` zh-CN → compile-time key
+  parity), system-language detection + fallback, `useT()` hook. Added `AppSettings.language`
+  (backend model + AppSettingsUpdate + shared type) and a Settings → Appearance language selector
+  (System / English / 简体中文). Translated titlebar, sidebar, composer + `+` menu, search modal,
+  account menu, all settings sections, Atelier, Progress panel, onboarding, close prompt, providers.
+- **Live Office → Yanshi Atelier (偃师工坊)**: user-facing rename; module file kept as `live-office`.
+- **Atelier detached**: `AtelierModal` (floating, centered, pop-out) opened from the titlebar
+  Sparkles button + tray `open-live-office`; `AtelierWindow` for the `?liveOffice=1` pop-out. Removed
+  the forced right-panel embed.
+- **Right Progress panel**: new `features/progress-panel.tsx` with Progress/Files/Artifacts/Approvals/
+  Agents tabs on real run data (status, plan, agent queue, approve/deny, artifact reveal). Replaces
+  the old right Live Office mini panel. Developer-only detail for artifact summaries.
+- **Providers (multi-adapter)**: rebuilt Models→Providers section with the real OpenAI-compatible form
+  + an honest adapter catalog (OpenAI/OpenAI-Compatible = Available; OpenRouter/Ollama/LM Studio/
+  vLLM·SGLang = Custom endpoint required with base-URL hints; Anthropic/Gemini = Not implemented yet;
+  Custom). Capability + local/cloud badges. Secret handling unchanged.
+- **Asset-ready workers**: `packages/live-office/src/characters.ts` (characterRegistry / roleAccessoryMap
+  / animationMap / lifeAnimationMap / resolveCharacter / registerCharacterAsset /
+  usesFallbackProceduralWorker), exported from the package. Procedural fallback today; GLB-ready.
+- **Verification**: lint/typecheck/build green; pytest 73; cargo check + test 10. UI smoke confirmed
+  zh-CN across sidebar/composer/progress/atelier/providers, the floating Atelier (偃师工坊) with live
+  workers, the Progress panel on real data, and the honest provider catalog. No-mock audit clean.
+- Docs: added docs/FINAL_PRODUCT_GAPS.md; updated CURRENT_STATUS / NEXT_STEPS.
+
+## Phase: Projects UX refinement (ChatGPT-style) (2026-06-09)
+
+Frontend-only; preserved all real Project CRUD / scoped runs / files / artifacts / automations / team.
+- **Sidebar restructure**: top actions (New Task, Search, Runs, Workshop) → **Projects** section
+  (clickable header → Projects surface, **New Project** with folder-plus icon, project list with
+  icon+color) → **Recents** (latest-first; standalone + project runs; project name shown under the
+  run when applicable) → account block. Projects/Recents live in a scrollable middle region.
+- **Shared `CreateProjectModal`** (`components/create-project-modal.tsx`): emoji preset grid + free
+  emoji input + 8-color picker (icon button shows emoji on the chosen color); name input
+  ("Copenhagen Trip" placeholder, trim, Create disabled until valid, duplicate hint); a gear popover
+  for **Context** (Default / Project-only) → persisted as `project.settings.contextMode`. Reused by
+  the sidebar New Project, the Projects view, and the composer `+ → New Project…` (replacing the old
+  inline form). After creation the project is selected immediately.
+- **Project model**: `store.createProject(name, description?, settings?)` now merges a settings object
+  (icon/color/contextMode) via updateProject and returns the new id. Shared `projectIcon` / `projectColor`
+  helpers in `lib/shared`; the icon now appears in the sidebar, Projects list, project rows, search
+  results, and the composer Add-to-Project menu.
+- **Projects view**: create form replaced by a New Project button (same modal); list rows show the
+  project icon/color; tabs i18n'd; the "Live Office" tab renamed to **Atelier**.
+- **i18n**: added project keys (en-US + zh-CN): Projects/New Project/Create project/Project name/
+  Project icon/Color/Context/Default/Project-only/Recents/No runs/tab labels, etc.
+- **Verification**: lint/typecheck/test/build green; pytest 73 + cargo 10 unchanged (no backend/Rust
+  changes). UI smoke: sidebar Projects/Recents, New Project modal (icon/color/context popover),
+  create → appears in sidebar + Projects + Recents; icon/color/contextMode persisted
+  (Travel → ✈️ / #2fc279 / project_only). No-mock audit clean.
+
+## Phase: Codex QA regression fix pass (2026-06-09)
+
+Fixed the P0/P1 (and low-risk P2) defects from qa/codex-final-product-audit. No-mock + secret-safety
+preserved; bundled-sidecar preserved. Full results: qa/codex-final-product-audit/CLAUDE_FIX_RESULTS.md.
+- **P0 runtime lifecycle:** sidecar spawned as a process-group leader; whole group killed on every exit
+  path (RunEvent::Exit + quit_app) so the PyInstaller fork no longer orphans on :8765. Startup probes
+  the port → adopt healthy runtime / fail loudly on conflict (no dead-queue runs). Rust test added.
+  Verified packaged: no orphan after AppleScript quit; adopt + run-completes + adopted-runtime-survives.
+- **P1:** Project Agents tab + horizontal-scroll tabs; project Context shown; Workshop fully i18n'd
+  (zh-CN verified, no English leak); Atelier worker labels bound to the active run only (no stale/mixed);
+  provider scope kept honest.
+- **P2:** approval `deny`/`approve` aliases (backend validator + pytest); add-to-project menu + search
+  modal containment (CSS); first real vitest suite (i18n parity + helpers, 8 tests).
+- **Verification:** lint/typecheck green; pnpm test 8; build green; pytest 74 (+1); cargo 11 (+1);
+  desktop:release built .app+.dmg. No-mock + secret audits clean.
+- **Still blocked (human/external):** codesign/notarization, Browser Chromium provisioning, Computer-Use
+  permission grants, notifications/shortcut/menubar/window QA, real provider credentials, re-enter
+  provider key (QA wrote a fake one; app never exposes stored secrets).
+
+## 2026-06-10 - Product UX Architecture Refinement (Projects + AI Integrations + IA)
+
+- Phase: approved two-part UX refinement pass (ChatGPT-style Projects, AI Integrations settings,
+  Library IA, centered modals, toggles, shortcuts, context menus, GPU setting, motion).
+- Files changed (backend): `yanshi_runtime/models.py` (AppSettings.gpuAcceleration/shortcuts;
+  ExternalAgentConfig/McpServerConfig/AiIntegrationsConfig), `storage.py`
+  (`get/update_ai_integrations` + `_with_honest_integration_statuses` — status recomputed on read,
+  never "ready"), `server/app.py` (`GET/PUT /settings/integrations`), tests (+2 → 76).
+- Files changed (frontend): new `components/{modal,switch,context-menu,composer}.tsx`,
+  `lib/{floating.tsx,shortcuts.ts(+test)}`, `features/{library,ai-integrations,shortcuts-settings}.tsx`;
+  rewrites of `App.tsx` (IA, shortcut dispatcher, data-fx, context menus, Settings-as-modal),
+  `features/projects.tsx` (selector + ProjectHomeView + panels-as-modals + settings modal),
+  `features/settings.tsx` (SettingsModal + AI Integrations group + Switch + WebGL info),
+  `features/new-task.tsx` (thin page over shared Composer); updates to search/live-office/workshop/
+  automations/account-menu/create-project-modal, `lib/menu-placement.ts` (`placeFloatingPanel`),
+  `stores/runtimeStore.ts` + `api/client.ts` (integrations), `packages/shared` types,
+  `packages/live-office` (`lowPower` render tier), i18n en/zh (~140 new keys), `styles.css`
+  (modal system, switches, context menus, Library/Projects/Integrations/shortcuts, motion tokens,
+  data-fx tiers, responsive rules).
+- Honesty: ACP/MCP are persisted configs with server-enforced `not_implemented`/`not_configured`
+  statuses (pytest asserts a client-claimed "ready"+tools is rewritten); Skills shown as real
+  config aggregation; provider scope unchanged (OpenAI-compatible real, others honest); GPU setting
+  copy states it controls the app effect tier, not the OS GPU; context menus expose real actions
+  only; OS-level shortcut-conflict detection not claimed.
+- Verification: pnpm lint/typecheck/build PASS; pnpm test 24; pytest 76; UI smoke (vite + isolated
+  runtime, Playwright): project page composer → real run completed; Library shows real
+  artifact/file; MCP add → honest status; provider rows; shortcut edit/conflict/reset + live ⌘⇧L;
+  GPU toggle flips data-fx; ESC/centering on Search/Settings/Project/Atelier modals; containment at
+  1200×818 + 960×680; zh-CN dark verified visually. Evidence: qa/ux-refinement-pass/.
+
+## 2026-06-10 - Codex UX Review Fix Pass (event stream, shortcut capture, modal a11y)
+
+- P1 packaged event stream: replaced the single-shot WebSocket client with WS + exponential-backoff
+  reconnect and an HTTP-polling fallback over the existing real `GET /events?after=seq`
+  (shared cursor, dedup, honest connected/polling/reconnecting/unavailable status; error only after
+  repeated total failure, auto-cleared on recovery). Verified in the packaged app via the runtime
+  access log: warmup poll → WS connect → 3 UI hydrate bursts on a live run's events; clean quit.
+- P1 shortcut capture: capture suspends the app dispatcher (flag + stopImmediatePropagation);
+  `validateBinding` blocks persisting conflicts — explicit Replace (unbinds the other command) or
+  Cancel; verified with a real Cmd+K during capture (Search did not open, nothing persisted).
+- P2: Settings visible close button; "…" menu refocuses its trigger so Project Settings restores
+  focus; `aria-label` Close/关闭 on all modal X buttons; neutral project-name placeholder (P3).
+- Files: runtimeStore.ts(+test), api/client.ts, lib/shortcuts.ts(+tests), shortcuts-settings.tsx,
+  App.tsx, modal.tsx, settings.tsx, projects.tsx, search.tsx, live-office.tsx, progress-panel.tsx,
+  create-project-modal.tsx, i18n en/zh, styles.css. No Python/Rust changes.
+- Verification: lint/typecheck/build PASS; pnpm test 29; pytest 76; cargo 11; desktop:release PASS;
+  packaged + dev smokes recorded in qa/codex-ux-refinement-review/CLAUDE_FIX_RESULTS.md.
+
+## 2026-06-10 - Product-Detail Polish Pass
+
+- Phase 2 (P1): removed dead beige `.office-full-view` + `.live-office(.full)` CSS and the
+  duplicate early `.app-shell` block; fixed task-list grouping-pill overflow (header wraps);
+  added an app-wide `:focus-visible` accent-ring baseline (buttons/menu rows/nav/inputs).
+- Phase 3 (i18n + structure): localized the remaining normal-mode surfaces — task detail
+  (grouping pills/labels via `groupRuns` label params, plan summary, working/result/stopped,
+  approval card incl. risk, artifact cards, transcript "Details"), automations panel,
+  Workshop Agent Editor fields, artifacts/approvals views, composer upload error
+  (~30 en/zh keys). Settings nav regrouped to spec order with Shortcuts as its own group.
+  Agent names (Manager/Browser/File/…) remain product names; store/runtime error strings and
+  Developer raw traces stay English (documented).
+- Phase 4 (motion): sidebar stays mounted and animates collapse/expand via
+  grid-template-columns transition (contents fade, `inert` + aria-hidden when collapsed);
+  right Progress panel slides in; one-shot success pulse on the completed-result card
+  (fx-rich only); all transform/opacity, reduced-motion respected.
+- Phase 5: lint/typecheck/build PASS; pnpm 29 / pytest 76 / cargo 11; desktop:release rebuilt;
+  zh-CN dark smoke at 960×680/1200×818/1440×900 (no overflow; panel does not crush main —
+  868px main beside the 340px panel at 1440); sidebar animation + focus ring verified live.
+
+## 2026-06-11 - Manual UI Bugfix + Conversation UX Pass
+
+- Atelier white screen: app had zero error boundaries — added root boundary (main.tsx recoverable
+  crash screen) + Atelier-scoped boundary + WebGL pre-check with fallback (retry / simplified
+  real worker list). Verified by simulating WebGL-unavailable: fallback shows, app survives.
+- Chat IA: ChatView replaces the two-pane task-detail center (user bubble / Yanshi blocks from
+  real observations / plan + approval cards / output file cards / working dots / Developer raw
+  events; honest "Start a new chat" footer — runtime cannot continue runs, nothing faked).
+  Sidebar recents highlight the open chat. User-facing Task→Chat terminology in en/zh (~22 keys);
+  run/task remain runtime terms.
+- Right panel: title + close + Atelier buttons removed (titlebar owns them); tabs → compact
+  dropdown (Progress/Files (n)/Approvals/Agents); outputs listed under Files with Web links.
+- Artifacts de-surfaced: Library merges outputs into Files (By Project / All files; Web source
+  chips from artifact metadata.url); project "…" menu and search labels updated (Outputs);
+  features/artifacts.tsx deleted (unreachable); runtime artifact data/API untouched.
+- Workshop → centered floating modal (tabs in header, roomier body, all functionality intact).
+- New Project modal rebuilt: ModalHeader + inline emoji grid/custom input, color swatches with
+  white default + custom color picker, context-mode segmented row, real duplicate-name hint,
+  store errors shown in-modal; shared ProjectGlyph (icon-on-color chip) in sidebar/search/
+  Add-to-Project; presets shared with Project Settings.
+- Settings redesign: Personal (Profile/Appearance) / Workspace (General/Yanshi Atelier) /
+  AI (Providers/Agents/MCP/Skills) / Tools (Permissions) / System (Shortcuts/Notifications/
+  Performance) / Developer; Personalization-Workshop-Help sections dissolved into the new IA;
+  account menu → Profile/Appearance/Keyboard Shortcuts/Settings; calm 560px content column,
+  no per-row dividers.
+- Search focus: removed the hard focus-visible rectangle on the search input; subtle accent
+  border + soft glow on the head (fx-rich), keyboard-visible state preserved.
+- Verification: lint/typecheck/build PASS; pnpm 29 / pytest 76 / cargo 11; desktop:release
+  rebuilt; live smoke covered every fixed surface (evidence qa/ux-refinement-pass/fix2-chat-view.png).

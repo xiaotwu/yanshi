@@ -25,3 +25,18 @@ yanshi-ui-run-smoke.png
 runtime/python/build/
 runtime/python/dist/
 apps/desktop/src-tauri/resources/yanshi-runtime-sidecar
+
+# VitePress docs build output
+apps/docs/.vitepress/dist/
+apps/docs/.vitepress/cache/
+
+# QA run debris — keep reports (.md) and screenshots (.png) only, never machine state.
+# Local runtime data, secret stores, and exported test packs from QA runs must not be committed.
+**/runtime-data/
+**/regression-runtime-data/
+**/regression-packaged-home/
+*.secret
+qa/**/*.zip
+qa/**/*.log
+qa/**/LOGS/*.json
+qa/**/*.pid

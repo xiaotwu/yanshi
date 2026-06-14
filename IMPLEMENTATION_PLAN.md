@@ -1,6 +1,13 @@
 # Yanshi Implementation Plan
 
-## Current Milestone
+> **Historical document (marked 2026-06-11).** This plan covers the original milestone 1–6
+> build-out and is superseded for day-to-day status by **CURRENT_STATUS.md** (snapshot),
+> **NEXT_STEPS.md** (active plan), and **IMPLEMENTATION_LOG.md** (pass history). Kept for
+> continuation-history per AGENTS.md; do not treat the milestone text below as current.
+> Progress reconciliation (2026-06-13): historical pending lines were converted away from
+> unchecked task-list syntax so they no longer appear as active current work.
+
+## Current Milestone (historical)
 
 Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri shell, React UI, Python runtime, REST/WebSocket API, SQLite persistence, LangGraph checkpointing, approvals, event protocol, file-tool sandbox, Workshop validation/import hardening, Live Office event visualization, Developer Mode event view, Tauri runtime reliability states, OpenAI-compatible provider settings/client, persisted app settings, project-scoped workspaces, real macOS permission status probes, persisted agent queues, Browser summarization, Docker sandbox execution path, queued multi-agent execution, Tauri Computer Use bridge commands, tray/menu actions, event notifications, lazy Live Office panel/full view/pop-out, tightened CSP, and build/release docs.
 
@@ -86,7 +93,10 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Office Editor furniture: model + storage (column + migration + export), palette + draggable + removable, 3D render; tested.
 - [x] Live Office polish: status-driven green ground glow ring.
 - [x] Packaged non-interactive verification re-run (bundled-sidecar, bridge 401, open-app, furniture, no key/token leak).
-- [ ] Pending: Office path/collision + pathfinding; modelled worker art; interactive packaged + Docker verification; codesign/notarization.
+- Historical pending at the time: Office path/collision + pathfinding; modelled worker art;
+  interactive packaged + Docker verification; codesign/notarization. Current classification:
+  richer motion/pathfinding is roadmap, Docker smoke is already verified for v0.1, and
+  interactive packaged/signing items are human/external release blockers.
 
 ## Persona-everywhere + 2D Office Editor + cleanup (2026-06-09)
 
@@ -94,7 +104,10 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Office Editor upgraded to a real visual 2D drag canvas (stations + areas + snap + reset), persisted.
 - [x] Fixed `capture_screen` permission-path crash bug.
 - [x] Rewrote ACCEPTANCE_CHECKLIST into clean categories; packaged non-interactive verification recorded.
-- [ ] Pending: App.tsx → features/* split; Office furniture/path editing; interactive packaged verification.
+- Historical pending at the time: App.tsx -> features/* split; Office furniture/path editing;
+  interactive packaged verification. Current classification: frontend split and Office furniture/
+  editor work are complete; pathfinding is roadmap; interactive packaged verification is
+  human-only.
 
 ## Persistence + Upload + Close-prompt + Q-style workers (2026-06-08)
 
@@ -102,7 +115,9 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Composer file upload (safe workspace copy, chips, File Agent scannable, tests).
 - [x] Close-with-active-runs prompt (Rust + frontend modal; real pause/hide/cancel).
 - [x] Live Office Q-style mechanical workers.
-- [ ] Pending: drag-drop 2D Office Editor; App.tsx → features/* split; interactive packaged verification.
+- Historical pending at the time: drag-drop 2D Office Editor; App.tsx -> features/* split;
+  interactive packaged verification. Current classification: editor/split work is complete;
+  interactive packaged verification is human-only.
 
 ## Theme + Reasoning + Profile Injection (2026-06-08)
 
@@ -117,21 +132,23 @@ Milestone 1-6 foundation and hardening slice is implemented: monorepo, Tauri she
 - [x] Workshop Agent Editor / Office Editor / Create + real pack export.
 - [x] Project-scoped Live Office tab + state.
 
-## Pending
+## Historical Pending Items Reconciled
 
-- [ ] Persist AgentInstance/AgentActor3D; full drag-drop 3D Office Editor.
-- [ ] Live Office life-animations, hover cards, fatigue, stations, project-scoped office state.
-- [ ] AgentProfile/Instance/Actor3D + LiveOfficeState data models + migrations.
-- [ ] Split frontend into `features/*` per spec §7; add Search; close-with-active-runs prompt.
-- [ ] Codesign + notarize the bundle for second-machine / store distribution.
-- [ ] Manually verify Computer bridge `click/type/shortcut` in the packaged app after granting Accessibility.
-- [ ] Manual Docker command smoke after the required image is available locally or image pull can complete.
-- [ ] Manually verify menubar/tray actions and notification delivery in the packaged desktop app.
-- [ ] Workshop export and richer pack management.
-- [ ] Live Office office editor.
-- [ ] Rich Developer Mode graph/checkpoint/database panels.
-- [ ] Manual verification of global shortcuts, tray actions, notifications, and packaged `.app` launch.
-- [ ] Full final acceptance pass.
+| Historical item | Current classification |
+| --- | --- |
+| Persist AgentInstance/AgentActor3D; full drag-drop 3D Office Editor | Persistence is complete; richer 3D/pathfinding remains roadmap. |
+| Live Office life-animations, hover cards, fatigue, stations, project-scoped office state | Core state/hover/stations/project context are complete; richer animation remains roadmap. |
+| AgentProfile/Instance/Actor3D + LiveOfficeState data models + migrations | Already completed. |
+| Split frontend into `features/*` per spec section 7; add Search; close-with-active-runs prompt | Already completed or superseded by current Chat/Library IA. |
+| Codesign + notarize the bundle for second-machine / store distribution | External Apple Developer ID release blocker. |
+| Manually verify Computer bridge `click/type/shortcut` in the packaged app after granting Accessibility | Human/macOS permission verification. |
+| Manual Docker command smoke after the required image is available locally or image pull can complete | Already verified for v0.1 local candidate; re-run only if release environment changes. |
+| Menubar/tray actions and notification delivery in the packaged desktop app | Human packaged-app verification. |
+| Workshop export and richer pack management | Export/import complete; richer marketplace/pack formats are roadmap. |
+| Live Office office editor | Current Office/Atelier editor path exists; richer pathfinding is roadmap. |
+| Rich Developer Mode graph/checkpoint/database panels | Deferred roadmap. |
+| Manual verification of global shortcuts, tray actions, notifications, and packaged `.app` launch | Human packaged-app verification. |
+| Full final acceptance pass | Local final-candidate validation passed; public release acceptance remains blocked by external/human checks. |
 
 ## Acceptance Criteria
 

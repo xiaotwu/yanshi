@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 EVENT_SCHEMA_VERSION = 1
 
@@ -96,6 +96,15 @@ class ApprovalSummary(BaseModel):
 
 class ApprovalDecisionRequest(BaseModel):
     decision: Literal["approved", "denied"]
+
+    @field_validator("decision", mode="before")
+    @classmethod
+    def _normalize_decision(cls, value: object) -> object:
+        # Accept the intuitive aliases `approve`/`deny` in addition to the canonical forms.
+        if isinstance(value, str):
+            alias = {"approve": "approved", "deny": "denied"}
+            return alias.get(value.strip().lower(), value)
+        return value
 
 
 class ArtifactSummary(BaseModel):
@@ -321,11 +330,22 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class UserProfileSettings(BaseModel):
+    """Local workspace identity — display only. No account, login, or subscription exists."""
+
+    displayName: str = ""
+    avatarType: Literal["emoji", "preset"] = "preset"
+    avatarValue: str = ""
+    avatarBackground: str | None = None
+    workspaceLabel: str = ""
+
+
 class AppSettings(BaseModel):
     permissionModeDefault: PermissionMode = "default"
     developerMode: bool = False
     onboarded: bool = False
     theme: Literal["light", "dark", "system"] = "system"
+    language: Literal["system", "en-US", "zh-CN"] = "system"
     reasoning: ReasoningLevel = "medium"
     liveOfficeAutoOpen: bool = True
     liveOfficeDefaultOpen: bool = False
@@ -338,6 +358,12 @@ class AppSettings(BaseModel):
     dockerMemory: str = "512m"
     dockerCpus: str = "1"
     dockerPidsLimit: int = 128
+    gpuAcceleration: bool = True
+    # In-app shortcut overrides keyed by command id; defaults live in the frontend.
+    shortcuts: dict[str, str] = Field(default_factory=dict)
+    profile: UserProfileSettings = Field(default_factory=UserProfileSettings)
+    # Preferred provider per action kind ("default" today; per-action routing is future work).
+    preferredActions: dict[str, str] = Field(default_factory=dict)
 
 
 class AppSettingsUpdate(BaseModel):
@@ -345,6 +371,7 @@ class AppSettingsUpdate(BaseModel):
     developerMode: bool | None = None
     onboarded: bool | None = None
     theme: Literal["light", "dark", "system"] | None = None
+    language: Literal["system", "en-US", "zh-CN"] | None = None
     reasoning: ReasoningLevel | None = None
     liveOfficeAutoOpen: bool | None = None
     liveOfficeDefaultOpen: bool | None = None
@@ -357,3 +384,57 @@ class AppSettingsUpdate(BaseModel):
     dockerMemory: str | None = None
     dockerCpus: str | None = None
     dockerPidsLimit: int | None = None
+    gpuAcceleration: bool | None = None
+    shortcuts: dict[str, str] | None = None
+    profile: UserProfileSettings | None = None
+    preferredActions: dict[str, str] | None = None
+
+
+# --- AI Integrations (External Agents / MCP servers) -------------------------------------------
+#
+# These are persisted *configuration* records. External Agents now have a real minimal ACP
+# foundation (stdio launch + initialize handshake — see acp.py); live connection state is overlaid
+# on read by the service. MCP still has no client, so MCP statuses stay honest on read: configs
+# with connection details report "not_implemented", incomplete configs "not_configured".
+# Statuses are never persisted as connected; "ready" is never produced.
+
+IntegrationStatus = Literal[
+    "not_configured", "configured", "starting", "connected", "ready", "error", "not_implemented"
+]
+
+
+class ExternalAgentConfig(BaseModel):
+    id: str
+    name: str
+    protocol: Literal["acp", "custom"] = "acp"
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    endpoint: str | None = None
+    enabled: bool = False
+    status: IntegrationStatus = "not_configured"
+    capabilities: list[str] = Field(default_factory=list)
+    lastError: str | None = None
+
+
+class McpServerConfig(BaseModel):
+    id: str
+    name: str
+    transport: Literal["stdio", "http", "sse"] = "stdio"
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    url: str | None = None
+    env: dict[str, str] = Field(default_factory=dict)
+    enabled: bool = False
+    status: IntegrationStatus = "not_configured"
+    tools: list[str] = Field(default_factory=list)
+
+
+class AiIntegrationsConfig(BaseModel):
+    externalAgents: list[ExternalAgentConfig] = Field(default_factory=list)
+    mcpServers: list[McpServerConfig] = Field(default_factory=list)
+
+
+class AiIntegrationsUpdate(BaseModel):
+    externalAgents: list[ExternalAgentConfig] | None = None
+    mcpServers: list[McpServerConfig] | None = None

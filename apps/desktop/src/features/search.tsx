@@ -1,22 +1,27 @@
 import type { AutomationSummary } from "@yanshi/shared";
-import { Archive, Boxes, Clock, FileSearch, Play, Search, SquarePen, X } from "lucide-react";
+import { Archive, Clock, FileSearch, Play, Search, SquarePen, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { runtimeApi } from "../api/client";
+import { Modal } from "../components/modal";
+import { useT } from "../i18n";
+import type { TKey } from "../i18n/en";
+import { ProjectGlyph } from "../lib/shared";
 import type { View } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type Filter = "all" | "projects" | "runs" | "artifacts" | "packs" | "automations";
-const FILTERS: Array<{ id: Filter; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "projects", label: "Projects" },
-  { id: "runs", label: "Runs" },
-  { id: "artifacts", label: "Artifacts" },
-  { id: "packs", label: "Workshop" },
-  { id: "automations", label: "Automations" },
+const FILTERS: Array<{ id: Filter; key: TKey }> = [
+  { id: "all", key: "search.all" },
+  { id: "projects", key: "search.projects" },
+  { id: "runs", key: "search.runs" },
+  { id: "artifacts", key: "search.artifacts" },
+  { id: "packs", key: "search.workshop" },
+  { id: "automations", key: "search.automations" },
 ];
 
-export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () => void; onNavigate: (view: View) => void; onNewTask: () => void }) {
+export function SearchModal({ onClose, onNavigate, onNewTask, onOpenWorkshop }: { onClose: () => void; onNavigate: (view: View) => void; onNewTask: () => void; onOpenWorkshop: () => void }) {
+  const { t } = useT();
   const { projects, runs, workshopPacks, events, setActiveProject, setActiveRun } = useRuntimeStore();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -26,12 +31,6 @@ export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () =>
   useEffect(() => {
     runtimeApi.automations().then(setAutomations).catch(() => setAutomations([]));
   }, []);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const match = (value: string | null | undefined) => !term || (value ?? "").toLowerCase().includes(term);
   const show = (f: Filter) => filter === "all" || filter === f;
@@ -47,40 +46,39 @@ export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () =>
   const total = projectHits.length + runHits.length + artifactHits.length + packHits.length + automationHits.length;
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="search-modal" onMouseDown={(event) => event.stopPropagation()}>
+    <Modal onClose={onClose} size="lg" className="search-modal">
         <div className="search-modal-head">
           <Search size={18} />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search…" />
-          <button className="icon-button ghost" title="Close" onClick={onClose}>
+          <input data-autofocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("search.placeholder")} />
+          <button className="icon-button ghost" aria-label={t("common.close")} title={t("search.close")} onClick={onClose}>
             <X size={16} />
           </button>
         </div>
         <div className="search-filters">
           {FILTERS.map((f) => (
             <button key={f.id} className={filter === f.id ? "active" : ""} onClick={() => setFilter(f.id)}>
-              {f.label}
+              {t(f.key)}
             </button>
           ))}
         </div>
         <div className="search-results">
           <button className="search-row primary" onClick={() => { onNewTask(); onClose(); }}>
-            <SquarePen size={16} /> New Task
+            <SquarePen size={16} /> {t("search.newTask")}
           </button>
-          {term && total === 0 && <p className="transcript-empty">No results.</p>}
+          {term && total === 0 && <p className="transcript-empty">{t("search.noResults")}</p>}
           {projectHits.length > 0 && (
             <div className="search-group">
-              <div className="search-group-label">Projects</div>
+              <div className="search-group-label">{t("search.projects")}</div>
               {projectHits.map((p) => (
-                <button key={p.id} className="search-row" onClick={() => { setActiveProject(p.id); onNavigate("projects"); onClose(); }}>
-                  <Boxes size={15} /> {p.name}
+                <button key={p.id} className="search-row" onClick={() => { setActiveProject(p.id); onNavigate("project"); onClose(); }}>
+                  <ProjectGlyph project={p} /> {p.name}
                 </button>
               ))}
             </div>
           )}
           {runHits.length > 0 && (
             <div className="search-group">
-              <div className="search-group-label">Runs</div>
+              <div className="search-group-label">{t("search.runs")}</div>
               {runHits.slice(0, 20).map((r) => (
                 <button key={r.id} className="search-row" onClick={() => { setActiveRun(r.id); onNavigate("runs"); onClose(); }}>
                   <Play size={15} /> {r.task}
@@ -90,7 +88,7 @@ export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () =>
           )}
           {artifactHits.length > 0 && (
             <div className="search-group">
-              <div className="search-group-label">Artifacts</div>
+              <div className="search-group-label">{t("search.artifacts")}</div>
               {artifactHits.slice(0, 20).map(({ seq, event }) => (
                 <button key={seq} className="search-row" onClick={() => { onNavigate("runs"); onClose(); }}>
                   <FileSearch size={15} /> {String(event.payload.title ?? "Artifact")}
@@ -100,9 +98,9 @@ export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () =>
           )}
           {packHits.length > 0 && (
             <div className="search-group">
-              <div className="search-group-label">Workshop</div>
+              <div className="search-group-label">{t("search.workshop")}</div>
               {packHits.map((p) => (
-                <button key={p.id} className="search-row" onClick={() => { onNavigate("workshop"); onClose(); }}>
+                <button key={p.id} className="search-row" onClick={() => { onClose(); onOpenWorkshop(); }}>
                   <Archive size={15} /> {p.name}
                 </button>
               ))}
@@ -110,16 +108,15 @@ export function SearchModal({ onClose, onNavigate, onNewTask }: { onClose: () =>
           )}
           {automationHits.length > 0 && (
             <div className="search-group">
-              <div className="search-group-label">Automations</div>
+              <div className="search-group-label">{t("search.automations")}</div>
               {automationHits.map((a) => (
-                <button key={a.id} className="search-row" onClick={() => { if (a.projectId) setActiveProject(a.projectId); onNavigate("projects"); onClose(); }}>
+                <button key={a.id} className="search-row" onClick={() => { if (a.projectId) setActiveProject(a.projectId); onNavigate(a.projectId ? "project" : "projects"); onClose(); }}>
                   <Clock size={15} /> {a.name}
                 </button>
               ))}
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

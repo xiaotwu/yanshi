@@ -1,11 +1,35 @@
 import { Fragment } from "react";
 import type { MacosPermissionStatus } from "@yanshi/shared";
 
-export type View = "new-task" | "search" | "projects" | "runs" | "workshop" | "settings" | "approvals" | "artifacts" | "developer";
+import { useT } from "../i18n";
+
+// "runs" is the internal task-detail surface (reached from Recents / project task lists);
+// the user-facing top-level nav shows Library instead of a technical Runs page.
+export type View = "new-task" | "search" | "projects" | "project" | "runs" | "library" | "approvals" | "developer";
 export type PermissionMode = "default" | "auto_review" | "full_access";
 export type RunGrouping = "time" | "project" | "status";
 export const STATION_OPTIONS = ["manager", "browser", "computer", "file", "reviewer", "terminal"];
 export const BEHAVIOR_OPTIONS: import("@yanshi/shared").BehaviorMode[] = ["professional", "balanced", "playful"];
+
+export function projectIcon(project: { settings?: Record<string, unknown> }): string {
+  const icon = project.settings?.icon;
+  return typeof icon === "string" && icon ? icon : "📁";
+}
+
+export function projectColor(project: { settings?: Record<string, unknown> }): string {
+  const color = project.settings?.color;
+  return typeof color === "string" && color ? color : "var(--accent)";
+}
+
+/** The project's emoji on its background color — used identically in the sidebar, project
+ *  header, Add-to-Project menu, search results and Library so the customization is consistent. */
+export function ProjectGlyph({ project, size = "sm" }: { project: { settings?: Record<string, unknown> }; size?: "sm" | "lg" }) {
+  return (
+    <span className={`proj-emoji glyph ${size}`} style={{ background: projectColor(project) }} aria-hidden>
+      {projectIcon(project)}
+    </span>
+  );
+}
 
 export function EmptyView({ title, text }: { title: string; text: string }) {
   return (
@@ -25,23 +49,26 @@ export const AGENT_LABELS: Record<string, string> = {
   agent_reviewer: "Reviewer",
 };
 
-export function agentLabel(agentId: unknown): string {
+export function agentLabel(agentId: unknown, brand = "Yanshi"): string {
   if (typeof agentId === "string" && agentId in AGENT_LABELS) return AGENT_LABELS[agentId];
-  return "Yanshi";
+  return brand;
 }
+
+const DEFAULT_GROUP_LABELS = { today: "Today", standalone: "Standalone", project: "Project" };
 
 export function groupRuns(
   runs: import("@yanshi/shared").RunSummary[],
   grouping: RunGrouping,
   projects: import("@yanshi/shared").ProjectSummary[],
+  labels: { today: string; standalone: string; project: string } = DEFAULT_GROUP_LABELS,
 ): Array<{ label: string; runs: import("@yanshi/shared").RunSummary[] }> {
   const buckets = new Map<string, import("@yanshi/shared").RunSummary[]>();
   const labelFor = (run: import("@yanshi/shared").RunSummary): string => {
     if (grouping === "status") return run.status.replace("_", " ");
-    if (grouping === "project") return run.projectId ? projects.find((p) => p.id === run.projectId)?.name ?? "Project" : "Standalone";
+    if (grouping === "project") return run.projectId ? projects.find((p) => p.id === run.projectId)?.name ?? labels.project : labels.standalone;
     const day = run.createdAt.slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
-    return day === today ? "Today" : day;
+    return day === today ? labels.today : day;
   };
   for (const run of runs) {
     const label = labelFor(run);
@@ -50,6 +77,16 @@ export function groupRuns(
     buckets.set(label, list);
   }
   return [...buckets.entries()].map(([label, list]) => ({ label, runs: list }));
+}
+
+/**
+ * Display name for a generated output: the real file name (basename of the path) is primary;
+ * the artifact title (e.g. "File scan") is only a fallback when no path exists. Never invents
+ * metadata — empty in, empty out.
+ */
+export function outputFileName(path: string | null | undefined, title?: string | null): string {
+  const base = path ? (path.split("/").filter(Boolean).pop() ?? "") : "";
+  return base || (title ?? "").trim() || (path ?? "");
 }
 
 export function eventSummary(payload: Record<string, unknown>): string {
@@ -73,16 +110,17 @@ export function permissionLabel(state: string): string {
 }
 
 export function TranscriptMessage({ event, developerMode }: { event: import("@yanshi/shared").YanshiEvent; developerMode: boolean }) {
+  const { t } = useT();
   const output = (event.payload.structuredOutput ?? {}) as Record<string, unknown>;
   const entries = Object.entries(output).filter(([, value]) => typeof value !== "object" || value === null);
   const hasDetails = entries.length > 0 || developerMode;
   return (
     <article className={event.payload.error ? "event-card error" : "event-card"}>
-      <span>{agentLabel(event.payload.agentId ?? event.agentId)}</span>
+      <span>{agentLabel(event.payload.agentId ?? event.agentId, t("brand"))}</span>
       <p>{eventSummary(event.payload)}</p>
       {hasDetails && (
         <details className="msg-details">
-          <summary>Details</summary>
+          <summary>{t("tasks.details")}</summary>
           {entries.length > 0 && (
             <dl className="runtime-details">
               {entries.map(([key, value]) => (

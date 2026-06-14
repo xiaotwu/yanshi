@@ -5,6 +5,7 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
     os::raw::{c_double, c_uchar, c_void},
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Mutex,
@@ -150,6 +151,54 @@ enum RuntimeLaunch {
     },
 }
 
+/// Outcome of probing 127.0.0.1:8765 before spawning the sidecar.
+enum RuntimePort {
+    /// Nothing is listening — safe to spawn our own sidecar.
+    Free,
+    /// A healthy Yanshi Runtime already owns the port — adopt it instead of spawning.
+    Healthy,
+    /// Some other process holds the port — fail loudly rather than queue dead runs.
+    OccupiedUnhealthy,
+}
+
+fn probe_runtime_port() -> RuntimePort {
+    // If we can bind the port, nothing is listening on it.
+    if TcpListener::bind("127.0.0.1:8765").is_ok() {
+        return RuntimePort::Free;
+    }
+    if runtime_health_ok() {
+        RuntimePort::Healthy
+    } else {
+        RuntimePort::OccupiedUnhealthy
+    }
+}
+
+/// Minimal blocking GET /health probe (no extra HTTP deps). A healthy Yanshi Runtime answers
+/// HTTP 200 with `{"ok":true,...,"runtimeVersion":...}`.
+fn runtime_health_ok() -> bool {
+    use std::io::{Read, Write};
+    use std::time::Duration;
+    let Ok(mut stream) = TcpStream::connect("127.0.0.1:8765") else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1500)));
+    if stream
+        .write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        .is_err()
+    {
+        return false;
+    }
+    let mut buf = String::new();
+    let _ = stream.read_to_string(&mut buf);
+    health_response_is_ok(&buf)
+}
+
+/// True only for an HTTP 200 response whose body is a healthy Yanshi Runtime `/health` payload.
+fn health_response_is_ok(response: &str) -> bool {
+    response.contains(" 200") && response.contains("\"ok\":true") && response.contains("runtimeVersion")
+}
+
 pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
     let mut child_guard = state.child.lock().expect("runtime child mutex poisoned");
     if child_guard.is_some() {
@@ -167,6 +216,27 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
     *state.log_path.lock().expect("runtime log mutex poisoned") = Some(log_path.clone());
 
     let bridge = ensure_computer_bridge(state, &log_path);
+
+    // Lifecycle guard: never spawn a second sidecar onto an occupied port (which would leave new
+    // runs stuck at `created` against a stale runtime). Adopt a healthy one, or fail loudly.
+    match probe_runtime_port() {
+        RuntimePort::Free => {}
+        RuntimePort::Healthy => {
+            append_runtime_log(&log_path, "Adopted an existing healthy Yanshi Runtime on 127.0.0.1:8765.");
+            *state.last_error.lock().expect("runtime error mutex poisoned") = None;
+            *state.launch_mode.lock().expect("runtime mode mutex poisoned") = Some("adopted-runtime".into());
+            *state.command_label.lock().expect("runtime command mutex poisoned") = None;
+            return;
+        }
+        RuntimePort::OccupiedUnhealthy => {
+            let detail = "Port 127.0.0.1:8765 is held by another process that is not a healthy Yanshi Runtime. Quit that process (or restart your Mac), then use Restart Runtime.".to_string();
+            append_runtime_log(&log_path, &detail);
+            *state.last_error.lock().expect("runtime error mutex poisoned") = Some(detail);
+            *state.launch_mode.lock().expect("runtime mode mutex poisoned") = Some("port-conflict".into());
+            *state.command_label.lock().expect("runtime command mutex poisoned") = None;
+            return;
+        }
+    }
 
     let resource_dir = app.path().resource_dir().ok();
     let launch = resolve_runtime_launch(resource_dir.as_deref());
@@ -189,7 +259,10 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 .arg("--data-dir")
                 .arg(&data_dir)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+                .stderr(Stdio::piped())
+                // New process group so we can reliably kill the whole runtime tree (PyInstaller
+                // onefile forks a child that holds the port) when the app quits.
+                .process_group(0);
             inject_bridge_env(&mut command, bridge.as_ref());
             let command_label = format!(
                 "{} run --project {} yanshi-runtime --host 127.0.0.1 --port 8765 --data-dir {}",
@@ -231,7 +304,10 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 .arg("--data-dir")
                 .arg(&data_dir)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+                .stderr(Stdio::piped())
+                // New process group so we can reliably kill the whole runtime tree (PyInstaller
+                // onefile forks a child that holds the port) when the app quits.
+                .process_group(0);
             inject_bridge_env(&mut command, bridge.as_ref());
             let command_label = format!(
                 "{} --host 127.0.0.1 --port 8765 --data-dir {}",
@@ -279,8 +355,18 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
 pub fn stop_runtime(state: &State<RuntimeState>) {
     let mut child_guard = state.child.lock().expect("runtime child mutex poisoned");
     if let Some(child) = child_guard.as_mut() {
+        // The spawned process is the leader of its own process group (process_group(0)). Killing the
+        // group terminates the PyInstaller bootloader AND the forked server that actually holds port
+        // 8765, so the sidecar never orphans after the app quits.
+        let pgid = child.id();
         let _ = child.kill();
         let _ = child.wait();
+        let _ = Command::new("/bin/kill")
+            .arg("-TERM")
+            .arg(format!("-{pgid}"))
+            .status();
+        // Give it a moment, then force-kill any survivor in the group.
+        let _ = Command::new("pkill").arg("-9").arg("-g").arg(pgid.to_string()).status();
     }
     *child_guard = None;
 }
@@ -1040,6 +1126,9 @@ pub fn hide_main_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
+    // Terminate the sidecar we own before exiting so it never orphans on port 8765.
+    let state = app.state::<RuntimeState>();
+    stop_runtime(&state);
     app.exit(0);
 }
 
@@ -1161,6 +1250,31 @@ fn runtime_status_from_state(state: &State<RuntimeState>) -> DesktopRuntimeStatu
                 missing_requirements: vec![],
                 repair_actions: runtime_repair_actions(),
             },
+        }
+    } else if launch_mode == "adopted-runtime" {
+        // We did not spawn a child but a healthy runtime owns the port — report it as running.
+        DesktopRuntimeStatus {
+            status: "running".into(),
+            detail: "Attached to an existing Yanshi Runtime on 127.0.0.1:8765.".into(),
+            launch_mode,
+            runtime_url: "http://127.0.0.1:8765".into(),
+            log_path,
+            command_label,
+            last_error,
+            missing_requirements: vec![],
+            repair_actions: vec!["Restart Runtime".into(), "Open Logs".into()],
+        }
+    } else if launch_mode == "port-conflict" {
+        DesktopRuntimeStatus {
+            status: "failed".into(),
+            detail: last_error.clone().unwrap_or_else(|| "Runtime port is in use.".into()),
+            launch_mode,
+            runtime_url: "http://127.0.0.1:8765".into(),
+            log_path,
+            command_label,
+            last_error,
+            missing_requirements: vec![],
+            repair_actions: runtime_repair_actions(),
         }
     } else {
         let missing = parse_missing_requirements(&launch_mode);
@@ -1370,6 +1484,16 @@ mod tests {
             vec!["uv".to_string(), "runtime_sidecar".to_string()]
         );
         assert!(parse_missing_requirements("dev-repo-runtime").is_empty());
+    }
+
+    #[test]
+    fn health_probe_accepts_only_healthy_yanshi_runtime() {
+        let healthy = "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":true,\"runtimeVersion\":\"0.1.0\",\"databasePath\":\"/tmp/yanshi.db\"}";
+        assert!(health_response_is_ok(healthy));
+        // Wrong status, missing fields, or a non-Yanshi server must be rejected (fail loudly).
+        assert!(!health_response_is_ok("HTTP/1.1 503 Service Unavailable\r\n\r\n{}"));
+        assert!(!health_response_is_ok("HTTP/1.0 200 OK\r\n\r\n{\"ok\":false}"));
+        assert!(!health_response_is_ok("HTTP/1.0 200 OK\r\n\r\n<html>nginx</html>"));
     }
 
     #[test]

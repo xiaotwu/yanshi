@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -14 220 264" width="440" height="528">
+    
+        <path d="M56 50 L18 26 L26 48 L48 60 Z" fill="#33373d" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+        <path d="M44 50 L26 36 L31 47 L44 54 Z" fill="#4f8d83" opacity="0.85"/>
+        <path d="M144 50 L182 26 L174 48 L152 60 Z" fill="#33373d" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+        <path d="M156 50 L174 36 L169 47 L156 54 Z" fill="#4f8d83" opacity="0.85"/>
+        <circle cx="176" cy="32" r="4.5" fill="#d24b42"/>
+    <path d="M100 18
+    C 52 18 30 52 30 92
+    C 30 116 34 138 28 158 L 44 150 L 50 168 L 64 156 L 72 172 L 84 162
+    L 100 170 L 116 162 L 128 172 L 136 156 L 150 168 L 156 150 L 172 158
+    C 166 138 170 116 170 92
+    C 170 52 148 18 100 18 Z" fill="#33373d" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="7"/>
+    
+    <path d="M100 160
+      C 120 160 132 172 135 196 L 138 220 C 139 229 130 234 100 234 C 70 234 61 229 62 220 L 65 196
+      C 68 172 80 160 100 160 Z" fill="#2f3237" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+    <path d="M74 168 C 84 177 116 177 126 168 L 129 179 C 116 189 84 189 71 179 Z"
+      fill="#4f8d83" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+    <path d="M118 188 L 126 224" stroke="#d24b42" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+    <ellipse cx="66" cy="198" rx="8.5" ry="9.5" fill="#f2e8dc" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+    <ellipse cx="134" cy="198" rx="8.5" ry="9.5" fill="#f2e8dc" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+    <rect x="76" y="228" width="21" height="10" rx="5" fill="#3c4047" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+    <rect x="103" y="228" width="21" height="10" rx="5" fill="#3c4047" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+    <path d="M100 44
+    C 142 44 162 72 162 104
+    C 162 136 136 156 100 156
+    C 64 156 38 136 38 104
+    C 38 72 58 44 100 44 Z" fill="#f2e8dc" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+    
+    <path d="M36 100
+      C 34 56 62 34 100 34
+      C 138 34 166 56 164 100
+      L 152 82 L 146 106 L 132 76 L 122 104 L 106 68 L 96 108 L 82 72 L 70 102 L 58 78 L 46 104 Z"
+      fill="#33373d" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+    <path d="M104 70 L 96 106 L 88 92 Z" fill="#33373d"/>
+    <path d="M60 50 C 72 42 88 38 100 38 L 96 52 L 78 56 Z" fill="#4c545e" opacity="0.7"/>
+    <path d="M126 52 C 134 60 138 70 139 82 L 128 72 Z" fill="#5d7a8c" opacity="0.8"/>
+    
+    
+        <path d="M30 110 C 22 56 58 26 100 26 C 142 26 178 56 170 110
+          C 166 84 160 70 152 62 C 156 78 156 92 154 102
+          C 144 64 124 48 100 48 C 76 48 56 64 46 102 C 44 92 44 78 48 62 C 40 70 34 84 30 110 Z"
+          fill="#2f3237" stroke="#23262a" stroke-linejoin="round" stroke-linecap="round" stroke-width="6"/>
+        <circle cx="100" cy="34" r="5" fill="#4f8d83"/>
+    
+    <ellipse cx="56" cy="128" rx="9" ry="5" fill="#e8b3a0" opacity="0.65"/>
+    <ellipse cx="144" cy="128" rx="9" ry="5" fill="#e8b3a0" opacity="0.65"/>
+        <path d="M-12 118 L 12 118" transform="translate(68 0)" fill="none" stroke="#23262a" stroke-width="5" stroke-linecap="round"/>
+        <path d="M-12 118 L 12 118" transform="translate(132 0)" fill="none" stroke="#23262a" stroke-width="5" stroke-linecap="round"/>
+        <path d="M95 142 Q 100 139 105 142" fill="none" stroke="#23262a" stroke-width="4.5" stroke-linecap="round"/>
+        <g fill="#23262a" opacity="0.85" font-family="ui-rounded, 'Hiragino Maru Gothic ProN', sans-serif" font-weight="700">
+          <text x="158" y="92" font-size="22">z</text>
+          <text x="172" y="74" font-size="15">z</text>
+        </g>
+    <g transform="translate(168 178)"><rect x="-14" y="-11" width="28" height="22" rx="4" fill="#23262a" stroke="#4f8d83" stroke-width="3.5"/>
+        <path d="M-8 -4 L -3 0 L -8 4 M 0 5 L 8 5" stroke="#4f8d83" stroke-width="2.5" stroke-linecap="round" fill="none"/></g>
+  </svg>

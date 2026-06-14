@@ -66,14 +66,12 @@ pub fn run() {
                     api.prevent_close();
                     let state = window.state::<RuntimeState>();
                     let active = *state.active_runs.lock().expect("active runs mutex poisoned");
-                    if active > 0 {
-                        // Ask the user how to handle active runs instead of silently hiding.
-                        let _ = window.emit("desktop:close-prompt", active);
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    } else {
-                        let _ = window.hide();
-                    }
+                    // Always confirm — the red close button never silently hides the app.
+                    // The frontend prompt offers Cancel / Hide to menu bar / Quit; Quit goes
+                    // through the canonical full-quit path (sidecar killed on RunEvent::Exit).
+                    let _ = window.emit("desktop:close-prompt", active);
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
                 tauri::WindowEvent::Destroyed => {
                     let state = window.state::<RuntimeState>();
@@ -82,8 +80,16 @@ pub fn run() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Yanshi");
+        .build(tauri::generate_context!())
+        .expect("error while building Yanshi")
+        .run(|app_handle, event| {
+            // Terminate the owned sidecar on every process-exit path (Cmd+Q, tray Quit,
+            // AppleScript quit) so it never orphans on port 8765.
+            if let tauri::RunEvent::Exit = event {
+                let state = app_handle.state::<RuntimeState>();
+                stop_runtime(&state);
+            }
+        });
 }
 
 fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {

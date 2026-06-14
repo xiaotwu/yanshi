@@ -146,6 +146,10 @@ Artifacts
 Developer
 ```
 
+_Note (2026-06-11): the shipped IA evolved from this original spec — user-facing nav is
+New Chat / Search / Library / Workshop (+ Projects, Recents); "Runs" and "Artifacts" are
+internal/runtime terms now (see docs/UI_INTERACTION_MODEL.md)._
+
 ## Required first core agents
 
 - Manager Agent
@@ -157,11 +161,27 @@ Developer
 Developer Mode may enable:
 - Code / Terminal Agent
 
+## Agent workflow (updated 2026-06-11)
+
+- **Claude Code** is the primary implementation agent: design, implementation, bug fixes.
+- **Codex** is the validation agent: independent QA, review, regression testing.
+- **The user** makes final product decisions and performs human-only verification.
+- **Junie is not part of the active workflow.** Junie material is historical only and its
+  evidence directories were removed in repository cleanup; do not request or wait for Junie
+  reviews.
+
+User-facing terminology must stay consistent:
+
+- **Chat** (not Task/Run) — runs/tasks remain internal runtime terms.
+- **Files / Outputs** (not Artifacts) in user-facing surfaces.
+- **Yanshi Atelier** in English; **偃师 / 偃师工坊** in zh-CN normal-mode UI (never "Yanshi"
+  in Chinese surfaces unless technically necessary).
+
 ## Required build style
 
-Codex must first create a complete plan and wait for approval.
+The implementation agent must first create a complete plan and wait for approval.
 
-After approval, Codex may execute freely:
+After approval, it may execute freely:
 - create files
 - delete obsolete files
 - install dependencies
@@ -181,7 +201,7 @@ Maintain these files during implementation:
 - `NEXT_STEPS.md`
 - `ACCEPTANCE_CHECKLIST.md`
 
-Update them after each major phase so another Codex session can resume.
+Update them after each major phase so another agent session can resume.
 
 ## Required verification
 

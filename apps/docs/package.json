@@ -1,0 +1,18 @@
+{
+  "name": "@yanshi/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build:site": "vitepress build",
+    "preview": "vitepress preview --port 4400",
+    "lint": "echo \"@yanshi/docs: no lint\"",
+    "typecheck": "echo \"@yanshi/docs: no typecheck\"",
+    "test": "echo \"@yanshi/docs: no tests\"",
+    "build": "echo \"@yanshi/docs: run docs:build at root for the site\""
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

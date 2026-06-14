@@ -173,6 +173,7 @@ export interface AppSettings {
   developerMode: boolean;
   onboarded: boolean;
   theme: "light" | "dark" | "system";
+  language: "system" | "en-US" | "zh-CN";
   reasoning: "low" | "medium" | "high" | "extra_high";
   liveOfficeAutoOpen: boolean;
   liveOfficeDefaultOpen: boolean;
@@ -185,6 +186,61 @@ export interface AppSettings {
   dockerMemory: string;
   dockerCpus: string;
   dockerPidsLimit: number;
+  gpuAcceleration: boolean;
+  /** In-app shortcut overrides keyed by command id; defaults live in the frontend. */
+  shortcuts: Record<string, string>;
+  profile: UserProfileSettings;
+  /** Preferred provider per action kind ("default" today; per-action routing is future work). */
+  preferredActions: Record<string, string>;
+}
+
+/** Local workspace identity — display only. No account, login, or subscription exists. */
+export interface UserProfileSettings {
+  displayName: string;
+  avatarType: "emoji" | "preset";
+  avatarValue: string;
+  avatarBackground?: string | null;
+  workspaceLabel: string;
+}
+
+/**
+ * AI integration configs are persisted settings. External Agents have a real minimal ACP
+ * foundation (stdio launch + initialize handshake); live state ("starting"/"connected"/"error")
+ * is overlaid server-side on read and never persisted. MCP has no client yet, so MCP statuses
+ * stay "not_implemented"/"not_configured" — discovered tools are never faked.
+ */
+export type IntegrationStatus = "not_configured" | "configured" | "starting" | "connected" | "ready" | "error" | "not_implemented";
+
+export interface ExternalAgentConfig {
+  id: string;
+  name: string;
+  protocol: "acp" | "custom";
+  command?: string | null;
+  args: string[];
+  env: Record<string, string>;
+  endpoint?: string | null;
+  enabled: boolean;
+  status: IntegrationStatus;
+  capabilities: string[];
+  lastError?: string | null;
+}
+
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  transport: "stdio" | "http" | "sse";
+  command?: string | null;
+  args: string[];
+  url?: string | null;
+  env: Record<string, string>;
+  enabled: boolean;
+  status: IntegrationStatus;
+  tools: string[];
+}
+
+export interface AiIntegrationsConfig {
+  externalAgents: ExternalAgentConfig[];
+  mcpServers: McpServerConfig[];
 }
 
 export interface WorkshopPackSummary {

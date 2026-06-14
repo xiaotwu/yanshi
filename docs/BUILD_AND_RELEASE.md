@@ -208,19 +208,35 @@ uv run --project runtime/python playwright install chromium
 - macOS Accessibility permission for click/type/shortcut Computer Use.
 - macOS Screen Recording permission for screenshot Computer Use.
 
-## Release Checklist
+## Release Status Matrix
 
-- [x] Run the full verification command set above.
-- [x] Build the distributable bundle with `pnpm desktop:release`.
-- [x] Manually launch `apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app`.
-- [x] Confirm runtime launch mode is `bundled-sidecar`.
-- [x] Bundle and verify `yanshi-runtime-sidecar` launches from a clean environment.
-- [x] Verify Computer bridge `open-app` end-to-end and 401 on unauthorized bridge requests.
-- [ ] Grant Accessibility and verify Computer bridge `click`/`type`/`shortcut`.
-- [ ] Codesign + notarize for second-machine distribution.
-- [ ] Verify Browser Use with installed Chromium and screenshot artifact output.
-- [ ] Verify Docker sandbox with the configured image pre-pulled or pullable.
-- [ ] Verify macOS Accessibility and Screen Recording permission flows.
-- [ ] Verify tray menu actions: Open Yanshi, Current Tasks, Open Live Office, Pause All, Quit.
-- [ ] Verify notifications for approval requested, run completed, run failed, and runtime error.
-- [ ] Verify no API keys or provider secrets appear in logs, events, or public settings responses.
+This matrix replaces old unchecked task-list syntax so release blockers do not appear as active
+current-task progress. "Human/external" items must remain open until the user grants permissions,
+provides credentials, or completes Apple signing/notarization.
+
+| Item | Status | Classification |
+| --- | --- | --- |
+| Run the full verification command set above | Complete | Already completed |
+| Build the distributable bundle with `pnpm desktop:release` | Complete | Already completed |
+| Manually launch `apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app` | Complete | Already completed |
+| Confirm runtime launch mode is `bundled-sidecar` | Complete | Already completed |
+| Bundle and verify `yanshi-runtime-sidecar` launches from a clean environment | Complete | Already completed |
+| Verify Computer bridge `open-app` end-to-end and 401 on unauthorized bridge requests | Complete | Already completed |
+| Verify no API keys or provider secrets appear in logs, events, or public settings responses | Complete | Already completed in Codex global secret audit |
+| Verify Docker sandbox with configured image pre-pulled or pullable | Complete for v0.1 local candidate | Already completed in packaged baseline; re-run before public release if environment changes |
+| Grant Accessibility and verify Computer bridge `click`/`type`/`shortcut` | Open | Human verification / macOS permission grant |
+| Verify macOS Screen Recording permission flow | Open | Human verification / macOS permission grant |
+| Verify Browser Use with installed Chromium and screenshot artifact output | Open | External setup: Chromium provisioning |
+| Verify tray menu actions: Open Yanshi, Current Tasks, Open Live Office, Pause All, Quit | Open | Human packaged-app verification |
+| Verify notifications for approval requested, run completed, run failed, and runtime error | Open | Human packaged-app verification |
+| Codesign + notarize for second-machine distribution | Blocked | External Apple Developer ID requirement |
+
+### Runtime lifecycle (2026-06-09, Codex QA fix)
+
+The desktop app spawns the runtime sidecar as a **process-group leader** and kills the whole group on
+every exit path (`RunEvent::Exit`, tray Quit, `quit_app`, AppleScript quit), so the PyInstaller-onefile
+forked server that holds port 8765 never orphans. On startup it probes `127.0.0.1:8765`: a healthy
+Yanshi Runtime is **adopted** (no second sidecar); an unhealthy occupant yields a **blocking
+`port-conflict`** runtime error (Restart Runtime to recover) instead of queueing dead runs. Verified in
+the packaged app: AppleScript quit leaves no orphan; adopt path completes runs and does not kill a
+runtime it did not spawn.

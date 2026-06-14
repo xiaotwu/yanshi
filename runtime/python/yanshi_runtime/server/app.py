@@ -16,12 +16,15 @@ import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from yanshi_runtime.acp import AcpManager
 from yanshi_runtime.config import RuntimeSettings, settings_from_env
 from yanshi_runtime.graph import RuntimeGraph
 from yanshi_runtime.models import (
     AgentActor3DSummary,
     AgentInstanceSummary,
     AgentProfileSummary,
+    AiIntegrationsConfig,
+    AiIntegrationsUpdate,
     AppSettings,
     AppSettingsUpdate,
     ApprovalDecisionRequest,
@@ -69,6 +72,7 @@ class RuntimeService:
             provider=self.provider,
         )
         self.pack_validator = WorkshopPackValidator()
+        self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
         self.storage.append_event(
             "runtime.status.changed",
@@ -274,6 +278,56 @@ class RuntimeService:
         )
         return settings
 
+    def ai_integrations(self) -> AiIntegrationsConfig:
+        return self._overlay_acp_state(self.storage.get_ai_integrations())
+
+    def _overlay_acp_state(self, config: AiIntegrationsConfig) -> AiIntegrationsConfig:
+        """Overlay live ACP connection state (never persisted) on the honest stored baseline."""
+        for agent in config.externalAgents:
+            live = self.acp.live_state(agent.id)
+            if live is not None:
+                agent.status = live.status
+                agent.capabilities = list(live.capabilities)
+                agent.lastError = live.error
+        return config
+
+    def connect_external_agent(self, agent_id: str) -> AiIntegrationsConfig:
+        config = self.storage.get_ai_integrations()
+        agent = next((item for item in config.externalAgents if item.id == agent_id), None)
+        if agent is None:
+            raise HTTPException(status_code=404, detail="External agent not found.")
+        try:
+            connection = self.acp.connect(agent)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        self.storage.append_event(
+            "runtime.status.changed",
+            payload={"status": "acp.connection", "agentId": agent_id, "result": connection.status},
+        )
+        return self._overlay_acp_state(config)
+
+    def disconnect_external_agent(self, agent_id: str) -> AiIntegrationsConfig:
+        self.acp.disconnect(agent_id)
+        return self.ai_integrations()
+
+    def update_ai_integrations(self, request: AiIntegrationsUpdate) -> AiIntegrationsConfig:
+        # Drop live connections for agents that were removed or had their config replaced.
+        if request.externalAgents is not None:
+            kept = {agent.id for agent in request.externalAgents}
+            for agent in self.storage.get_ai_integrations().externalAgents:
+                if agent.id not in kept:
+                    self.acp.disconnect(agent.id)
+        config = self.storage.update_ai_integrations(request)
+        self.storage.append_event(
+            "runtime.status.changed",
+            payload={
+                "status": "integrations.updated",
+                "externalAgents": len(config.externalAgents),
+                "mcpServers": len(config.mcpServers),
+            },
+        )
+        return self._overlay_acp_state(config)
+
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         name = request.name.strip()
         if not name:
@@ -465,6 +519,11 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     def service_dep() -> RuntimeService:
         return get_service(app)
 
+    @app.on_event("shutdown")
+    def shutdown_acp() -> None:
+        # Kill any launched ACP agent processes with the runtime — no orphans.
+        get_service(app).acp.shutdown()
+
     @app.get("/health", response_model=RuntimeHealth)
     def health(service: RuntimeService = Depends(service_dep)):
         return service.health()
@@ -492,6 +551,22 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.put("/settings", response_model=AppSettings)
     def put_app_settings(request: AppSettingsUpdate, service: RuntimeService = Depends(service_dep)):
         return service.update_app_settings(request)
+
+    @app.get("/settings/integrations", response_model=AiIntegrationsConfig)
+    def get_ai_integrations(service: RuntimeService = Depends(service_dep)):
+        return service.ai_integrations()
+
+    @app.put("/settings/integrations", response_model=AiIntegrationsConfig)
+    def put_ai_integrations(request: AiIntegrationsUpdate, service: RuntimeService = Depends(service_dep)):
+        return service.update_ai_integrations(request)
+
+    @app.post("/settings/integrations/agents/{agent_id}/connect", response_model=AiIntegrationsConfig)
+    def connect_external_agent(agent_id: str, service: RuntimeService = Depends(service_dep)):
+        return service.connect_external_agent(agent_id)
+
+    @app.post("/settings/integrations/agents/{agent_id}/disconnect", response_model=AiIntegrationsConfig)
+    def disconnect_external_agent(agent_id: str, service: RuntimeService = Depends(service_dep)):
+        return service.disconnect_external_agent(agent_id)
 
     @app.post("/runs")
     def create_run(

@@ -13,6 +13,9 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "tauri": "pnpm --filter @yanshi/desktop tauri",
+    "docs:dev": "pnpm --filter @yanshi/docs dev",
+    "docs:build": "pnpm --filter @yanshi/docs build:site",
+    "docs:preview": "pnpm --filter @yanshi/docs preview",
     "sidecar:build": "bash scripts/build-sidecar.sh",
     "desktop:release": "pnpm sidecar:build && pnpm --filter @yanshi/desktop tauri build --config src-tauri/tauri.sidecar.conf.json"
   },

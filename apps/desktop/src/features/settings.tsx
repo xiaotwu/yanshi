@@ -1,111 +1,273 @@
+import { RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import appIconUrl from "../../../../icon.png";
 import { openDesktopRuntimeLogs } from "../api/desktop";
+import { releaseWebglContext } from "../components/error-boundary";
+import { Modal } from "../components/modal";
+import { Switch } from "../components/switch";
+import { useT } from "../i18n";
+import type { TKey } from "../i18n/en";
 import { permissionLabel } from "../lib/shared";
 import type { PermissionMode } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
+import { ExternalAgentsSection, McpServersSection, ProvidersSection, SkillsSection } from "./ai-integrations";
+import { GpuSettingRow, ShortcutsSettings } from "./shortcuts-settings";
 
 export type SettingsSection =
-  | "general"
-  | "appearance"
   | "profile"
-  | "personalization"
-  | "models"
+  | "appearance"
+  | "general"
+  | "atelier"
+  | "agents"
+  | "mcp"
+  | "skills"
+  | "providers"
   | "permissions"
-  | "workshop"
-  | "help"
+  | "shortcuts"
+  | "notifications"
+  | "performance"
   | "runtime"
   | "sandbox"
   | "database";
 
-const SHORTCUTS: Array<[string, string]> = [
-  ["Open / hide Yanshi", "⌘Y"],
-  ["New task", "⌘N"],
-  ["Open Search", "⌘K"],
-  ["Open Live Office", "⌘L"],
-];
+/** Real WebGL probe for Developer Mode — availability + unmasked renderer when the browser exposes it.
+ *  The probe context is released immediately (WKWebView caps live contexts; leaks break the Atelier). */
+function webglInfo(): { available: boolean; renderer: string } {
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = (canvas.getContext("webgl2") ?? canvas.getContext("webgl")) as WebGLRenderingContext | null;
+    if (!gl) return { available: false, renderer: "—" };
+    const debug = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : "(masked by browser)";
+    releaseWebglContext(gl);
+    return { available: true, renderer };
+  } catch {
+    return { available: false, renderer: "—" };
+  }
+}
 
-export function SettingsView({ initialSection = "general" }: { initialSection?: SettingsSection }) {
+/** Settings as a centered floating window (like Search), with grouped left nav. */
+export function SettingsModal({ initialSection = "general", onClose }: { initialSection?: SettingsSection; onClose: () => void }) {
+  const { t } = useT();
   const { appSettings } = useRuntimeStore();
   const developer = appSettings?.developerMode ?? false;
   const [section, setSection] = useState<SettingsSection>(initialSection);
 
   useEffect(() => setSection(initialSection), [initialSection]);
 
-  const groups: Array<{ label: string; items: Array<{ id: SettingsSection; label: string }> }> = [
+  // Claude-style IA: Personal / Workspace / AI / Tools / System (+ Developer). No About.
+  const groups: Array<{ labelKey: TKey; items: Array<{ id: SettingsSection; key: TKey }> }> = [
     {
-      label: "Personal",
+      labelKey: "settings.group.personal",
       items: [
-        { id: "general", label: "General" },
-        { id: "appearance", label: "Appearance" },
-        { id: "profile", label: "Profile" },
-        { id: "personalization", label: "Personalization" },
+        { id: "profile", key: "settings.section.profile" },
+        { id: "appearance", key: "settings.section.appearance" },
       ],
     },
     {
-      label: "Tools",
+      labelKey: "settings.group.workspace",
       items: [
-        { id: "models", label: "Models" },
-        { id: "permissions", label: "Permissions" },
-        { id: "workshop", label: "Workshop" },
-        { id: "help", label: "Help" },
+        { id: "general", key: "settings.section.general" },
+        { id: "atelier", key: "settings.section.atelier" },
+      ],
+    },
+    {
+      labelKey: "settings.group.ai",
+      items: [
+        { id: "providers", key: "integrations.providers.title" },
+        { id: "agents", key: "integrations.agents.title" },
+        { id: "mcp", key: "integrations.mcp.title" },
+        { id: "skills", key: "integrations.skills.title" },
+      ],
+    },
+    {
+      labelKey: "settings.group.tools",
+      items: [{ id: "permissions", key: "settings.section.permissions" }],
+    },
+    {
+      labelKey: "settings.group.system",
+      items: [
+        { id: "shortcuts", key: "settings.section.shortcuts" },
+        { id: "notifications", key: "settings.section.notifications" },
+        { id: "performance", key: "settings.section.performance" },
       ],
     },
   ];
-  if (developer) groups.push({ label: "Developer", items: [{ id: "runtime", label: "Runtime" }, { id: "sandbox", label: "Sandbox" }, { id: "database", label: "Database" }] });
+  if (developer) {
+    groups.push({
+      labelKey: "settings.group.developer",
+      items: [
+        { id: "runtime", key: "settings.section.runtime" },
+        { id: "sandbox", key: "settings.section.sandbox" },
+        { id: "database", key: "settings.section.database" },
+      ],
+    });
+  }
 
   const allIds = groups.flatMap((g) => g.items.map((i) => i.id));
   const active = allIds.includes(section) ? section : "general";
 
   return (
-    <section className="settings-layout">
-      <nav className="settings-nav">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <div className="settings-nav-label">{group.label}</div>
-            {group.items.map((item) => (
-              <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
-                {item.label}
+    <Modal onClose={onClose} size="xl" className="settings-modal" labelledBy="settings-title">
+      <button className="icon-button ghost settings-close" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+        <X size={16} />
+      </button>
+      <section className="settings-layout">
+        <div className="settings-nav-col">
+          {/* The title stays fixed; only the nav list below it scrolls. */}
+          <h2 id="settings-title" className="settings-title">{t("account.settings")}</h2>
+          <nav className="settings-nav" aria-label={t("account.settings")}>
+            {groups.map((group) => (
+              <div key={group.labelKey}>
+                <div className="settings-nav-label">{t(group.labelKey)}</div>
+                {group.items.map((item) => (
+                  <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
+                    {t(item.key)}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </div>
+        <div className="settings-content">
+          <SettingsSectionView section={active} />
+        </div>
+      </section>
+    </Modal>
+  );
+}
+
+const AVATAR_EMOJI = ["🤖", "🦊", "🐼", "🦉", "🐳", "🌿", "⚡", "🎨"];
+const AVATAR_BACKGROUNDS = ["#1f6f4a", "#2f5d8a", "#7a4a8f", "#a85f2a", "#8a2f3e", "#3d3d46"];
+
+/** Shared avatar rendering — used here and in the account block. Emoji on a colored disc, or the
+ *  default Yanshi mark. Image upload is intentionally not offered yet (no unvalidated paths). */
+export function ProfileAvatar({ size = 28 }: { size?: number }) {
+  const profile = useRuntimeStore((state) => state.appSettings?.profile);
+  if (profile?.avatarType === "emoji" && profile.avatarValue) {
+    return (
+      <span
+        className="profile-avatar"
+        style={{ width: size, height: size, fontSize: size * 0.55, background: profile.avatarBackground ?? AVATAR_BACKGROUNDS[0] }}
+        aria-hidden
+      >
+        {profile.avatarValue}
+      </span>
+    );
+  }
+  return <img src={appIconUrl} alt="" className="account-avatar" style={{ width: size, height: size }} />;
+}
+
+function ProfileSettings() {
+  const { t } = useT();
+  const { appSettings, saveAppSettings } = useRuntimeStore();
+  if (!appSettings) return null;
+  const profile = appSettings.profile;
+  // Read the latest profile at call time (not render time) so back-to-back edits never clobber
+  // each other; the store also merges optimistically.
+  const saveProfile = (patch: Partial<typeof profile>) => {
+    const latest = useRuntimeStore.getState().appSettings?.profile ?? profile;
+    void saveAppSettings({ profile: { ...latest, ...patch } });
+  };
+
+  return (
+    <div className="settings-panel">
+      <h3>{t("settings.section.profile")}</h3>
+      <p className="muted">{t("settings.profile.identityHint")}</p>
+
+      <div className="profile-editor">
+        <div className="profile-preview">
+          <ProfileAvatar size={56} />
+          <strong>{profile.displayName.trim() || t("brand")}</strong>
+          {profile.workspaceLabel.trim() && <small className="muted">{profile.workspaceLabel}</small>}
+        </div>
+
+        <label className="setting-row">
+          <span>{t("settings.profile.displayName")}</span>
+          <input
+            defaultValue={profile.displayName}
+            placeholder={t("settings.profile.displayNamePlaceholder")}
+            maxLength={40}
+            onBlur={(event) => {
+              const value = event.currentTarget.value.trim();
+              if (value !== profile.displayName) saveProfile({ displayName: value });
+            }}
+          />
+        </label>
+        <label className="setting-row">
+          <span>{t("settings.profile.workspaceLabel")}</span>
+          <input
+            defaultValue={profile.workspaceLabel}
+            maxLength={40}
+            onBlur={(event) => {
+              const value = event.currentTarget.value.trim();
+              if (value !== profile.workspaceLabel) saveProfile({ workspaceLabel: value });
+            }}
+          />
+        </label>
+
+        <div className="setting-row column">
+          <span>{t("settings.profile.avatar")}</span>
+          <div className="avatar-options">
+            <button
+              className={`avatar-option${profile.avatarType === "preset" ? " selected" : ""}`}
+              onClick={() => saveProfile({ avatarType: "preset", avatarValue: "" })}
+              title={t("settings.profile.avatarDefault")}
+              aria-label={t("settings.profile.avatarDefault")}
+            >
+              <img src={appIconUrl} alt="" className="account-avatar" style={{ width: 26, height: 26 }} />
+            </button>
+            {AVATAR_EMOJI.map((emoji) => (
+              <button
+                key={emoji}
+                className={`avatar-option${profile.avatarType === "emoji" && profile.avatarValue === emoji ? " selected" : ""}`}
+                style={{ background: profile.avatarBackground ?? AVATAR_BACKGROUNDS[0] }}
+                onClick={() => saveProfile({ avatarType: "emoji", avatarValue: emoji, avatarBackground: profile.avatarBackground ?? AVATAR_BACKGROUNDS[0] })}
+                aria-label={emoji}
+              >
+                {emoji}
               </button>
             ))}
           </div>
-        ))}
-      </nav>
-      <div className="settings-content">
-        <SettingsSectionView section={active} />
+        </div>
+
+        {profile.avatarType === "emoji" && (
+          <div className="setting-row column">
+            <span>{t("settings.profile.background")}</span>
+            <div className="avatar-options">
+              {AVATAR_BACKGROUNDS.map((color) => (
+                <button
+                  key={color}
+                  className={`avatar-option swatch${(profile.avatarBackground ?? AVATAR_BACKGROUNDS[0]) === color ? " selected" : ""}`}
+                  style={{ background: color }}
+                  onClick={() => saveProfile({ avatarBackground: color })}
+                  aria-label={color}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </section>
+    </div>
   );
 }
 
 export function SettingsSectionView({ section }: { section: SettingsSection }) {
+  const { t } = useT();
   const {
     status,
     desktopStatus,
-    providerSettings,
-    providerHealth,
+    eventStreamStatus,
     restartRuntime,
     refreshMacosPermissions,
-    saveProviderSettings,
-    checkProviderHealth,
     saveAppSettings,
     loading,
     appSettings,
     macosPermissions,
-    workshopPacks,
   } = useRuntimeStore();
-  const [baseUrl, setBaseUrl] = useState(providerSettings?.baseUrl ?? "https://api.openai.com/v1");
-  const [model, setModel] = useState(providerSettings?.model ?? "gpt-4o-mini");
-  const [apiKey, setApiKey] = useState("");
 
-  useEffect(() => {
-    if (providerSettings) {
-      setBaseUrl(providerSettings.baseUrl);
-      setModel(providerSettings.model ?? "gpt-4o-mini");
-    }
-  }, [providerSettings]);
-
-  if (!appSettings) return <p className="muted">Loading settings…</p>;
+  if (!appSettings) return <p className="muted">{t("common.loading")}</p>;
 
   const toggle = (key: keyof typeof appSettings, label: string, hint?: string) => (
     <label className="setting-row">
@@ -113,7 +275,7 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
         {label}
         {hint && <small>{hint}</small>}
       </span>
-      <input type="checkbox" checked={Boolean(appSettings[key])} onChange={(event) => void saveAppSettings({ [key]: event.target.checked })} />
+      <Switch checked={Boolean(appSettings[key])} onChange={(value) => void saveAppSettings({ [key]: value })} ariaLabel={label} />
     </label>
   );
 
@@ -121,187 +283,162 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
     case "general":
       return (
         <div className="settings-panel">
-          <h3>General</h3>
+          <h3>{t("settings.section.general")}</h3>
           <label className="setting-row">
-            <span>Default permission</span>
+            <span>{t("settings.general.defaultPermission")}</span>
             <select
               value={appSettings.permissionModeDefault}
               onChange={(event) => void saveAppSettings({ permissionModeDefault: event.target.value as PermissionMode })}
             >
-              <option value="default">Default</option>
-              <option value="auto_review">Auto-review</option>
-              <option value="full_access">Full access</option>
+              <option value="default">{t("permission.default")}</option>
+              <option value="auto_review">{t("permission.auto_review")}</option>
+              <option value="full_access">{t("permission.full_access")}</option>
             </select>
           </label>
-          {toggle("developerMode", "Developer Mode", "Show runtime internals and raw events.")}
+          {toggle("developerMode", t("settings.general.developerMode"), t("settings.general.developerModeHint"))}
         </div>
       );
     case "appearance":
       return (
         <div className="settings-panel">
-          <h3>Appearance</h3>
+          <h3>{t("settings.section.appearance")}</h3>
           <label className="setting-row">
-            <span>Theme</span>
+            <span>{t("settings.appearance.theme")}</span>
             <select value={appSettings.theme} onChange={(event) => void saveAppSettings({ theme: event.target.value as "light" | "dark" | "system" })}>
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{t("settings.appearance.themeSystem")}</option>
+              <option value="light">{t("settings.appearance.themeLight")}</option>
+              <option value="dark">{t("settings.appearance.themeDark")}</option>
+            </select>
+          </label>
+          <label className="setting-row">
+            <span>{t("settings.appearance.language")}</span>
+            <select value={appSettings.language} onChange={(event) => void saveAppSettings({ language: event.target.value as "system" | "en-US" | "zh-CN" })}>
+              <option value="system">{t("settings.appearance.languageSystem")}</option>
+              <option value="en-US">English</option>
+              <option value="zh-CN">简体中文</option>
             </select>
           </label>
         </div>
       );
+    case "shortcuts":
+      return <ShortcutsSettings />;
     case "profile":
+      return <ProfileSettings />;
+    case "atelier":
       return (
         <div className="settings-panel">
-          <h3>Profile</h3>
-          <dl className="runtime-details">
-            <dt>Workspace</dt>
-            <dd>Yanshi</dd>
-            <dt>Version</dt>
-            <dd>0.1.0</dd>
-            <dt>Runtime</dt>
-            <dd>{desktopStatus?.launchMode ?? "—"}</dd>
-          </dl>
+          <h3>{t("settings.section.atelier")}</h3>
+          {toggle("liveOfficeAutoOpen", t("settings.personalization.atelierAutoOpen"))}
+          {toggle("liveOfficeDefaultOpen", t("settings.personalization.atelierDefaultOpen"))}
         </div>
       );
-    case "personalization":
+    case "notifications":
       return (
         <div className="settings-panel">
-          <h3>Personalization</h3>
-          {toggle("liveOfficeAutoOpen", "Open Live Office when a task starts")}
-          {toggle("liveOfficeDefaultOpen", "Keep Live Office open by default")}
-          {toggle("notificationsEnabled", "Desktop notifications")}
+          <h3>{t("settings.section.notifications")}</h3>
+          {toggle("notificationsEnabled", t("settings.personalization.notifications"))}
         </div>
       );
-    case "models":
+    case "performance":
       return (
         <div className="settings-panel">
-          <h3>Models</h3>
-          <p className="muted">{status?.missingRequirements.includes("model_provider") ? "Provider not configured." : "Provider configured."}</p>
-          <div className="settings-form">
-            <label>
-              Base URL
-              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} spellCheck={false} />
-            </label>
-            <label>
-              Model
-              <input value={model} onChange={(event) => setModel(event.target.value)} spellCheck={false} />
-            </label>
-            <label>
-              API key
-              <input
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder={providerSettings?.apiKeyConfigured ? "Configured" : "Not configured"}
-                type="password"
-              />
-            </label>
-          </div>
-          <div className="settings-actions">
-            <button
-              disabled={loading || !baseUrl.trim() || !model.trim()}
-              onClick={() => {
-                void saveProviderSettings({ baseUrl: baseUrl.trim(), model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
-                setApiKey("");
-              }}
-            >
-              Save
-            </button>
-            <button disabled={loading} onClick={() => void checkProviderHealth()}>
-              Check
-            </button>
-          </div>
-          {providerHealth && <p className={providerHealth.ok ? "status-text ok" : "status-text"}>{providerHealth.detail}</p>}
+          <h3>{t("settings.section.performance")}</h3>
+          <GpuSettingRow />
         </div>
       );
+    case "agents":
+      return <ExternalAgentsSection />;
+    case "mcp":
+      return <McpServersSection />;
+    case "skills":
+      return <SkillsSection />;
+    case "providers":
+      return <ProvidersSection />;
     case "permissions":
       return (
         <div className="settings-panel">
-          <h3>Permissions</h3>
-          <p className="muted">Allow Yanshi to use these tools during approved tasks.</p>
-          {toggle("browserToolEnabled", "Browser")}
-          {toggle("computerToolEnabled", "Computer")}
-          {toggle("terminalToolEnabled", "Terminal")}
-          {macosPermissions && (
-            <dl className="runtime-details">
-              <dt>Accessibility</dt>
-              <dd>{permissionLabel(macosPermissions.accessibility)}</dd>
-              <dt>Screen</dt>
-              <dd>{permissionLabel(macosPermissions.screenRecording)}</dd>
-            </dl>
+          <h3>{t("settings.section.permissions")}</h3>
+          <p className="muted">{t("settings.permissions.intro")}</p>
+          {toggle("browserToolEnabled", t("settings.permissions.browser"))}
+          {toggle("computerToolEnabled", t("settings.permissions.computer"))}
+          {toggle("terminalToolEnabled", t("settings.permissions.terminal"))}
+          {macosPermissions ? (
+            <>
+              <div className="setting-row">
+                <span>{t("settings.permissions.accessibility")}</span>
+                <span className={`status-badge ${macosPermissions.accessibility === "granted" ? "configured" : "not_configured"}`}>
+                  {permissionLabel(macosPermissions.accessibility)}
+                </span>
+              </div>
+              <div className="setting-row">
+                <span>{t("settings.permissions.screen")}</span>
+                <span className={`status-badge ${macosPermissions.screenRecording === "granted" ? "configured" : "not_configured"}`}>
+                  {permissionLabel(macosPermissions.screenRecording)}
+                </span>
+              </div>
+            </>
+          ) : (
+            // Honest state: never silently hide system permission status. Without the desktop
+            // bridge (web/dev, or a failed bridge call) there is nothing real to show — say so.
+            <div className="setting-row">
+              <span>
+                {t("settings.permissions.system")}
+                <small>{t("settings.permissions.bridgeUnavailableHint")}</small>
+              </span>
+              <span className="status-badge not_configured">{t("settings.permissions.bridgeUnavailable")}</span>
+            </div>
           )}
           <div className="settings-actions">
-            <button onClick={() => void refreshMacosPermissions()} disabled={loading}>
-              Refresh
+            <button
+              className="icon-action"
+              onClick={() => void refreshMacosPermissions()}
+              disabled={loading}
+              title={t("common.refresh")}
+              aria-label={t("common.refresh")}
+            >
+              <RotateCcw size={15} />
             </button>
           </div>
         </div>
       );
-    case "workshop":
+    case "runtime": {
+      const gl = webglInfo();
       return (
         <div className="settings-panel">
-          <h3>Workshop</h3>
-          <p className="muted">{workshopPacks.length} pack{workshopPacks.length === 1 ? "" : "s"} installed.</p>
-        </div>
-      );
-    case "help":
-      return (
-        <div className="settings-panel">
-          <h3>Help</h3>
+          <h3>{t("settings.section.runtime")}</h3>
+          <p className="muted">{desktopStatus?.detail ?? status?.details ?? t("common.loading")}</p>
           <dl className="runtime-details">
-            <dt>Yanshi</dt>
-            <dd>0.1.0</dd>
-            <dt>Runtime</dt>
-            <dd>{status?.status ?? desktopStatus?.launchMode ?? "—"}</dd>
-          </dl>
-          <h4 className="settings-subhead">Keyboard shortcuts</h4>
-          <dl className="runtime-details">
-            {SHORTCUTS.map(([name, key]) => (
-              <div key={name} style={{ display: "contents" }}>
-                <dt>{name}</dt>
-                <dd>{key}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="settings-actions">
-            <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus?.logPath}>
-              Open logs
-            </button>
-          </div>
-        </div>
-      );
-    case "runtime":
-      return (
-        <div className="settings-panel">
-          <h3>Runtime</h3>
-          <p className="muted">{desktopStatus?.detail ?? status?.details ?? "Checking runtime…"}</p>
-          <dl className="runtime-details">
-            <dt>Mode</dt>
+            <dt>{t("settings.runtime.mode")}</dt>
             <dd>{desktopStatus?.launchMode ?? "—"}</dd>
-            <dt>URL</dt>
+            <dt>{t("settings.runtime.url")}</dt>
             <dd>{desktopStatus?.runtimeUrl ?? "—"}</dd>
-            <dt>Log</dt>
-            <dd>{desktopStatus?.logPath ?? "Not available"}</dd>
-            <dt>Missing</dt>
-            <dd>{desktopStatus?.missingRequirements.length ? desktopStatus.missingRequirements.join(", ") : "None"}</dd>
+            <dt>{t("settings.runtime.log")}</dt>
+            <dd>{desktopStatus?.logPath ?? t("common.notAvailable")}</dd>
+            <dt>{t("settings.runtime.missing")}</dt>
+            <dd>{desktopStatus?.missingRequirements.length ? desktopStatus.missingRequirements.join(", ") : t("common.none")}</dd>
+            <dt>{t("settings.runtime.eventStream")}</dt>
+            <dd>{t(`stream.${eventStreamStatus}` as TKey)}</dd>
+            <dt>WebGL</dt>
+            <dd>{gl.available ? `${t("settings.runtime.webglAvailable")} · ${gl.renderer}` : t("common.notAvailable")}</dd>
           </dl>
           <div className="settings-actions">
             <button onClick={() => void restartRuntime()} disabled={loading}>
-              Restart
+              {t("settings.runtime.restart")}
             </button>
             <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus?.logPath}>
-              Logs
+              {t("settings.runtime.logs")}
             </button>
           </div>
         </div>
       );
+    }
     case "sandbox":
       return (
         <div className="settings-panel">
-          <h3>Sandbox</h3>
+          <h3>{t("settings.section.sandbox")}</h3>
           <div className="settings-form split">
             <label>
-              Image
+              {t("settings.sandbox.image")}
               <input
                 defaultValue={appSettings.dockerImage}
                 spellCheck={false}
@@ -312,7 +449,7 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
               />
             </label>
             <label>
-              Memory
+              {t("settings.sandbox.memory")}
               <input
                 defaultValue={appSettings.dockerMemory}
                 spellCheck={false}
@@ -323,7 +460,7 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
               />
             </label>
             <label>
-              CPUs
+              {t("settings.sandbox.cpus")}
               <input
                 defaultValue={appSettings.dockerCpus}
                 spellCheck={false}
@@ -334,7 +471,7 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
               />
             </label>
             <label>
-              PID limit
+              {t("settings.sandbox.pids")}
               <input
                 defaultValue={String(appSettings.dockerPidsLimit)}
                 inputMode="numeric"
@@ -350,11 +487,11 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
     case "database":
       return (
         <div className="settings-panel">
-          <h3>Database</h3>
+          <h3>{t("settings.section.database")}</h3>
           <dl className="runtime-details">
-            <dt>Health</dt>
+            <dt>{t("settings.database.health")}</dt>
             <dd>{status?.status ?? "—"}</dd>
-            <dt>Runtime URL</dt>
+            <dt>{t("settings.database.runtimeUrl")}</dt>
             <dd>{desktopStatus?.runtimeUrl ?? "—"}</dd>
           </dl>
         </div>

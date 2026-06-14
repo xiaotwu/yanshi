@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.tsx",
+    "./worker-art": "./src/worker-art.ts"
   },
   "scripts": {
     "lint": "tsc -p tsconfig.json --noEmit",

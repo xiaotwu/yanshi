@@ -1,0 +1,768 @@
+/* Yanshi docs theme — black/white with a mint-green glow accent.
+   Restyles the default VitePress theme via design tokens; no structural overrides. */
+
+:root {
+  --vp-c-brand-1: #1faa6a;
+  --vp-c-brand-2: #2fc279;
+  --vp-c-brand-3: #28b06f;
+  --vp-c-brand-soft: rgba(47, 194, 121, 0.14);
+
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f6f8f7;
+  --vp-c-bg-soft: #f1f4f2;
+
+  --yanshi-glow: rgba(47, 194, 121, 0.32);
+  --yanshi-panel: rgba(255, 255, 255, 0.78);
+  --yanshi-panel-strong: rgba(255, 255, 255, 0.92);
+  --yanshi-panel-border: rgba(17, 24, 28, 0.12);
+  --yanshi-text-soft: rgba(34, 43, 48, 0.72);
+  --yanshi-code-bg: #0f1415;
+  --yanshi-shadow: 0 24px 80px -52px rgba(12, 16, 18, 0.36);
+
+  /* Hero brand gradient (the big title) */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #14181a 30%, #1faa6a);
+  --vp-home-hero-image-filter: blur(48px);
+  --vp-home-hero-image-background-image: linear-gradient(60deg, rgba(47, 194, 121, 0.25), rgba(31, 170, 106, 0.12));
+
+  --vp-button-brand-bg: var(--vp-c-brand-1);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-bg: var(--vp-c-brand-3);
+
+  --vp-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.dark {
+  --vp-c-bg: #0c0e10;
+  --vp-c-bg-alt: #121517;
+  --vp-c-bg-soft: #16191c;
+  --vp-c-divider: #23282b;
+  --vp-c-border: #23282b;
+  --yanshi-panel: rgba(18, 21, 23, 0.78);
+  --yanshi-panel-strong: rgba(20, 24, 26, 0.94);
+  --yanshi-panel-border: rgba(255, 255, 255, 0.1);
+  --yanshi-text-soft: rgba(236, 244, 240, 0.72);
+  --yanshi-code-bg: #080b0c;
+  --yanshi-shadow: 0 30px 90px -54px rgba(0, 0, 0, 0.78);
+
+  --vp-home-hero-name-background: linear-gradient(120deg, #f2f5f3 20%, #2fc279);
+  --vp-home-hero-image-background-image: linear-gradient(60deg, rgba(47, 194, 121, 0.32), rgba(31, 170, 106, 0.16));
+  --yanshi-glow: rgba(47, 194, 121, 0.4);
+}
+
+/* Subtle grid + glow background behind the whole page */
+.dark body {
+  background-image:
+    radial-gradient(60% 50% at 50% -10%, rgba(47, 194, 121, 0.1), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+body {
+  background-image:
+    radial-gradient(60% 50% at 50% -10%, rgba(47, 194, 121, 0.07), transparent 70%),
+    linear-gradient(rgba(20, 24, 26, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 24, 26, 0.022) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Brand glow on links + primary buttons */
+.VPButton.brand {
+  box-shadow: 0 0 0 1px rgba(47, 194, 121, 0.3), 0 8px 26px -12px var(--yanshi-glow);
+  transition: box-shadow 0.2s ease, transform 0.12s ease;
+}
+.VPButton.brand:hover {
+  box-shadow: 0 0 0 1px rgba(47, 194, 121, 0.5), 0 10px 34px -10px var(--yanshi-glow);
+}
+.VPButton:active { transform: translateY(1px); }
+
+/* Hero feature cards: glow on hover */
+.VPFeature {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.VPFeature:hover {
+  border-color: rgba(47, 194, 121, 0.45);
+  box-shadow: 0 12px 40px -20px var(--yanshi-glow);
+  transform: translateY(-2px);
+}
+.VPFeature .icon {
+  background-color: var(--vp-c-brand-soft) !important;
+}
+
+/* Code blocks: a touch more contrast + rounded */
+.vp-doc div[class*="language-"] {
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-divider);
+  box-shadow: 0 18px 48px -36px rgba(0, 0, 0, 0.55);
+}
+.vp-doc div[class*="language-"] code {
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* Status badges (used inline in docs via <Badge>) tuned to the palette */
+.VPBadge.tip { background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1); border-color: rgba(47, 194, 121, 0.3); }
+
+/* Nav active + search key hint */
+.VPNavBarSearch .DocSearch-Button,
+.VPNavBarSearchButton {
+  border-radius: 10px;
+  border: 1px solid var(--yanshi-panel-border);
+  background: var(--yanshi-panel);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.VPNavBarSearch .DocSearch-Button:hover,
+.VPNavBarSearchButton:hover {
+  border-color: rgba(47, 194, 121, 0.42);
+  box-shadow: 0 0 0 3px rgba(47, 194, 121, 0.08);
+}
+.DocSearch-Button-Keys,
+.VPNavBarSearch .keybinds {
+  opacity: 0.9;
+}
+
+/* Focus visibility for keyboard users */
+:where(a, button, input, .VPFeature):focus-visible {
+  outline: 2px solid var(--vp-c-brand-2);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Stylized hero mock panel (used on the home page via raw HTML) */
+.yanshi-hero-mock {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 16px;
+  background: linear-gradient(160deg, var(--vp-c-bg-alt), var(--vp-c-bg-soft));
+  box-shadow: 0 30px 80px -40px var(--yanshi-glow);
+  overflow: hidden;
+}
+
+.VPSidebar {
+  border-right: 1px solid var(--yanshi-panel-border);
+  background: color-mix(in srgb, var(--vp-c-bg) 88%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.VPSidebarItem .item {
+  border-radius: 8px;
+  transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.VPSidebarItem .item:hover {
+  background: rgba(47, 194, 121, 0.08);
+  color: var(--vp-c-brand-1);
+  transform: translateX(1px);
+}
+
+.VPDocAsideOutline .outline-link {
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.VPDocAsideOutline .outline-link:hover,
+.VPDocAsideOutline .outline-link.active {
+  color: var(--vp-c-brand-1);
+  border-left-color: var(--vp-c-brand-2);
+}
+
+.yanshi-landing {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 88px 24px 96px;
+}
+
+.yanshi-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(440px, 0.95fr) minmax(460px, 1.05fr);
+  gap: 36px;
+  align-items: center;
+  min-height: min(660px, calc(100vh - 112px));
+  padding: 34px 0 28px;
+}
+
+.yanshi-hero::before {
+  content: "";
+  position: absolute;
+  inset: -70px -40px auto 38%;
+  height: 460px;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(47, 194, 121, 0.16), transparent 72%);
+  filter: blur(8px);
+  z-index: -1;
+}
+
+.yanshi-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.yanshi-hero-kicker,
+.section-kicker {
+  margin: 0;
+  color: var(--vp-c-brand-1);
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.yanshi-hero h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(42px, 4.6vw, 64px);
+  line-height: 1.02;
+  letter-spacing: 0;
+  color: var(--vp-c-text-1);
+}
+
+.yanshi-hero-lede {
+  margin: 0;
+  max-width: 610px;
+  color: var(--yanshi-text-soft);
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.55;
+}
+
+.yanshi-hero-actions,
+.yanshi-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.yanshi-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--vp-c-text-1);
+  text-decoration: none !important;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.yanshi-button.primary {
+  color: #06110b;
+  background: linear-gradient(135deg, #76f2aa, #2fc279);
+  box-shadow: 0 14px 36px -22px var(--yanshi-glow), inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.yanshi-button.secondary {
+  border: 1px solid var(--yanshi-panel-border);
+  background: var(--yanshi-panel);
+}
+
+.yanshi-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(47, 194, 121, 0.46);
+  box-shadow: 0 18px 44px -28px var(--yanshi-glow);
+}
+
+.status-pill {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--vp-c-text-1);
+  background: var(--yanshi-panel);
+  font-size: 12px;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 18px currentColor;
+}
+
+.status-pill.available { color: #19a466; }
+.status-pill.foundation { color: #2c9ee8; }
+.status-pill.setup { color: #b7791f; }
+.status-pill.planned { color: #7a83f5; }
+.status-pill.blocked { color: #d84b4b; }
+
+.yanshi-hero-visual {
+  position: relative;
+  min-width: 0;
+}
+
+.desktop-mock {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--yanshi-panel-strong) 92%, var(--vp-c-brand-2) 8%), var(--vp-c-bg-alt));
+  box-shadow: var(--yanshi-shadow), 0 0 0 1px rgba(47, 194, 121, 0.08), 0 0 70px -34px var(--yanshi-glow);
+}
+
+.desktop-mock::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -35% 18%;
+  height: 180px;
+  background: radial-gradient(closest-side, rgba(47, 194, 121, 0.24), transparent 75%);
+  pointer-events: none;
+}
+
+.mock-titlebar {
+  display: grid;
+  grid-template-columns: 14px 14px 14px 1fr;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--yanshi-panel-border);
+  background: color-mix(in srgb, var(--vp-c-bg) 72%, transparent);
+}
+
+.traffic {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  opacity: 0.86;
+}
+
+.traffic.red { background: #ff5f57; }
+.traffic.yellow { background: #ffbd2e; }
+.traffic.green { background: #28c840; }
+
+.mock-search {
+  justify-self: end;
+  min-width: 190px;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 9px;
+  padding: 7px 12px;
+  color: var(--yanshi-text-soft);
+  background: var(--yanshi-panel);
+  font-size: 12px;
+}
+
+.mock-shell {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 190px;
+  min-height: 360px;
+}
+
+.mock-sidebar,
+.mock-chat,
+.mock-atelier {
+  padding: 18px;
+}
+
+.mock-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-right: 1px solid var(--yanshi-panel-border);
+  background: color-mix(in srgb, var(--vp-c-bg-alt) 86%, transparent);
+}
+
+.mock-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.mock-brand img {
+  width: 20px;
+  height: 20px;
+}
+
+.mock-nav {
+  display: block;
+  width: 100%;
+  height: 24px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--vp-c-text-1) 8%, transparent);
+}
+
+.mock-nav.short { width: 70%; }
+.mock-nav.active {
+  background: rgba(47, 194, 121, 0.16);
+  box-shadow: inset 3px 0 0 var(--vp-c-brand-2);
+}
+
+.mock-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mock-label,
+.atelier-title {
+  color: var(--vp-c-text-1);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.mock-bubble {
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 14px;
+  background: var(--yanshi-panel);
+}
+
+.mock-bubble.user {
+  align-self: flex-end;
+  width: 58%;
+  height: 46px;
+  background: rgba(47, 194, 121, 0.12);
+}
+
+.mock-bubble.agent {
+  display: flex;
+  width: 86%;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+}
+
+.mock-bubble.agent span {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vp-c-text-1) 12%, transparent);
+}
+
+.mock-bubble.agent span.short { width: 62%; }
+
+.mock-runtime-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 340px);
+  margin-top: auto;
+  border: 1px solid rgba(47, 194, 121, 0.26);
+  border-radius: 13px;
+  padding: 12px;
+  color: var(--vp-c-text-1);
+  background: rgba(47, 194, 121, 0.08);
+  font-size: 12px;
+}
+
+.mock-runtime-card strong {
+  margin-left: auto;
+  color: var(--vp-c-brand-1);
+}
+
+.runtime-dot,
+.preview-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--vp-c-brand-2);
+  box-shadow: 0 0 18px var(--yanshi-glow);
+}
+
+.mock-atelier {
+  position: relative;
+  overflow: hidden;
+  border-left: 1px solid var(--yanshi-panel-border);
+  background:
+    linear-gradient(180deg, rgba(47, 194, 121, 0.08), transparent 45%),
+    color-mix(in srgb, var(--vp-c-bg-soft) 82%, transparent);
+}
+
+.atelier-stage {
+  position: absolute;
+  inset: 58px 12px 16px;
+  border-radius: 16px;
+  background:
+    linear-gradient(rgba(47, 194, 121, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 194, 121, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--vp-c-bg) 72%, transparent), var(--vp-c-bg-alt));
+  background-size: 22px 22px, 22px 22px, auto;
+}
+
+.atelier-worker {
+  position: absolute;
+  z-index: 2;
+  width: 46px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.2));
+  animation: workerFloat 4.8s ease-in-out infinite;
+}
+
+.worker-a { left: 20px; top: 34px; }
+.worker-b { right: 18px; top: 70px; animation-delay: -1.5s; }
+.worker-c { left: 62px; bottom: 28px; animation-delay: -2.4s; }
+
+.desk {
+  position: absolute;
+  z-index: 1;
+  width: 54px;
+  height: 20px;
+  border-radius: 9px 9px 5px 5px;
+  background: color-mix(in srgb, var(--vp-c-text-1) 10%, rgba(47, 194, 121, 0.12));
+}
+
+.desk-a { left: 16px; top: 88px; }
+.desk-b { right: 14px; top: 124px; }
+
+.atelier-preview {
+  position: absolute;
+  right: 22px;
+  bottom: -18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(47, 194, 121, 0.28);
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: var(--vp-c-text-1);
+  background: var(--yanshi-panel-strong);
+  box-shadow: 0 18px 46px -28px var(--yanshi-glow);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.docs-entry,
+.public-status,
+.quickstart-band {
+  margin-top: 72px;
+}
+
+.docs-entry h2,
+.public-status h2,
+.quickstart-band h2 {
+  margin: 8px 0 0;
+  max-width: 720px;
+  color: var(--vp-c-text-1);
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.docs-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.docs-card {
+  position: relative;
+  display: flex;
+  min-height: 176px;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 12px;
+  padding: 20px;
+  color: var(--vp-c-text-1);
+  text-decoration: none !important;
+  background: var(--yanshi-panel);
+  box-shadow: 0 16px 54px -44px rgba(0, 0, 0, 0.5);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.docs-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(47, 194, 121, 0.42);
+  box-shadow: 0 24px 64px -42px var(--yanshi-glow);
+  background: var(--yanshi-panel-strong);
+}
+
+.docs-card strong {
+  font-size: 17px;
+}
+
+.docs-card span:last-child,
+.public-status p,
+.quickstart-band p {
+  color: var(--yanshi-text-soft);
+  line-height: 1.65;
+}
+
+.card-index {
+  color: var(--vp-c-brand-1);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.public-status {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(360px, 1fr);
+  gap: 34px;
+  align-items: start;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 18px;
+  padding: 28px;
+  background: var(--yanshi-panel);
+}
+
+.status-table {
+  overflow: hidden;
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 12px;
+  background: var(--yanshi-panel-strong);
+}
+
+.status-table div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--yanshi-panel-border);
+  font-size: 13px;
+}
+
+.status-table div:last-child {
+  border-bottom: 0;
+}
+
+.quickstart-band {
+  border: 1px solid var(--yanshi-panel-border);
+  border-radius: 18px;
+  padding: 28px;
+  background:
+    linear-gradient(135deg, rgba(47, 194, 121, 0.1), transparent 38%),
+    var(--yanshi-panel);
+}
+
+.yanshi-code {
+  overflow-x: auto;
+  margin: 24px 0 12px;
+  border: 1px solid rgba(47, 194, 121, 0.22);
+  border-radius: 14px;
+  padding: 18px 20px;
+  color: #d7f7e4;
+  background:
+    linear-gradient(180deg, rgba(47, 194, 121, 0.08), transparent),
+    var(--yanshi-code-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px -34px rgba(0, 0, 0, 0.7);
+}
+
+.yanshi-code code {
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+@keyframes workerFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@media (max-width: 960px) {
+  .yanshi-landing {
+    padding-top: 48px;
+  }
+
+  .yanshi-hero,
+  .public-status {
+    grid-template-columns: 1fr;
+  }
+
+  .yanshi-hero {
+    min-height: auto;
+  }
+
+  .mock-shell {
+    grid-template-columns: 108px minmax(0, 1fr);
+  }
+
+  .mock-atelier {
+    grid-column: 1 / -1;
+    min-height: 190px;
+    border-top: 1px solid var(--yanshi-panel-border);
+    border-left: 0;
+  }
+
+  .docs-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .yanshi-landing {
+    padding: 34px 18px 72px;
+  }
+
+  .yanshi-hero h1 {
+    font-size: 40px;
+  }
+
+  .yanshi-button {
+    width: 100%;
+  }
+
+  .mock-titlebar {
+    grid-template-columns: 12px 12px 12px;
+  }
+
+  .mock-search {
+    display: none;
+  }
+
+  .mock-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .mock-sidebar {
+    display: none;
+  }
+
+  .mock-chat {
+    min-height: 290px;
+  }
+
+  .docs-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-status,
+  .quickstart-band {
+    padding: 20px;
+  }
+
+  .status-table div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .atelier-preview {
+    position: static;
+    margin-top: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPButton,
+  .VPFeature,
+  .yanshi-button,
+  .docs-card,
+  .VPSidebarItem .item,
+  .VPNavBarSearch .DocSearch-Button,
+  .VPNavBarSearchButton {
+    transition: none;
+  }
+  .atelier-worker { animation: none; }
+  body { background-attachment: scroll; }
+}

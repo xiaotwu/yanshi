@@ -13,6 +13,8 @@ from .models import (
     AgentInstanceSummary,
     AgentProfileSummary,
     AgentTaskSummary,
+    AiIntegrationsConfig,
+    AiIntegrationsUpdate,
     AppSettings,
     AppSettingsUpdate,
     ApprovalSummary,
@@ -77,6 +79,33 @@ def locked_storage_method(method):
             return method(self, *args, **kwargs)
 
     return wrapper
+
+
+def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegrationsConfig:
+    """Recompute persisted integration statuses from what the runtime can actually do.
+
+    External Agents have a real minimal ACP foundation (stdio launch + initialize handshake, see
+    acp.py). Live connection state is overlaid by the service on read and never persisted, so the
+    stored baseline is: ACP agents with a launch command are "configured" (saved, connectable);
+    endpoint-only or custom-protocol entries are "not_implemented" (no client for those paths);
+    entries missing details are "not_configured". Capabilities are cleared at rest — only a live
+    handshake may report them. MCP still has no client: complete entries stay "not_implemented",
+    discovered tools are never faked.
+    """
+    for agent in config.externalAgents:
+        if agent.protocol == "acp" and agent.command:
+            agent.status = "configured"
+        elif agent.command or agent.endpoint:
+            agent.status = "not_implemented"
+        else:
+            agent.status = "not_configured"
+        agent.capabilities = []
+        agent.lastError = None
+    for server in config.mcpServers:
+        connectable = server.command if server.transport == "stdio" else server.url
+        server.status = "not_implemented" if connectable else "not_configured"
+        server.tools = []
+    return config
 
 
 class Storage:
@@ -1385,11 +1414,23 @@ class Storage:
         return AppSettings(**value)
 
     def update_app_settings(self, update: AppSettingsUpdate) -> AppSettings:
-        current = self.get_app_settings()
+        current = self.get_app_settings().model_dump()
         patch = update.model_dump(exclude_none=True)
-        next_settings = current.model_copy(update=patch)
+        next_settings = AppSettings(**{**current, **patch})
         self.set_setting("app", next_settings.model_dump())
         return next_settings
+
+    def get_ai_integrations(self) -> AiIntegrationsConfig:
+        value = self.get_setting("integrations") or {}
+        return _with_honest_integration_statuses(AiIntegrationsConfig(**value))
+
+    def update_ai_integrations(self, update: AiIntegrationsUpdate) -> AiIntegrationsConfig:
+        current = self.get_ai_integrations().model_dump()
+        patch = update.model_dump(exclude_none=True)
+        # model_copy(update=...) skips validation, so rebuild through the model instead.
+        next_config = _with_honest_integration_statuses(AiIntegrationsConfig(**{**current, **patch}))
+        self.set_setting("integrations", next_config.model_dump())
+        return next_config
 
     def _run_from_row(self, row: sqlite3.Row) -> RunSummary:
         return RunSummary(
@@ -1504,6 +1545,8 @@ for _storage_method_name in [
     "get_provider_settings_public",
     "get_app_settings",
     "update_app_settings",
+    "get_ai_integrations",
+    "update_ai_integrations",
     "_project_id_for_run",
 ]:
     setattr(Storage, _storage_method_name, locked_storage_method(getattr(Storage, _storage_method_name)))

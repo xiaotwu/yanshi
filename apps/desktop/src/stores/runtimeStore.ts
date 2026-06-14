@@ -1,6 +1,7 @@
 import type {
   AgentInstanceSummary,
   AgentProfileSummary,
+  AiIntegrationsConfig,
   AppSettings,
   ApprovalSummary,
   BehaviorMode,
@@ -21,6 +22,10 @@ import { create } from "zustand";
 
 import { runtimeApi } from "../api/client";
 import { getDesktopRuntimeStatus, getMacosPermissionStatus, restartDesktopRuntime, sendDesktopNotification } from "../api/desktop";
+// Used only at call time inside notification helpers — safe despite i18n importing this store.
+import { resolveLocale, translate } from "../i18n";
+import { codeForMissingRequirement, reportError } from "../lib/errors";
+import type { LanguagePref, Locale } from "../i18n";
 
 interface RuntimeStore {
   status: RuntimeStatus | null;
@@ -29,6 +34,7 @@ interface RuntimeStore {
   providerSettings: ProviderSettingsPublic | null;
   providerHealth: ProviderHealth | null;
   appSettings: AppSettings | null;
+  aiIntegrations: AiIntegrationsConfig | null;
   projects: ProjectSummary[];
   workshopPacks: WorkshopPackSummary[];
   runs: RunSummary[];
@@ -36,6 +42,7 @@ interface RuntimeStore {
   events: Array<{ seq: number; event: YanshiEvent }>;
   activeProjectId: string | null;
   activeRunId: string | null;
+  eventStreamStatus: EventStreamStatus;
   liveAgents: LiveAgentState[];
   agentProfiles: AgentProfileSummary[];
   agentInstances: AgentInstanceSummary[];
@@ -50,7 +57,7 @@ interface RuntimeStore {
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
   ) => Promise<void>;
-  createProject: (name: string, description?: string, icon?: string) => Promise<void>;
+  createProject: (name: string, description?: string, settings?: Record<string, unknown>) => Promise<string | undefined>;
   updateProject: (projectId: string, update: { name?: string; description?: string; settings?: Record<string, unknown> }) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   setActiveProject: (projectId: string | null) => void;
@@ -64,6 +71,10 @@ interface RuntimeStore {
   saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<void>;
   checkProviderHealth: () => Promise<void>;
   saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
+  loadAiIntegrations: () => Promise<void>;
+  saveAiIntegrations: (update: Partial<AiIntegrationsConfig>) => Promise<void>;
+  connectExternalAgent: (agentId: string) => Promise<void>;
+  disconnectExternalAgent: (agentId: string) => Promise<void>;
   loadAgentProfiles: () => Promise<void>;
   saveAgentProfile: (id: string, update: Partial<AgentProfileSummary>) => Promise<void>;
   createAgentProfile: (body: { name: string; station?: string; behaviorMode?: BehaviorMode; accent?: string }) => Promise<void>;
@@ -85,7 +96,22 @@ const FALLBACK_PROFILES: Array<Pick<AgentProfileSummary, "id" | "name" | "role" 
 
 const LIFE_ACTIONS: LifeAction[] = ["coffee_break", "stretching", "walking_around", "playing_phone", "chatting_with_neighbor", "nap"];
 
+export type EventStreamStatus = "connecting" | "connected" | "reconnecting" | "polling" | "unavailable";
+
+const STREAM_ERROR = "Event stream unavailable.";
+
 let socket: WebSocket | null = null;
+let streamStarted = false;
+let lastEventSeq = 0;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let wsAttempts = 0;
+let pollFailures = 0;
+
+/** Exponential backoff for WebSocket reconnects, capped at 15s. */
+export function wsBackoffDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** Math.max(attempt - 1, 0), 15000);
+}
 
 interface AgentAccumulator {
   status: LiveAgentState["status"];
@@ -113,15 +139,31 @@ function computeAgents(
   const acc = new Map<string, AgentAccumulator>();
   for (const profile of base) {
     const persisted = instanceById.get(profile.id);
+    // Seed fatigue/queue (decorative) from the persisted instance, but NOT a stale terminal status —
+    // displayed task status comes only from the currently-active run (see activeRunIds below), so the
+    // office reads calm/idle between runs instead of stranding old "Failed"/"Done" labels.
     acc.set(profile.id, {
-      status: persisted?.status ?? "idle",
+      status: "idle",
       queue: persisted?.queueCount ?? 0,
       work: persisted ? Math.round(persisted.fatigue / 0.16) : 0,
-      task: persisted?.currentTask ?? null,
+      task: null,
     });
   }
 
+  // A run is "active" if it has started and has no terminal (completed/failed) event in the window.
+  const terminalRunIds = new Set<string>();
+  const startedRunIds = new Set<string>();
   for (const { event } of events) {
+    if (!event.runId) continue;
+    if (event.type === "run.completed" || event.type === "run.failed") terminalRunIds.add(event.runId);
+    else if (event.type === "run.started") startedRunIds.add(event.runId);
+  }
+  const activeRunIds = new Set([...startedRunIds].filter((runId) => !terminalRunIds.has(runId)));
+
+  for (const { event } of events) {
+    // Only events belonging to an active run drive live worker state — events from finished runs are
+    // history and must not produce stale/mixed labels in the Atelier.
+    if (!event.runId || !activeRunIds.has(event.runId)) continue;
     const id = event.agentId || (event.type.startsWith("approval.") ? "agent_reviewer" : "agent_manager");
     const state = acc.get(id);
     if (!state) continue;
@@ -202,6 +244,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   providerSettings: null,
   providerHealth: null,
   appSettings: null,
+  aiIntegrations: null,
   projects: [],
   workshopPacks: [],
   runs: [],
@@ -209,6 +252,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   events: [],
   activeProjectId: null,
   activeRunId: null,
+  eventStreamStatus: "connecting",
   liveAgents: computeAgents(FALLBACK_PROFILES as AgentProfileSummary[], [], "balanced"),
   agentProfiles: [],
   agentInstances: [],
@@ -234,6 +278,9 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
           runtimeApi.agentInstances(currentProjectId),
         ]);
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
+      if (desktopStatus?.missingRequirements.some((item) => item.toLowerCase().includes("shortcut"))) {
+        reportError("YANSHI_SHORTCUT_002", desktopStatus.missingRequirements);
+      }
       const activeProjectId = projects.some((project) => project.id === currentProjectId) ? currentProjectId : null;
       set({
         status,
@@ -254,6 +301,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         loading: false,
       });
     } catch (error) {
+      reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Runtime unavailable.", loading: false });
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
       set({ desktopStatus, macosPermissions });
@@ -263,31 +311,43 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   createRun: async (task, permissionMode, projectId, planFirst, reasoning) => {
     set({ loading: true, error: null });
     try {
+      const previousProjectId = get().activeProjectId;
       const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning);
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
+      const nextProjectId = projectId === undefined ? previousProjectId : (projectId ?? null);
       set({
         activeRunId: run.id,
-        activeProjectId: projectId === undefined ? get().activeProjectId : projectId,
+        activeProjectId: nextProjectId,
         runs,
         approvals,
         loading: false,
       });
+      // Atelier context follows the chat: a standalone chat resets to the global office, a
+      // project chat inherits that project's office state and agent team.
+      if (nextProjectId !== previousProjectId) {
+        void get().loadAgentInstances(nextProjectId);
+        void get().loadOfficeState(nextProjectId);
+      }
     } catch (error) {
+      reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Could not create run.", loading: false });
     }
   },
 
-  createProject: async (name, description, icon) => {
+  createProject: async (name, description, settings) => {
     set({ loading: true, error: null });
     try {
       const project = await runtimeApi.createProject(name, description);
-      if (icon) {
-        await runtimeApi.updateProject(project.id, { settings: { ...project.settings, icon } });
+      if (settings && Object.keys(settings).length > 0) {
+        await runtimeApi.updateProject(project.id, { settings: { ...project.settings, ...settings } });
       }
       const projects = await runtimeApi.projects();
       set({ projects, activeProjectId: project.id, loading: false });
+      return project.id;
     } catch (error) {
+      reportError("YANSHI_PROJECT_001", error);
       set({ error: error instanceof Error ? error.message : "Could not create project.", loading: false });
+      return undefined;
     }
   },
 
@@ -301,6 +361,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         loading: false,
       }));
     } catch (error) {
+      reportError("YANSHI_PROJECT_001", error);
       set({ error: error instanceof Error ? error.message : "Could not update project.", loading: false });
     }
   },
@@ -317,6 +378,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         loading: false,
       }));
     } catch (error) {
+      reportError("YANSHI_PROJECT_001", error);
       set({ error: error instanceof Error ? error.message : "Could not delete project.", loading: false });
     }
   },
@@ -328,7 +390,16 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   },
 
   setActiveRun: (runId) => {
-    set({ activeRunId: runId });
+    // Opening a chat also switches the Atelier context to that chat's project (or the global
+    // office for standalone chats).
+    const run = get().runs.find((item) => item.id === runId);
+    const projectId = run ? (run.projectId ?? null) : get().activeProjectId;
+    const changed = projectId !== get().activeProjectId;
+    set({ activeRunId: runId, activeProjectId: projectId });
+    if (changed) {
+      void get().loadAgentInstances(projectId);
+      void get().loadOfficeState(projectId);
+    }
   },
 
   importWorkshopPack: async (file) => {
@@ -338,6 +409,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       const workshopPacks = await runtimeApi.workshopPacks();
       set({ workshopPacks, loading: false });
     } catch (error) {
+      reportError(error instanceof Error && /unsafe|rejected|validation/i.test(error.message) ? "YANSHI_WORKSHOP_002" : "YANSHI_WORKSHOP_001", error);
       set({ error: error instanceof Error ? error.message : "Could not import pack.", loading: false });
     }
   },
@@ -351,6 +423,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         loading: false,
       }));
     } catch (error) {
+      reportError("YANSHI_WORKSHOP_001", error);
       set({ error: error instanceof Error ? error.message : "Could not update pack.", loading: false });
     }
   },
@@ -362,6 +435,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
       set({ runs, approvals, activeRunId: approval.runId, loading: false });
     } catch (error) {
+      reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Could not decide approval.", loading: false });
     }
   },
@@ -375,6 +449,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       const runs = await runtimeApi.runs(get().activeProjectId);
       set({ runs, loading: false });
     } catch (error) {
+      reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Could not pause runs.", loading: false });
     }
   },
@@ -386,6 +461,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       set({ desktopStatus, macosPermissions, loading: false });
       await get().hydrate();
     } catch (error) {
+      reportError("YANSHI_RUNTIME_003", error);
       set({ error: error instanceof Error ? error.message : "Could not restart runtime.", loading: false });
     }
   },
@@ -402,6 +478,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       const status = await runtimeApi.status();
       set({ providerSettings, status, loading: false });
     } catch (error) {
+      reportError("YANSHI_PROVIDER_003", error);
       set({ error: error instanceof Error ? error.message : "Could not save provider settings.", loading: false });
     }
   },
@@ -410,19 +487,71 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const providerHealth = await runtimeApi.providerHealth();
+      // The healthcheck request succeeded but the provider itself is unusable — still an error.
+      if (!providerHealth.ok) {
+        reportError(providerHealth.status === "not_configured" ? "YANSHI_PROVIDER_001" : "YANSHI_PROVIDER_002", providerHealth.detail);
+      }
       set({ providerHealth, loading: false });
     } catch (error) {
+      reportError("YANSHI_PROVIDER_002", error);
       set({ error: error instanceof Error ? error.message : "Provider healthcheck failed.", loading: false });
     }
   },
 
   saveAppSettings: async (settings) => {
+    // Optimistic merge so rapid consecutive edits (e.g. profile name blur + avatar click) each
+    // build on the latest local state instead of a stale snapshot — no lost updates.
+    const current = get().appSettings;
+    if (current) set({ appSettings: { ...current, ...settings } });
     set({ loading: true, error: null });
     try {
       const appSettings = await runtimeApi.updateAppSettings(settings);
       set({ appSettings, loading: false });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not save settings.", loading: false });
+      reportError("YANSHI_SETTINGS_001", error);
+      set({ appSettings: current, error: error instanceof Error ? error.message : "Could not save settings.", loading: false });
+    }
+  },
+
+  loadAiIntegrations: async () => {
+    try {
+      const aiIntegrations = await runtimeApi.aiIntegrations();
+      set({ aiIntegrations });
+    } catch {
+      // Settings surface shows the runtime-unavailable state; nothing to fake here.
+    }
+  },
+
+  saveAiIntegrations: async (update) => {
+    set({ loading: true, error: null });
+    try {
+      const aiIntegrations = await runtimeApi.updateAiIntegrations(update);
+      set({ aiIntegrations, loading: false });
+    } catch (error) {
+      reportError("YANSHI_MCP_001", error);
+      set({ error: error instanceof Error ? error.message : "Could not save integrations.", loading: false });
+    }
+  },
+
+  connectExternalAgent: async (agentId) => {
+    set({ loading: true, error: null });
+    try {
+      const aiIntegrations = await runtimeApi.connectExternalAgent(agentId);
+      set({ aiIntegrations, loading: false });
+    } catch (error) {
+      reportError("YANSHI_ACP_001", error);
+      set({ error: error instanceof Error ? error.message : "Could not connect the agent.", loading: false });
+    }
+  },
+
+  disconnectExternalAgent: async (agentId) => {
+    set({ loading: true, error: null });
+    try {
+      const aiIntegrations = await runtimeApi.disconnectExternalAgent(agentId);
+      set({ aiIntegrations, loading: false });
+    } catch (error) {
+      reportError("YANSHI_ACP_001", error);
+      set({ error: error instanceof Error ? error.message : "Could not disconnect the agent.", loading: false });
     }
   },
 
@@ -464,11 +593,19 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     set((state) => ({ officeState, liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode, state.agentInstances) }));
   },
 
+  // Event stream: WebSocket primary with backoff reconnect, HTTP polling of the same real
+  // `GET /events?after=seq` as fallback (the server's WS loop is itself a 250ms poll, so the
+  // transports are equivalent). Needed because the packaged app's tauri:// origin is a secure
+  // context and WKWebView blocks insecure ws:// to loopback while plain http:// fetches work.
+  // The "Event stream unavailable." error only appears when BOTH transports keep failing, and it
+  // clears automatically on recovery; retrying never stops.
   connectEvents: () => {
-    if (socket && socket.readyState !== WebSocket.CLOSED) return;
-    socket = new WebSocket(runtimeApi.eventsUrl());
-    socket.onmessage = (message) => {
-      const payload = JSON.parse(message.data) as { seq: number; event: YanshiEvent };
+    if (streamStarted) return;
+    streamStarted = true;
+
+    const handlePayload = (payload: { seq: number; event: YanshiEvent }) => {
+      if (payload.seq <= lastEventSeq) return; // dedup across WS/poll transports
+      lastEventSeq = payload.seq;
       set((state) => {
         const events = [...state.events.slice(-300), payload];
         return {
@@ -476,7 +613,14 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
           liveAgents: computeAgents(state.agentProfiles, events, state.officeState?.behaviorMode ?? "balanced", state.agentInstances),
         };
       });
-      notifyForEvent(payload.event, get().appSettings?.notificationsEnabled ?? true);
+      notifyForEvent(payload.event, get().appSettings?.notificationsEnabled ?? true, get().appSettings?.language);
+      // Honest tool blockers (missing Chromium, macOS permissions, Docker…) surface as coded
+      // toasts; the dedupe window keeps repeated observations from spamming.
+      const requirement = payload.event.payload?.missingRequirement;
+      if (typeof requirement === "string" && requirement) {
+        const requirementCode = codeForMissingRequirement(requirement);
+        if (requirementCode) reportError(requirementCode, requirement);
+      }
       if (
         payload.event.type.startsWith("run.") ||
         payload.event.type.startsWith("approval.") ||
@@ -486,31 +630,104 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         void get().hydrate();
       }
     };
-    socket.onerror = () => {
-      set({ error: "Event stream unavailable." });
+
+    const setStreamStatus = (status: EventStreamStatus) => {
+      // Toast only on the transition into "unavailable" (recovery is silent + auto-clears).
+      if (status === "unavailable" && get().eventStreamStatus !== "unavailable") {
+        reportError("YANSHI_RUNTIME_002", "event stream unavailable after ws + polling retries");
+      }
+      const patch: Partial<Pick<RuntimeStore, "eventStreamStatus" | "error">> = { eventStreamStatus: status };
+      if (status === "unavailable") patch.error = STREAM_ERROR;
+      else if (get().error === STREAM_ERROR) patch.error = null;
+      set(patch);
     };
+
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      pollFailures = 0;
+    };
+
+    const startPolling = () => {
+      if (pollTimer) return;
+      const tick = async () => {
+        try {
+          const batch = await runtimeApi.events(lastEventSeq);
+          pollFailures = 0;
+          for (const payload of batch) handlePayload(payload);
+          if (!socket || socket.readyState !== WebSocket.OPEN) setStreamStatus("polling");
+        } catch {
+          pollFailures += 1;
+          if (pollFailures >= 3 && (!socket || socket.readyState !== WebSocket.OPEN)) setStreamStatus("unavailable");
+        }
+        // Slow down while clearly unavailable, keep retrying forever.
+        pollTimer = setTimeout(() => void tick(), pollFailures >= 3 ? 2000 : 400);
+      };
+      pollTimer = setTimeout(() => void tick(), 0);
+    };
+
+    const scheduleWsRetry = () => {
+      if (wsRetryTimer) return;
+      wsAttempts += 1;
+      wsRetryTimer = setTimeout(() => {
+        wsRetryTimer = null;
+        connectWs();
+      }, wsBackoffDelay(wsAttempts));
+    };
+
+    const connectWs = () => {
+      let next: WebSocket;
+      try {
+        next = new WebSocket(runtimeApi.eventsUrl(lastEventSeq));
+      } catch {
+        startPolling();
+        scheduleWsRetry();
+        return;
+      }
+      socket = next;
+      next.onopen = () => {
+        wsAttempts = 0;
+        stopPolling();
+        setStreamStatus("connected");
+      };
+      next.onmessage = (message) => handlePayload(JSON.parse(message.data) as { seq: number; event: YanshiEvent });
+      const onDown = () => {
+        if (socket !== next) return; // stale socket from a previous attempt
+        if (get().eventStreamStatus === "connected") setStreamStatus("reconnecting");
+        startPolling();
+        scheduleWsRetry();
+      };
+      next.onerror = onDown;
+      next.onclose = onDown;
+    };
+
+    setStreamStatus("connecting");
+    connectWs();
   },
 }));
 
-function notifyForEvent(event: YanshiEvent, enabled: boolean): void {
+function notifyForEvent(event: YanshiEvent, enabled: boolean, language: string | undefined): void {
   if (!enabled) return;
-  const titleBody = notificationForEvent(event);
+  const titleBody = notificationForEvent(event, resolveLocale(language as LanguagePref | undefined));
   if (!titleBody) return;
   void sendDesktopNotification(titleBody.title, titleBody.body).catch(() => undefined);
 }
 
-function notificationForEvent(event: YanshiEvent): { title: string; body: string } | null {
+// Notification titles follow the UI language so zh-CN users see 偃师, not "Yanshi".
+function notificationForEvent(event: YanshiEvent, locale: Locale): { title: string; body: string } | null {
   if (event.type === "approval.requested") {
-    return { title: "Yanshi approval requested", body: String(event.payload.request ?? "A run is waiting for approval.") };
+    return { title: translate(locale, "notify.approval"), body: String(event.payload.request ?? "A run is waiting for approval.") };
   }
   if (event.type === "run.completed") {
-    return { title: "Yanshi run completed", body: String(event.payload.summary ?? "Run completed.") };
+    return { title: translate(locale, "notify.completed"), body: String(event.payload.summary ?? "Run completed.") };
   }
   if (event.type === "run.failed") {
-    return { title: "Yanshi run failed", body: String(event.payload.summary ?? "Run failed.") };
+    return { title: translate(locale, "notify.failed"), body: String(event.payload.summary ?? "Run failed.") };
   }
   if (event.type === "runtime.status.changed" && String(event.payload.status ?? "").includes("failed")) {
-    return { title: "Yanshi runtime error", body: String(event.payload.detail ?? "Runtime reported an error.") };
+    return { title: translate(locale, "notify.runtimeError"), body: String(event.payload.detail ?? "Runtime reported an error.") };
   }
   return null;
 }

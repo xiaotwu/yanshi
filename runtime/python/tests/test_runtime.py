@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+import sys
 import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -359,6 +360,23 @@ def test_approval_pause_and_resume(tmp_path: Path) -> None:
     resumed = client.get(f"/runs/{run_id}").json()
     assert resumed["status"] == "failed"
     assert "model provider" in resumed["resultSummary"]
+
+
+def test_approval_decision_accepts_aliases(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    # `deny` alias resolves to a denied decision.
+    run_id = client.post("/runs", json={"task": "Move files in my workspace"}).json()["id"]
+    approval = client.get("/approvals").json()[0]
+    decided = client.post(f"/approvals/{approval['id']}/decision", json={"decision": "deny"})
+    assert decided.status_code == 200
+    assert decided.json()["status"] == "denied"
+    # `approve` alias resolves to an approved decision on a fresh run.
+    run2 = client.post("/runs", json={"task": "Move files in my workspace"}).json()["id"]
+    approval2 = client.get("/approvals").json()[0]
+    decided2 = client.post(f"/approvals/{approval2['id']}/decision", json={"decision": "approve"})
+    assert decided2.status_code == 200
+    assert decided2.json()["status"] == "approved"
+    assert run2  # touch to satisfy lints
 
 
 def test_file_scan_uses_real_workspace(tmp_path: Path) -> None:
@@ -1256,6 +1274,175 @@ def test_app_settings_persist(tmp_path: Path) -> None:
     persisted = client.get("/settings")
     assert persisted.json()["developerMode"] is True
     assert persisted.json()["permissionModeDefault"] == "auto_review"
+
+
+def test_gpu_and_shortcut_settings_persist(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    defaults = client.get("/settings").json()
+    assert defaults["gpuAcceleration"] is True
+    assert defaults["shortcuts"] == {}
+
+    updated = client.put(
+        "/settings",
+        json={"gpuAcceleration": False, "shortcuts": {"open-library": "Meta+L", "new-task": ""}},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["gpuAcceleration"] is False
+    assert updated.json()["shortcuts"] == {"open-library": "Meta+L", "new-task": ""}
+
+    persisted = client.get("/settings").json()
+    assert persisted["gpuAcceleration"] is False
+    assert persisted["shortcuts"]["open-library"] == "Meta+L"
+
+
+def test_ai_integrations_config_persists_with_honest_statuses(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    empty = client.get("/settings/integrations")
+    assert empty.status_code == 200
+    assert empty.json() == {"externalAgents": [], "mcpServers": []}
+
+    updated = client.put(
+        "/settings/integrations",
+        json={
+            "externalAgents": [
+                {"id": "ea_1", "name": "Claude Code", "protocol": "acp", "command": "claude-code-acp", "enabled": True},
+                {"id": "ea_2", "name": "Unset agent", "protocol": "acp", "enabled": False},
+            ],
+            "mcpServers": [
+                {
+                    "id": "mcp_1",
+                    "name": "Filesystem",
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    "enabled": True,
+                    # A client claiming readiness/tools must be rewritten honestly by the runtime.
+                    "status": "ready",
+                    "tools": ["read_file"],
+                },
+                {"id": "mcp_2", "name": "Remote", "transport": "http", "enabled": False},
+            ],
+        },
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    # ACP agents with a launch command are "configured" (the stdio foundation can attempt a real
+    # connection); incomplete entries are "not_configured". MCP has no client: configured entries
+    # are "not_implemented" and discovered tools are never faked.
+    assert body["externalAgents"][0]["status"] == "configured"
+    assert body["externalAgents"][0]["capabilities"] == []
+    assert body["externalAgents"][1]["status"] == "not_configured"
+    assert body["mcpServers"][0]["status"] == "not_implemented"
+    assert body["mcpServers"][0]["tools"] == []
+    assert body["mcpServers"][1]["status"] == "not_configured"
+
+    persisted = client.get("/settings/integrations").json()
+    assert [a["id"] for a in persisted["externalAgents"]] == ["ea_1", "ea_2"]
+    assert persisted["mcpServers"][0]["args"] == ["-y", "@modelcontextprotocol/server-filesystem"]
+    assert persisted["mcpServers"][0]["status"] == "not_implemented"
+
+
+ACP_FIXTURE_AGENT = '''
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    message = json.loads(line)
+    if message.get("method") == "initialize":
+        response = {
+            "jsonrpc": "2.0",
+            "id": message["id"],
+            "result": {
+                "protocolVersion": 1,
+                "agentCapabilities": {"loadSession": True, "promptCapabilities": {"image": True, "audio": False}},
+            },
+        }
+        sys.stdout.write(json.dumps(response) + "\\n")
+        sys.stdout.flush()
+'''
+
+
+def test_acp_connect_handshake_and_disconnect(tmp_path: Path) -> None:
+    """The ACP foundation launches a real agent process over stdio, completes the initialize
+    handshake, reports only the capabilities the agent itself declared, and tears down cleanly."""
+    client = make_client(tmp_path)
+    agent_script = tmp_path / "acp_agent.py"
+    agent_script.write_text(ACP_FIXTURE_AGENT)
+
+    client.put(
+        "/settings/integrations",
+        json={"externalAgents": [{"id": "ea_ok", "name": "Fixture agent", "protocol": "acp", "command": f"{sys.executable} {agent_script}", "enabled": True}]},
+    )
+
+    connected = client.post("/settings/integrations/agents/ea_ok/connect")
+    assert connected.status_code == 200
+    agent = connected.json()["externalAgents"][0]
+    assert agent["status"] == "connected"
+    assert agent["lastError"] is None
+    assert "loadSession" in agent["capabilities"]
+    assert "promptCapabilities.image" in agent["capabilities"]
+    assert "promptCapabilities.audio" not in agent["capabilities"]
+
+    # Live state is an overlay, not persistence: nothing "connected" may be stored at rest.
+    raw = client.app.state.runtime_service.storage.get_setting("integrations")
+    assert raw["externalAgents"][0]["status"] != "connected"
+
+    disconnected = client.post("/settings/integrations/agents/ea_ok/disconnect")
+    assert disconnected.status_code == 200
+    assert disconnected.json()["externalAgents"][0]["status"] == "configured"
+
+
+def test_acp_connect_reports_honest_errors(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put(
+        "/settings/integrations",
+        json={"externalAgents": [{"id": "ea_bad", "name": "Broken", "protocol": "acp", "command": "/nonexistent/acp-agent-binary", "enabled": True}]},
+    )
+
+    result = client.post("/settings/integrations/agents/ea_bad/connect")
+    assert result.status_code == 200
+    agent = result.json()["externalAgents"][0]
+    assert agent["status"] == "error"
+    assert agent["lastError"]
+    assert agent["capabilities"] == []
+
+    missing = client.post("/settings/integrations/agents/no_such_agent/connect")
+    assert missing.status_code == 404
+
+    unconfigured = client.put(
+        "/settings/integrations",
+        json={"externalAgents": [{"id": "ea_none", "name": "No command", "protocol": "acp", "enabled": True}]},
+    )
+    assert unconfigured.status_code == 200
+    refused = client.post("/settings/integrations/agents/ea_none/connect")
+    assert refused.status_code == 400
+
+
+def test_profile_and_preferred_actions_persist(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    defaults = client.get("/settings").json()
+    assert defaults["profile"] == {"displayName": "", "avatarType": "preset", "avatarValue": "", "avatarBackground": None, "workspaceLabel": ""}
+    assert defaults["preferredActions"] == {}
+
+    updated = client.put(
+        "/settings",
+        json={
+            "profile": {"displayName": "Xiaotong", "avatarType": "emoji", "avatarValue": "🦊", "avatarBackground": "#1f6f4a", "workspaceLabel": "Studio"},
+            "preferredActions": {"default": "openai-compatible"},
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["profile"]["displayName"] == "Xiaotong"
+    assert updated.json()["profile"]["avatarValue"] == "🦊"
+    assert updated.json()["preferredActions"] == {"default": "openai-compatible"}
+
+    persisted = client.get("/settings").json()
+    assert persisted["profile"]["displayName"] == "Xiaotong"
+    assert persisted["preferredActions"]["default"] == "openai-compatible"
 
 
 def test_docker_settings_persist_in_developer_preferences(tmp_path: Path) -> None:
