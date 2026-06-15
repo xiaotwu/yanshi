@@ -1738,12 +1738,12 @@ button.list-row {
   grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 .app-shell.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "titlebar" "main";
+  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-areas: "titlebar titlebar" "sidebar main";
 }
 .app-shell.sidebar-collapsed.office-visible {
-  grid-template-columns: minmax(0, 1fr) 340px;
-  grid-template-areas: "titlebar titlebar" "main office";
+  grid-template-columns: 64px minmax(0, 1fr) 340px;
+  grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 
 /* Titlebar / window chrome */
@@ -2960,24 +2960,39 @@ textarea:focus-visible {
    instant version via the global reduced-motion rule. */
 .app-shell { transition: grid-template-columns 0.28s cubic-bezier(0.3, 0.8, 0.4, 1); }
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 0px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   grid-template-areas: "titlebar titlebar" "sidebar main";
 }
 .app-shell.sidebar-collapsed.office-visible {
-  grid-template-columns: 0px minmax(0, 1fr) 340px;
+  grid-template-columns: 64px minmax(0, 1fr) 340px;
   grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 .sidebar {
   min-width: 0;
   transition: padding 0.28s cubic-bezier(0.3, 0.8, 0.4, 1), border-color 0.28s ease;
 }
-.app-shell.sidebar-collapsed .sidebar {
-  padding-left: 0;
-  padding-right: 0;
-  border-right-color: transparent;
+.sidebar > * { min-width: 0; }
+
+/* ── Icon rail (collapsed sidebar) ─────────────────────────────────────────────── */
+.sidebar.rail { padding: 10px 8px 12px; align-items: stretch; }
+/* Label-bearing scroll area (projects + recents) is hidden in the rail. */
+.sidebar.rail .sidebar-scroll { display: none; }
+/* Nav + project/new-project buttons become centered square icon tiles; labels hidden. */
+.sidebar.rail nav { gap: 4px; }
+.sidebar.rail .nav-item {
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+  height: 40px;
+  margin: 0 auto;
 }
-.sidebar > * { min-width: 0; transition: opacity 0.18s ease; }
-.app-shell.sidebar-collapsed .sidebar > * { opacity: 0; }
+.sidebar.rail .nav-item > span,
+.sidebar.rail .recent-project { display: none; }
+/* Account row: avatar only. */
+.sidebar.rail .sidebar-footer { display: flex; justify-content: center; }
+.sidebar.rail .account-block { justify-content: center; padding: 6px; }
+.sidebar.rail .account-name,
+.sidebar.rail .account-caret { display: none; }
 
 /* Right Progress panel: slide in from the right edge when opened. */
 @keyframes panel-slide-in {

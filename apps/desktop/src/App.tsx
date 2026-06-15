@@ -361,9 +361,10 @@ export function App() {
         </div>
       </header>
 
-      {/* Always mounted so collapse/expand animates (grid column transition); inert + aria-hidden
-          while collapsed so nothing inside stays focusable. */}
-      <aside className="sidebar" aria-hidden={!sidebarOpen} inert={sidebarOpen ? undefined : true}>
+      {/* Collapsing the sidebar leaves an interactive icon rail (top nav + account), not a hidden
+          panel — so it stays a real navigation surface. The label-bearing scroll area (projects/
+          recents) is display:none in rail mode, so only the rail's icons remain focusable. */}
+      <aside className={sidebarOpen ? "sidebar" : "sidebar rail"}>
           <nav>
             <button className={view === "new-task" ? "nav-item active" : "nav-item"} onClick={() => navigate("new-task")} title={t("nav.newTask")}>
               <SquarePen size={18} />
