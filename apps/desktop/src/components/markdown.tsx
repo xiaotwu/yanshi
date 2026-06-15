@@ -84,6 +84,15 @@ function parseBlocks(src: string): Block[] {
   return blocks;
 }
 
+/**
+ * Allowlist link schemes. Markdown comes from model/tool output, so reject anything that could
+ * execute (javascript:, data:, vbscript:, …) — only http(s)/mailto and relative/anchor links pass.
+ */
+export function safeUrl(raw: string): string | null {
+  const url = raw.trim();
+  return /^(https?:\/\/|mailto:|\/|#)/i.test(url) ? url : null;
+}
+
 /** Inline parser: bold, italic, inline code, and links. Returns React nodes. */
 function renderInline(text: string, keyBase: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -110,13 +119,15 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       nodes.push(<code key={key} className="md-code">{token.slice(1, -1)}</code>);
     } else if (token.startsWith("[")) {
       const link = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
-      if (link) {
+      const href = link ? safeUrl(link[2]) : null;
+      if (link && href) {
         nodes.push(
-          <a key={key} href={link[2]} target="_blank" rel="noreferrer">
+          <a key={key} href={href} target="_blank" rel="noreferrer noopener">
             {link[1]}
           </a>,
         );
       } else {
+        // Unsafe/unsupported scheme (e.g. javascript:, data:) — render as plain text, never a link.
         nodes.push(<Fragment key={key}>{token}</Fragment>);
       }
     } else if (token.startsWith("**")) {
