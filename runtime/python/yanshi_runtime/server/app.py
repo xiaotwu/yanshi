@@ -74,6 +74,7 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
+        self._seed_default_workspace()
         self.storage.append_event(
             "runtime.status.changed",
             payload={"status": "running", "databasePath": str(settings.database_path)},
@@ -96,7 +97,7 @@ class RuntimeService:
         if not request.task.strip():
             raise HTTPException(status_code=400, detail="Task is required.")
         try:
-            run = self.storage.create_run(request.task.strip(), request.projectId)
+            run = self.storage.create_run(request.task.strip(), request.projectId, request.parentRunId)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
         reasoning = request.reasoning or self.storage.get_app_settings().reasoning
@@ -430,6 +431,29 @@ class RuntimeService:
                 api_key=self.settings.model_api_key,
             )
 
+    def _seed_default_workspace(self) -> None:
+        """Drop a small welcome file into a fresh standalone workspace so first-run file tools
+        (and the onboarding demo) return real content instead of an empty scan. Only seeds when
+        the workspace has no files yet — never overwrites the user's work."""
+        workspace = self.settings.workspace_root / "default"
+        try:
+            workspace.mkdir(parents=True, exist_ok=True)
+            if any(workspace.iterdir()):
+                return
+            (workspace / "welcome.md").write_text(
+                "# Welcome to your Yanshi workspace\n\n"
+                "This is a sample file so the File tool has something real to read.\n"
+                "Drop your own documents here, then ask Yanshi to summarize or scan them.\n",
+                encoding="utf-8",
+            )
+            (workspace / "notes.txt").write_text(
+                "todo: try asking Yanshi to list or summarize the files in this workspace\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            # Seeding is a nicety, never fatal to startup.
+            pass
+
     def _pack_folder_name(self, name: str, version: str) -> str:
         slug = re.sub(r"[^a-zA-Z0-9_.-]+", "-", f"{name}-{version}").strip("-").lower()
         return slug or "pack"
@@ -748,9 +772,16 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
 
     @app.post("/runs/{run_id}/cancel")
     def cancel_run(run_id: str, service: RuntimeService = Depends(service_dep)):
+        service.graph.request_cancel(run_id)
         run = service.storage.update_run(run_id, status="cancelled", completed=True, result_summary="Run cancelled.")
         service.storage.append_event("run.cancelled", run_id=run_id, payload={"runId": run_id})
         return run
+
+    @app.get("/runs/{run_id}/partial")
+    def run_partial(run_id: str, service: RuntimeService = Depends(service_dep)):
+        # Streamed partial answer for an in-flight run: {text, done} or {text:"", done:true}
+        # when nothing is buffered. Polled by the UI while a turn is generating.
+        return service.graph.partial(run_id) or {"text": "", "done": True}
 
     @app.get("/approvals", response_model=list[ApprovalSummary])
     def list_approvals(service: RuntimeService = Depends(service_dep)):

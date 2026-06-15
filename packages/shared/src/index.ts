@@ -83,6 +83,9 @@ export interface RunSummary {
   updatedAt: string;
   completedAt?: string | null;
   resultSummary?: string | null;
+  /** Conversation threading: runs in one chat share a threadId (own id when single-turn). */
+  threadId?: string | null;
+  parentRunId?: string | null;
 }
 
 export interface ProjectSummary {

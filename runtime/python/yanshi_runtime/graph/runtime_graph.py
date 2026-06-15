@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -12,6 +13,7 @@ from langgraph.types import Command, interrupt
 from yanshi_runtime.approvals import PermissionPolicy
 from yanshi_runtime.models import ChatMessage
 from yanshi_runtime.providers import OpenAICompatibleProvider, ProviderCallError
+from yanshi_runtime.providers.openai_compatible import strip_reasoning
 from yanshi_runtime.storage import Storage
 from yanshi_runtime.tools import BrowserTool, ComputerTool, DockerConfig, FileTool, TerminalTool
 
@@ -80,10 +82,63 @@ class RuntimeGraph:
         self.computer_tool = ComputerTool()
         self.terminal_tool = TerminalTool()
         self.provider = provider
+        # In-memory partial-answer buffer for streaming the final answer to the UI without
+        # persisting every token to the event log. Keyed by run_id; read by the /partial endpoint.
+        self._partials: dict[str, dict[str, Any]] = {}
+        self._partials_lock = threading.Lock()
+        # Run ids the user asked to stop. Streaming checks this to break early; the finalizer
+        # leaves a cancelled run cancelled instead of overwriting it with completed/failed.
+        self._cancelled: set[str] = set()
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         self.checkpoint_conn = sqlite3.connect(checkpoint_path, check_same_thread=False)
         self.checkpointer = SqliteSaver(self.checkpoint_conn)
         self.graph = self._build_graph()
+
+    def partial(self, run_id: str) -> dict[str, Any] | None:
+        """Current streamed partial answer for a run, or None. Shape: {text, done}."""
+        with self._partials_lock:
+            value = self._partials.get(run_id)
+            return dict(value) if value else None
+
+    def _begin_partial(self, run_id: str) -> None:
+        with self._partials_lock:
+            self._partials[run_id] = {"text": "", "done": False}
+
+    def _append_partial(self, run_id: str, delta: str) -> None:
+        with self._partials_lock:
+            entry = self._partials.get(run_id)
+            if entry is not None:
+                entry["text"] += delta
+
+    def _finish_partial(self, run_id: str) -> None:
+        with self._partials_lock:
+            entry = self._partials.get(run_id)
+            if entry is not None:
+                entry["done"] = True
+
+    def request_cancel(self, run_id: str) -> None:
+        """Mark a run for cancellation: streaming stops early and the finalizer won't override
+        the cancelled status. The in-flight HTTP call may still finish server-side, but its
+        result is discarded — Stop is honest from the user's point of view."""
+        self._cancelled.add(run_id)
+
+    def _is_cancelled(self, run_id: str) -> bool:
+        return run_id in self._cancelled
+
+    def _stream_manager_answer(self, run_id: str, messages: list[ChatMessage]) -> str:
+        """Stream the manager's answer into the run's partial buffer and return the full text."""
+        self._begin_partial(run_id)
+        chunks: list[str] = []
+        for piece in self.provider.stream_chat_completion(messages):
+            if self._is_cancelled(run_id):
+                break
+            chunks.append(piece)
+            self._append_partial(run_id, piece)
+        self._finish_partial(run_id)
+        text = strip_reasoning("".join(chunks))
+        if not text:
+            raise ProviderCallError("Provider returned an empty assistant message.")
+        return text
 
     def _build_graph(self):
         builder = StateGraph(GraphState)
@@ -303,7 +358,9 @@ class RuntimeGraph:
                 agent_id="agent_reviewer",
                 structured_output={"approvalId": state.get("approval_id"), "approved": False},
             )
-            return {**state, "provider_failed": True, "result_summary": summary}
+            # This observation already states the outcome clearly; don't let the finalizer
+            # re-narrate it as a second "blocking condition" message.
+            return {**state, "provider_failed": True, "failure_reviewed": True, "result_summary": summary}
 
         assignments = state.get("agent_tasks", [])
         if not assignments:
@@ -320,7 +377,9 @@ class RuntimeGraph:
                     },
                     error="model_not_configured",
                 )
-                return {**state, "result_summary": summary}
+                # The blocker is already a single clear observation; suppress the duplicate
+                # finalizer review so the user sees it once (plus the run status), not 3×.
+                return {**state, "failure_reviewed": True, "result_summary": summary}
             manager_result = self._execute_manager_assignment(
                 state,
                 {"agentId": "agent_manager", "task": "Produce the response with the configured provider.", "taskId": None},
@@ -329,6 +388,9 @@ class RuntimeGraph:
             return {
                 **state,
                 "provider_failed": not manager_result["ok"],
+                # A failed manager assignment already emits a clear ErrorObservation; don't
+                # duplicate it with a finalizer review.
+                "failure_reviewed": not manager_result["ok"],
                 "result_summary": manager_result["summary"],
             }
 
@@ -400,15 +462,20 @@ class RuntimeGraph:
 
     def _finalizer_node(self, state: GraphState) -> GraphState:
         run_id = state["run_id"]
+        # If the user stopped this run, leave it cancelled — don't overwrite with completed/failed
+        # or emit a terminal event (the cancel endpoint already did).
+        if self._is_cancelled(run_id):
+            self._cancelled.discard(run_id)
+            return state
         summary = state.get("result_summary") or "Run stopped without a final result."
-        failed = (
+        # Failure is determined by explicit state flags set upstream — never by keyword-matching
+        # the answer text (which misfired when a normal answer happened to contain "needs"/"requires").
+        failed = bool(
             state.get("blocked")
             or state.get("approved") is False
             or state.get("missing_model")
             or state.get("provider_failed")
             or state.get("tool_failed")
-            or "requires" in summary.lower()
-            or "needs" in summary.lower()
         )
         if failed and not state.get("failure_reviewed"):
             self._review_failure(run_id, summary)
@@ -876,13 +943,19 @@ class RuntimeGraph:
             return self._agent_execution_result("agent_manager", assignment, True, summary, "MessageObservation")
 
         try:
-            response = self.provider.chat_completion(
+            # Stream the final answer into the run's partial buffer so the UI can render it as it
+            # arrives (the only user-facing synthesis call; plan generation stays non-streamed).
+            response = self._stream_manager_answer(
+                run_id,
                 [
                     ChatMessage(
                         role="system",
                         content=(
                             "You are Yanshi Manager Agent." + self._agent_persona("agent_manager") + " "
                             "Produce the final response from actual agent observations. "
+                            "Reply directly with the final answer for the user — do not include your planning or analysis. "
+                            "When conversationHistory is present, this is a follow-up turn: stay consistent with the "
+                            "earlier answers and treat the new request as continuing that conversation. "
                             "Do not claim any browser, computer, file, or terminal action unless it appears in the provided observations."
                         ),
                     ),
@@ -891,6 +964,7 @@ class RuntimeGraph:
                         content=json.dumps(
                             {
                                 "originalTask": state["task"],
+                                "conversationHistory": self._thread_context(run_id),
                                 "managerAssignment": str(assignment.get("task") or ""),
                                 "agentObservations": [
                                     {
@@ -907,7 +981,7 @@ class RuntimeGraph:
                             ensure_ascii=False,
                         ),
                     ),
-                ]
+                ],
             )
         except ProviderCallError as exc:
             summary = str(exc)
@@ -1053,6 +1127,18 @@ class RuntimeGraph:
             "structured_output": structured_output or {},
         }
 
+    def _thread_context(self, run_id: str) -> list[dict[str, str]]:
+        """Prior completed turns of this chat as {request, response} pairs for follow-up context.
+
+        Capped to the most recent turns to keep prompts bounded for local models.
+        """
+        history = self.storage.thread_history(run_id)[-6:]
+        return [
+            {"request": run.task, "response": run.resultSummary or ""}
+            for run in history
+            if run.resultSummary
+        ]
+
     def _assignment_context(self, state: GraphState, assignment: dict[str, Any]) -> str:
         assignment_task = str(assignment.get("task") or "")
         return f"{assignment_task}\n\nOriginal request: {state['task']}"
@@ -1112,8 +1198,38 @@ class RuntimeGraph:
         if direct_assignments:
             return self._plan_for_task(task, risk_level), direct_assignments
         if self.provider.configured:
-            return self._provider_agent_plan(task, risk_level, reasoning)
+            try:
+                return self._provider_agent_plan(task, risk_level, reasoning)
+            except (ValueError, json.JSONDecodeError):
+                # The model returned a malformed or non-conforming plan (common with smaller
+                # local models). Rather than failing the whole run, fall back to a
+                # manager-only plan so the configured provider still produces a real answer.
+                # Genuine connectivity failures raise ProviderCallError and propagate.
+                return self._fallback_agent_plan(task, risk_level)
         return self._plan_for_task(task, risk_level), []
+
+    def _fallback_agent_plan(self, task: str, risk_level: str) -> tuple[list[str], list[dict[str, Any]]]:
+        steps = self._plan_for_task(task, risk_level)
+        assignments = [
+            {
+                "agentId": "agent_manager",
+                "task": "Produce the final response for the request from available knowledge.",
+                "metadata": {"source": "plan_fallback"},
+            }
+        ]
+        return steps, assignments
+
+    @staticmethod
+    def _normalize_agent_id(raw: str) -> str | None:
+        """Map provider-supplied agent IDs onto valid ones, tolerating common model errors
+        (casing, hyphens/spaces, and misspellings like ``agency_manager`` or bare ``manager``)."""
+        candidate = raw.strip().lower().replace("-", "_").replace(" ", "_")
+        if candidate in VALID_AGENT_IDS:
+            return candidate
+        for role in ("manager", "reviewer", "browser", "computer", "terminal", "file"):
+            if role in candidate:
+                return f"agent_{role}"
+        return None
 
     def _provider_agent_plan(self, task: str, risk_level: str, reasoning: str = "medium") -> tuple[list[str], list[dict[str, Any]]]:
         response = self.provider.chat_completion(
@@ -1127,6 +1243,7 @@ class RuntimeGraph:
                         "For general answer-writing tasks, assign agent_manager only. "
                         "Use only these agent IDs: agent_manager, agent_browser, agent_computer, agent_file, agent_reviewer, agent_terminal. "
                         "Do not assign browser, computer, file, or terminal work unless the user explicitly requested that tool. "
+                        "Write the steps in the same language as the user's task. "
                         + self._reasoning_directive(reasoning)
                     ),
                 ),
@@ -1144,16 +1261,47 @@ class RuntimeGraph:
         for raw_task in raw_tasks[:8]:
             if not isinstance(raw_task, dict):
                 raise ValueError("Provider task entries must be objects.")
-            agent_id = str(raw_task.get("agentId") or "")
+            agent_id = self._normalize_agent_id(str(raw_task.get("agentId") or ""))
             assignment_task = str(raw_task.get("task") or "").strip()
-            if agent_id not in VALID_AGENT_IDS:
-                raise ValueError(f"Provider assigned unknown agent: {agent_id}")
+            if agent_id is None:
+                raise ValueError(f"Provider assigned unknown agent: {raw_task.get('agentId')}")
             if not assignment_task:
                 raise ValueError("Provider assigned an empty task.")
+            # Enforce the honest-tool-use rule in code, not just the prompt: smaller models often
+            # assign a browser/computer/file/terminal agent to plain knowledge questions, which then
+            # fails the whole run on a tool it never needed. Drop tool assignments the task doesn't
+            # warrant; the manager still answers from its own knowledge.
+            if not self._tool_agent_warranted(agent_id, task):
+                continue
+            # One manager synthesis is enough; smaller models often emit several redundant
+            # manager steps, which turn into multiple slow sequential LLM calls (and timeouts).
+            if agent_id == "agent_manager" and any(a["agentId"] == "agent_manager" for a in assignments):
+                continue
             assignments.append({"agentId": agent_id, "task": assignment_task, "metadata": {"source": "provider_plan"}})
         if not any(assignment["agentId"] == "agent_manager" for assignment in assignments):
-            raise ValueError("Provider plan must include an agent_manager task for general execution.")
+            # After filtering spurious tools, guarantee the manager produces the answer.
+            assignments.append({
+                "agentId": "agent_manager",
+                "task": "Produce the final response for the request.",
+                "metadata": {"source": "provider_plan"},
+            })
         return [step.strip() for step in steps[:8]], assignments
+
+    @staticmethod
+    def _tool_agent_warranted(agent_id: str, task: str) -> bool:
+        """Whether a tool agent is justified by the task. Manager/reviewer are always allowed;
+        tool agents require an explicit signal (English or Chinese keyword) so a plain question
+        never triggers a tool that would fail. Mirrors the product's honest-tool-use rule."""
+        if agent_id in {"agent_manager", "agent_reviewer"}:
+            return True
+        lowered = task.lower()
+        signals: dict[str, tuple[str, ...]] = {
+            "agent_browser": ("browser", "http", "url", "web", "navigate", "page", "site", "link", "浏览", "网页", "网站", "打开网"),
+            "agent_computer": ("computer", "screenshot", "screen", "click", "电脑", "截图", "屏幕", "点击"),
+            "agent_file": ("file", "workspace", "folder", "directory", "文件", "目录", "工作区"),
+            "agent_terminal": ("terminal", "command", "docker", "shell", "终端", "命令", "运行命令"),
+        }
+        return any(keyword in lowered for keyword in signals.get(agent_id, ()))
 
     def _parse_json_object(self, content: str) -> dict[str, Any]:
         text = content.strip()

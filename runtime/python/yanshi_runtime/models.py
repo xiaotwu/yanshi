@@ -47,6 +47,11 @@ class RunSummary(BaseModel):
     updatedAt: str
     completedAt: str | None = None
     resultSummary: str | None = None
+    # Conversation threading: runs that belong to the same chat share a threadId. A run with
+    # no follow-ups simply has threadId == id. parentRunId points at the immediately preceding
+    # turn (None for the first message of a chat).
+    threadId: str | None = None
+    parentRunId: str | None = None
 
 
 ReasoningLevel = Literal["low", "medium", "high", "extra_high"]
@@ -58,6 +63,8 @@ class CreateRunRequest(BaseModel):
     permissionMode: PermissionMode = "default"
     planFirst: bool = False
     reasoning: ReasoningLevel | None = None
+    # When set, this run is a follow-up turn in the same chat as parentRunId.
+    parentRunId: str | None = None
 
 
 class ProjectSummary(BaseModel):

@@ -53,6 +53,11 @@ class FakeOpenAIHandler(BaseHTTPRequestHandler):
             )
         else:
             content = "Provider response from fake server."
+        # The manager synthesis streams; plan generation does not. Honor the requested mode so the
+        # SSE-parsing path is exercised by tests too.
+        if FakeOpenAIHandler.received_payload.get("stream"):
+            self._sse(content)
+            return
         self._json(
             200,
             {
@@ -70,6 +75,20 @@ class FakeOpenAIHandler(BaseHTTPRequestHandler):
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             },
         )
+
+    def _sse(self, content: str) -> None:
+        # Emit the content as two deltas + [DONE] in OpenAI SSE format.
+        mid = max(1, len(content) // 2)
+        body_lines = []
+        for piece in (content[:mid], content[mid:]):
+            body_lines.append("data: " + json.dumps({"choices": [{"delta": {"content": piece}}]}))
+        body_lines.append("data: [DONE]")
+        payload = ("\n\n".join(body_lines) + "\n\n").encode("utf-8")
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.send_header("content-length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def log_message(self, format: str, *args: object) -> None:
         return
@@ -111,6 +130,10 @@ class SequencedProvider:
         if not self.responses:
             raise AssertionError("SequencedProvider received an unexpected chat completion call.")
         return self.responses.pop(0)
+
+    def stream_chat_completion(self, messages: list[object]):
+        # Stream the next sequenced response as a single chunk (the graph joins chunks).
+        yield self.chat_completion(messages)
 
 
 class FakePlaywrightError(Exception):
@@ -959,9 +982,10 @@ def test_docker_run_records_terminal_log_artifact(tmp_path: Path) -> None:
     assert terminal_tasks[0].status == "completed"
 
 
-def test_reviewer_queue_explains_failed_runs(tmp_path: Path) -> None:
+def test_missing_provider_failure_is_stated_once(tmp_path: Path) -> None:
+    """A no-provider failure surfaces a single clear blocker observation — not the same
+    message re-narrated by a reviewer (the duplicate that cluttered the chat)."""
     client = make_client(tmp_path)
-    service = client.app.state.runtime_service
 
     created = client.post("/runs", json={"task": "Summarize this project"})
 
@@ -969,12 +993,20 @@ def test_reviewer_queue_explains_failed_runs(tmp_path: Path) -> None:
     run_id = created.json()["id"]
     run = client.get(f"/runs/{run_id}").json()
     assert run["status"] == "failed"
-    reviewer_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_reviewer")
-    assert len(reviewer_tasks) == 1
-    assert reviewer_tasks[0].status == "completed"
     events = client.get("/events", params={"runId": run_id}).json()
     observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
-    assert any(observation["type"] == "ReviewerObservation" for observation in observations)
+    # Exactly one observation carries the model-provider blocker, and it is the structured,
+    # actionable ErrorObservation (the frontend localizes it + offers a Configure CTA).
+    blockers = [
+        observation
+        for observation in observations
+        if (observation.get("structuredOutput") or {}).get("missingRequirement") == "model_provider"
+        or observation.get("error") == "model_not_configured"
+    ]
+    assert len(blockers) == 1
+    assert blockers[0]["type"] == "ErrorObservation"
+    # No duplicate "Reviewer identified the blocking condition: …" narration of the same text.
+    assert not any("identified the blocking condition" in (obs.get("summary") or "") for obs in observations)
 
 
 def test_project_crud_persists_and_emits_events(tmp_path: Path) -> None:
@@ -2124,3 +2156,86 @@ def test_configured_provider_call_creates_message_observation(tmp_path: Path) ->
     manager_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_manager")
     assert [task.status for task in manager_tasks] == ["completed", "completed"]
     assert manager_tasks[1].metadata == {"source": "provider_plan"}
+
+
+def test_strip_reasoning_handles_paired_and_dangling_think_tags() -> None:
+    from yanshi_runtime.providers.openai_compatible import strip_reasoning
+
+    # Well-formed paired block.
+    assert strip_reasoning("<think>deliberation</think>\n\nFinal answer.") == "Final answer."
+    # <thinking> variant.
+    assert strip_reasoning("<thinking>x</thinking>Answer") == "Answer"
+    # Dangling close tag: opening tag was consumed into a separate reasoning field, the
+    # thought text + closing tag leaked into content ahead of the real answer.
+    assert strip_reasoning("draft reasoning\n</think>\n\nReal answer.") == "Real answer."
+    # Plain content is returned untouched (trimmed).
+    assert strip_reasoning("  Just an answer.  ") == "Just an answer."
+
+
+def test_tool_agent_only_assigned_when_task_warrants_it() -> None:
+    """Plain questions must not trigger tool agents (which would fail the run); tools need an
+    explicit English/Chinese signal. Manager/reviewer are always allowed."""
+    from yanshi_runtime.graph.runtime_graph import RuntimeGraph
+
+    warranted = RuntimeGraph._tool_agent_warranted
+    assert warranted("agent_manager", "它在哪个城市？") is True
+    assert warranted("agent_reviewer", "anything") is True
+    # A pure knowledge question warrants no tools.
+    assert warranted("agent_browser", "它在哪个城市？") is False
+    assert warranted("agent_computer", "用一句话介绍西湖") is False
+    # Explicit tool intent (either language) is honored.
+    assert warranted("agent_browser", "open the browser to example.com") is True
+    assert warranted("agent_browser", "帮我浏览这个网页") is True
+    assert warranted("agent_file", "list the files in this workspace") is True
+    assert warranted("agent_terminal", "运行命令 ls") is True
+
+
+def test_keyless_local_provider_is_configured_and_sends_no_auth(tmp_path: Path) -> None:
+    """Keyless local servers (Ollama/LM Studio/vLLM) are usable with just endpoint + model."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    with FakeOpenAIServer() as base_url:
+        saved = client.put(
+            "/settings/provider",
+            json={"baseUrl": base_url, "model": "yanshi-test-model"},
+        )
+        assert saved.status_code == 200
+        # No key configured, but the provider must still be considered usable.
+        assert service.storage.get_provider_settings_secret() is not None
+        assert service.provider.configured is True
+        created = client.post("/runs", json={"task": "Write a concise hello"})
+
+    assert created.status_code == 200
+    run = client.get(f"/runs/{created.json()['id']}").json()
+    assert run["status"] == "completed"
+    # A keyless provider must not send an Authorization header.
+    assert FakeOpenAIHandler.received_authorization is None
+    # Public settings honestly report no key is configured.
+    assert client.get("/settings/provider").json()["apiKeyConfigured"] is False
+
+
+def test_follow_up_run_threads_and_carries_conversation_history(tmp_path: Path) -> None:
+    """A follow-up turn shares the parent's thread and passes prior conversation to the model."""
+    client = make_client(tmp_path)
+    with FakeOpenAIServer() as base_url:
+        client.put("/settings/provider", json={"baseUrl": base_url, "model": "yanshi-test-model"})
+        first = client.post("/runs", json={"task": "Introduce Hangzhou"})
+        first_id = first.json()["id"]
+        assert client.get(f"/runs/{first_id}").json()["status"] == "completed"
+
+        # Continue the same chat.
+        second = client.post("/runs", json={"task": "Now in one sentence", "parentRunId": first_id})
+        second_id = second.json()["id"]
+        second_run = client.get(f"/runs/{second_id}").json()
+
+    assert second_run["status"] == "completed"
+    # Both turns share one thread, keyed by the first turn's id, and the link is recorded.
+    assert second_run["threadId"] == first_id
+    assert second_run["parentRunId"] == first_id
+    assert client.get(f"/runs/{first_id}").json()["threadId"] == first_id
+    # The follow-up's manager synthesis received the prior turn as conversation history.
+    payload = FakeOpenAIHandler.received_payload
+    assert payload is not None
+    user_message = next(msg for msg in payload["messages"] if msg["role"] == "user")
+    assert "conversationHistory" in user_message["content"]
+    assert "Introduce Hangzhou" in user_message["content"]

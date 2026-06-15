@@ -143,6 +143,14 @@ class Storage:
               result_summary TEXT
             );
 
+            -- Conversation threading. Kept in a side table so it works on existing databases
+            -- without altering the runs schema. A run absent from this table is its own thread.
+            CREATE TABLE IF NOT EXISTS run_threads (
+              run_id TEXT PRIMARY KEY,
+              thread_id TEXT NOT NULL,
+              parent_run_id TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS projects (
               id TEXT PRIMARY KEY,
               name TEXT NOT NULL,
@@ -420,7 +428,7 @@ class Storage:
         self.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self.conn.commit()
 
-    def create_run(self, task: str, project_id: str | None = None) -> RunSummary:
+    def create_run(self, task: str, project_id: str | None = None, parent_run_id: str | None = None) -> RunSummary:
         if project_id:
             self.get_project(project_id)
         now = utc_now()
@@ -432,8 +440,40 @@ class Storage:
             """,
             (run_id, project_id, 0 if project_id else 1, task, "created", "[]", now, now),
         )
+        # Record conversation threading: a follow-up inherits its parent's thread; the first
+        # turn of a chat seeds a thread keyed by its own id.
+        if parent_run_id:
+            parent_thread, _ = self._thread_for(parent_run_id)
+            self.conn.execute(
+                "INSERT OR REPLACE INTO run_threads (run_id, thread_id, parent_run_id) VALUES (?, ?, ?)",
+                (run_id, parent_thread, parent_run_id),
+            )
         self.conn.commit()
         return self.get_run(run_id)
+
+    def _thread_for(self, run_id: str) -> tuple[str, str | None]:
+        """Return (thread_id, parent_run_id) for a run; a run with no thread row is its own thread."""
+        row = self.conn.execute(
+            "SELECT thread_id, parent_run_id FROM run_threads WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            return run_id, None
+        return row["thread_id"], row["parent_run_id"]
+
+    def thread_history(self, run_id: str) -> list[RunSummary]:
+        """Prior completed turns in this run's chat thread, oldest first (excludes this run)."""
+        thread_id, _ = self._thread_for(run_id)
+        rows = self.conn.execute(
+            """
+            SELECT r.* FROM runs r
+            LEFT JOIN run_threads t ON t.run_id = r.id
+            WHERE COALESCE(t.thread_id, r.id) = ? AND r.id != ? AND r.status = 'completed'
+            ORDER BY r.created_at ASC
+            """,
+            (thread_id, run_id),
+        ).fetchall()
+        return [self._run_from_row(row) for row in rows]
 
     def get_run(self, run_id: str) -> RunSummary:
         row = self.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
@@ -1377,13 +1417,11 @@ class Storage:
         value = self.get_setting("provider")
         if not value or not value.get("baseUrl") or not value.get("model"):
             return None
+        # The API key is optional: keyless local servers (Ollama, LM Studio, vLLM) are
+        # fully usable with just an endpoint + model. Resolve the key when present.
         ref = value.get("apiKeyRef")
-        if not ref:
-            return None
-        api_key = self.secret_store.get_secret(ref)
-        if not api_key:
-            return None
-        return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key}
+        api_key = self.secret_store.get_secret(ref) if ref else ""
+        return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key or ""}
 
     def get_provider_settings_public(self) -> ProviderSettingsPublic:
         value = self.get_setting("provider") or {}
@@ -1433,6 +1471,7 @@ class Storage:
         return next_config
 
     def _run_from_row(self, row: sqlite3.Row) -> RunSummary:
+        thread_id, parent_run_id = self._thread_for(row["id"])
         return RunSummary(
             id=row["id"],
             projectId=row["project_id"],
@@ -1444,6 +1483,8 @@ class Storage:
             updatedAt=row["updated_at"],
             completedAt=row["completed_at"],
             resultSummary=row["result_summary"],
+            threadId=thread_id,
+            parentRunId=parent_run_id,
         )
 
     def _project_from_row(self, row: sqlite3.Row) -> ProjectSummary:

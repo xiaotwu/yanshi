@@ -1,11 +1,41 @@
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from yanshi_runtime.models import ChatMessage, ProviderHealth
+
+# Local models (Ollama/LM Studio/vLLM) and reasoning models can take a while to generate,
+# especially on CPU and on a second/third sequential call. Keep generous timeouts so real runs
+# don't fail spuriously.
+_CHAT_TIMEOUT_SECONDS = 300.0
+_HEALTH_TIMEOUT_SECONDS = 15.0
+
+# Some reasoning models inline their chain-of-thought in the message content using
+# <think>…</think> (or <thinking>…</thinking>) tags rather than a separate field.
+# Strip it so downstream parsing/display only sees the final answer.
+_THINK_BLOCK = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.DOTALL | re.IGNORECASE)
+_THINK_CLOSE = re.compile(r"</think(?:ing)?>", re.IGNORECASE)
+
+
+def strip_reasoning(content: str) -> str:
+    """Remove inline reasoning from assistant content and return the final answer.
+
+    Handles two real-world shapes from local reasoning models (e.g. via Ollama):
+    well-formed ``<think>…</think>`` blocks, and a *dangling* closing tag where the opening
+    tag was consumed into a separate ``reasoning`` field but the thought text and the
+    closing ``</think>`` still leaked into ``content`` ahead of the answer.
+    """
+    text = _THINK_BLOCK.sub("", content)
+    closes = list(_THINK_CLOSE.finditer(text))
+    if closes:
+        # Everything up to and including the last dangling close tag is reasoning.
+        text = text[closes[-1].end():]
+    return text.strip()
 
 
 class ProviderCallError(RuntimeError):
@@ -24,8 +54,11 @@ class ProviderConfig:
             return None
         base_url = str(value.get("baseUrl") or "").rstrip("/")
         model = str(value.get("model") or "")
+        # The API key is optional: local OpenAI-compatible servers (Ollama, LM Studio,
+        # vLLM/SGLang) are keyless. A provider is "configured" once it has an endpoint and
+        # a model; auth is only sent when a key is present.
         api_key = str(value.get("apiKey") or "")
-        if not (base_url and model and api_key):
+        if not (base_url and model):
             return None
         return cls(base_url=base_url, model=model, api_key=api_key)
 
@@ -53,7 +86,7 @@ class OpenAICompatibleProvider:
         if self._config is None:
             return ProviderHealth(ok=False, status="not_configured", detail="Model provider is not configured.")
         try:
-            with httpx.Client(timeout=10) as client:
+            with httpx.Client(timeout=_HEALTH_TIMEOUT_SECONDS) as client:
                 response = client.get(
                     f"{self._config.base_url}/models",
                     headers=self._headers(),
@@ -91,7 +124,7 @@ class OpenAICompatibleProvider:
             "stream": False,
         }
         try:
-            with httpx.Client(timeout=60) as client:
+            with httpx.Client(timeout=_CHAT_TIMEOUT_SECONDS) as client:
                 response = client.post(
                     f"{self._config.base_url}/chat/completions",
                     headers=self._headers(),
@@ -105,15 +138,77 @@ class OpenAICompatibleProvider:
                 raise ProviderCallError("Provider returned no choices.")
             message = choices[0].get("message") or {}
             content = message.get("content")
-            if not isinstance(content, str) or not content.strip():
+            text = strip_reasoning(content) if isinstance(content, str) else ""
+            if not text:
+                # Some reasoning models put everything in the reasoning channel and leave content
+                # empty for certain prompts. Fall back to the reasoning so the run still produces
+                # an answer instead of failing.
+                reasoning = message.get("reasoning")
+                text = strip_reasoning(reasoning) if isinstance(reasoning, str) else ""
+            if not text:
                 raise ProviderCallError("Provider returned an empty assistant message.")
-            return content.strip()
+            return text
+        except httpx.HTTPError as exc:
+            raise ProviderCallError(f"Provider chat completion failed: {exc.__class__.__name__}.") from exc
+
+    def stream_chat_completion(self, messages: list[ChatMessage]):
+        """Yield assistant *content* deltas as they arrive (OpenAI SSE format). Reasoning deltas
+        are ignored. Used to stream the final answer to the UI; falls back cleanly — callers that
+        want the whole string can ``"".join(...)`` the chunks."""
+        if self._config is None:
+            raise ProviderCallError("Model provider is not configured.")
+        payload = {
+            "model": self._config.model,
+            "messages": [message.model_dump() for message in messages],
+            "stream": True,
+        }
+        try:
+            with httpx.Client(timeout=_CHAT_TIMEOUT_SECONDS) as client:
+                with client.stream(
+                    "POST",
+                    f"{self._config.base_url}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                ) as response:
+                    if response.status_code >= 400:
+                        raise ProviderCallError(
+                            f"Provider chat completion failed with HTTP {response.status_code}."
+                        )
+                    content_seen = False
+                    reasoning_parts: list[str] = []
+                    for line in response.iter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[len("data:") :].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        piece = delta.get("content")
+                        if isinstance(piece, str) and piece:
+                            content_seen = True
+                            yield piece
+                        reasoning = delta.get("reasoning")
+                        if isinstance(reasoning, str) and reasoning:
+                            reasoning_parts.append(reasoning)
+                    # Degenerate reasoning-only response (empty content): surface the reasoning as
+                    # the answer so the turn still completes instead of failing empty.
+                    if not content_seen and reasoning_parts:
+                        yield strip_reasoning("".join(reasoning_parts))
         except httpx.HTTPError as exc:
             raise ProviderCallError(f"Provider chat completion failed: {exc.__class__.__name__}.") from exc
 
     def _headers(self) -> dict[str, str]:
         assert self._config is not None
-        return {
-            "Authorization": f"Bearer {self._config.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        # Only attach bearer auth when a key is configured. Keyless local servers
+        # (Ollama, LM Studio, vLLM) reject or don't expect an empty bearer token.
+        if self._config.api_key:
+            headers["Authorization"] = f"Bearer {self._config.api_key}"
+        return headers
