@@ -267,6 +267,7 @@ export const zh: Record<TKey, string> = {
   "chat.phase.planning": "规划中……",
   "chat.phase.writing": "撰写中……",
   "chat.stop": "停止",
+  "chat.jumpToLatest": "回到最新",
 
   // 最近对话分组 + 筛选
   "recents.today": "今天",
@@ -337,6 +338,10 @@ export const zh: Record<TKey, string> = {
   "search.automations": "自动化",
   "search.newTask": "新对话",
   "search.noResults": "没有结果。",
+  "search.hintNav": "导航",
+  "search.hintOpen": "打开",
+  "search.hintClose": "关闭",
+  "search.count": "{count} 条结果",
   "search.close": "关闭",
 
   // Yanshi Atelier

@@ -1,4 +1,4 @@
-import { ArrowUp, Check, Copy, FileText, FolderOpen, MessageSquare, RefreshCw, Shield, Sparkles, Square, SquarePen, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, FileText, FolderOpen, MessageSquare, RefreshCw, Shield, Sparkles, Square, SquarePen, X } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { runtimeApi } from "../api/client";
@@ -97,11 +97,21 @@ export function ChatView({
     };
   }, [liveTurnInFlight, liveTurn?.id]);
 
-  // Keep the newest message in view while the chat is live.
+  // "Jump to latest" affordance: only auto-stick to the bottom when the user is already near it,
+  // so scrolling up to read history isn't yanked back down while a turn streams.
+  const [atBottom, setAtBottom] = useState(true);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  };
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [events.length, liveTurn?.status, turns.length, streamText]);
+    if (el && atBottom) el.scrollTop = el.scrollHeight;
+  }, [events.length, liveTurn?.status, turns.length, streamText, atBottom]);
 
   if (!activeRun) return <EmptyView title={t("project.tasks")} text={t("project.noTasks")} icon={<MessageSquare size={22} />} />;
 
@@ -126,7 +136,7 @@ export function ChatView({
         <span className={`status-pill ${liveTurn.status}`}>{statusLabel(liveTurn.status, t)}</span>
       </header>
 
-      <div className="chat-scroll" ref={scrollRef}>
+      <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>
         {turns.map((turn, index) => {
           const isLive = turn.id === liveTurn.id && liveTurnInFlight;
           const isLast = index === turns.length - 1;
@@ -148,6 +158,12 @@ export function ChatView({
           );
         })}
       </div>
+
+      {!atBottom && (
+        <button className="chat-jump" onClick={scrollToBottom} aria-label={t("chat.jumpToLatest")} title={t("chat.jumpToLatest")}>
+          <ChevronDown size={16} />
+        </button>
+      )}
 
       <footer className="chat-foot">
         <div className="chat-reply">

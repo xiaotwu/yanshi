@@ -2945,13 +2945,15 @@ select:focus-visible {
   outline-offset: 2px;
   border-radius: 8px;
 }
+/* Unified soft mint focus ring for text fields (matches the styled selects + chips). */
 input:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 /* The composer textarea already gets the focus glow from its container. */
-.composer textarea:focus-visible { outline: none; }
+.composer textarea:focus-visible { outline: none; box-shadow: none; }
 
 /* ── Product polish pass (Phase 4): sidebar / progress panel motion ───────────── */
 
@@ -3052,6 +3054,7 @@ textarea:focus-visible {
 
 /* ── Chat view (Claude-style conversation) ─────────────────────────────────────── */
 .chat-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -3061,6 +3064,25 @@ textarea:focus-visible {
   width: 100%;
   padding: 0 clamp(16px, 5vw, 48px);
 }
+/* Floating "jump to latest" — appears when the user scrolls up during a live chat. */
+.chat-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  animation: chat-in 0.2s ease;
+  z-index: 2;
+}
+.chat-jump:hover { color: var(--accent); border-color: var(--accent); }
 .chat-head {
   display: flex;
   align-items: center;
@@ -3977,3 +3999,38 @@ textarea:focus-visible {
   color: var(--text-muted);
   opacity: 0.85;
 }
+
+/* ── Search palette: active row + keyboard-hint footer ─────────────────────────── */
+.search-row.active { background: var(--accent-soft); color: var(--accent); }
+.search-row.active.primary { color: var(--accent); }
+.search-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.search-hints {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.search-hints kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-elevated);
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+.search-hint-sep { width: 1px; height: 11px; margin: 0 5px; background: var(--border); }
+.search-count { font-size: 11.5px; color: var(--text-muted); }

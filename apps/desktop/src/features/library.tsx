@@ -7,7 +7,7 @@ import { canRevealFiles, revealPath } from "../api/desktop";
 import { useContextMenu } from "../components/context-menu";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
-import { outputFileName, projectIcon } from "../lib/shared";
+import { FileTypeIcon, outputFileName, projectIcon } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type LibraryMode = "grouped" | "files";
@@ -193,7 +193,7 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
         onContextMenu={(event) => openContextMenu(event, itemActions(item))}
         title={item.path}
       >
-        {item.kind === "artifact" ? <Package size={15} /> : <FileText size={15} />}
+        <FileTypeIcon name={item.name} type={item.type} size={15} />
         <span className="library-name ellipsis">{item.name}</span>
         <span className="library-meta">
           {item.title && item.title !== item.name && <small className="ellipsis library-title">{item.title}</small>}

@@ -1,6 +1,23 @@
-import { Check } from "lucide-react";
+import { Check, File, FileCode, FileJson, FileText, Folder, Image as ImageIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import type { MacosPermissionStatus, RunSummary } from "@yanshi/shared";
+
+const CODE_EXTS = new Set([
+  "js", "jsx", "ts", "tsx", "py", "go", "rs", "java", "c", "h", "cpp", "rb", "php", "sh", "css", "html", "sql", "yml", "yaml", "toml",
+]);
+const DOC_EXTS = new Set(["md", "txt", "pdf", "doc", "docx", "rtf", "csv"]);
+const IMAGE_RE = /^(png|jpe?g|gif|webp|svg|bmp|heic|ico|avif)$/;
+
+/** Type-aware file icon for Library rows and the panel Files list. */
+export function FileTypeIcon({ name, type, size = 15 }: { name: string; type?: string; size?: number }) {
+  if (type === "folder" || type === "directory") return <Folder size={size} />;
+  const ext = (name.split(".").pop() ?? "").toLowerCase();
+  if (IMAGE_RE.test(ext)) return <ImageIcon size={size} />;
+  if (ext === "json") return <FileJson size={size} />;
+  if (CODE_EXTS.has(ext)) return <FileCode size={size} />;
+  if (DOC_EXTS.has(ext)) return <FileText size={size} />;
+  return <File size={size} />;
+}
 
 import { useT } from "../i18n";
 import type { TKey } from "../i18n/en";

@@ -337,13 +337,13 @@ export function App() {
     <div className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}${progressOpen ? " office-visible" : ""}`}>
       <header className="titlebar" data-tauri-drag-region>
         <div className="titlebar-left">
-          <button className="chrome-button" title={t("chrome.toggleSidebar")} onClick={() => setSidebarOpen((open) => !open)}>
+          <button className="chrome-button" title={t("chrome.toggleSidebar")} aria-label={t("chrome.toggleSidebar")} onClick={() => setSidebarOpen((open) => !open)}>
             <PanelLeft size={16} />
           </button>
-          <button className="chrome-button" title={t("chrome.back")} disabled={!canBack} onClick={goBack}>
+          <button className="chrome-button" title={t("chrome.back")} aria-label={t("chrome.back")} disabled={!canBack} onClick={goBack}>
             <ArrowLeft size={16} />
           </button>
-          <button className="chrome-button" title={t("chrome.forward")} disabled={!canForward} onClick={goForward}>
+          <button className="chrome-button" title={t("chrome.forward")} aria-label={t("chrome.forward")} disabled={!canForward} onClick={goForward}>
             <ArrowRight size={16} />
           </button>
         </div>
@@ -351,11 +351,12 @@ export function App() {
           <button
             className={`${atelierOpen ? "chrome-button active" : "chrome-button"}${agentsWorking ? " chrome-busy" : ""}`}
             title={t("chrome.toggleAtelier")}
+            aria-label={t("chrome.toggleAtelier")}
             onClick={() => setAtelierOpen(true)}
           >
             <Sparkles size={16} />
           </button>
-          <button className={progressOpen ? "chrome-button active" : "chrome-button"} title={t("chrome.toggleProgress")} onClick={toggleProgress}>
+          <button className={progressOpen ? "chrome-button active" : "chrome-button"} title={t("chrome.toggleProgress")} aria-label={t("chrome.toggleProgress")} onClick={toggleProgress}>
             <PanelRight size={16} />
           </button>
         </div>
@@ -366,21 +367,21 @@ export function App() {
           recents) is display:none in rail mode, so only the rail's icons remain focusable. */}
       <aside className={sidebarOpen ? "sidebar" : "sidebar rail"}>
           <nav>
-            <button className={view === "new-task" ? "nav-item active" : "nav-item"} onClick={() => navigate("new-task")} title={t("nav.newTask")}>
+            <button className={view === "new-task" ? "nav-item active" : "nav-item"} onClick={() => navigate("new-task")} title={t("nav.newTask")} aria-label={t("nav.newTask")}>
               <SquarePen size={18} />
               <span>{t("nav.newTask")}</span>
             </button>
-            <button className="nav-item" onClick={() => setSearchOpen(true)} title={t("nav.search")}>
+            <button className="nav-item" onClick={() => setSearchOpen(true)} title={t("nav.search")} aria-label={t("nav.search")}>
               <Search size={18} />
               <span>{t("nav.search")}</span>
             </button>
             {[...navItems, ...conditionalItems].map((item) => (
-              <button key={item.id} className={view === item.id ? "nav-item active" : "nav-item"} onClick={() => navigate(item.id)} title={t(item.key)}>
+              <button key={item.id} className={view === item.id ? "nav-item active" : "nav-item"} onClick={() => navigate(item.id)} title={t(item.key)} aria-label={t(item.key)}>
                 <item.icon size={18} />
                 <span>{t(item.key)}</span>
               </button>
             ))}
-            <button className={workshopOpen ? "nav-item active" : "nav-item"} onClick={() => setWorkshopOpen(true)} title={t("nav.workshop")}>
+            <button className={workshopOpen ? "nav-item active" : "nav-item"} onClick={() => setWorkshopOpen(true)} title={t("nav.workshop")} aria-label={t("nav.workshop")}>
               <LayoutGrid size={18} />
               <span>{t("nav.workshop")}</span>
             </button>

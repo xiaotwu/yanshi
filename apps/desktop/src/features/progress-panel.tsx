@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { canRevealFiles, revealPath } from "../api/desktop";
 import { useT } from "../i18n";
-import { PlanSteps, agentDisplayName, agentStateLabel, outputFileName, statusLabel } from "../lib/shared";
+import { FileTypeIcon, PlanSteps, agentDisplayName, agentStateLabel, outputFileName, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type PanelSection = "progress" | "files" | "approvals" | "agents";
@@ -149,7 +149,7 @@ export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
                       onClick={() => canRevealFiles() && void revealPath(path)}
                       title={path}
                     >
-                      <FolderOpen size={15} />
+                      <FileTypeIcon name={name} size={15} />
                       <span className="file-output-text">
                         <span className="ellipsis">{name}</span>
                         <small className="muted ellipsis">{title && title !== name ? `${title} · ${path}` : path}</small>

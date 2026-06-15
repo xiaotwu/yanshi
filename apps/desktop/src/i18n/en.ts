@@ -265,6 +265,7 @@ export const en = {
   "chat.phase.planning": "Planning…",
   "chat.phase.writing": "Writing…",
   "chat.stop": "Stop",
+  "chat.jumpToLatest": "Jump to latest",
 
   // Recents grouping + filter
   "recents.today": "Today",
@@ -335,6 +336,10 @@ export const en = {
   "search.automations": "Automations",
   "search.newTask": "New Chat",
   "search.noResults": "No results.",
+  "search.hintNav": "navigate",
+  "search.hintOpen": "open",
+  "search.hintClose": "close",
+  "search.count": "{count} results",
   "search.close": "Close",
 
   // Yanshi Atelier (the animated worker world; formerly "Live Office")
