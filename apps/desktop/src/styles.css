@@ -13,13 +13,15 @@
   --titlebar-control-size: 28px;
   --titlebar-gap: 6px;
   --titlebar-left-safe-area: 84px;
-  --background: #ffffff;
-  --surface: #f5f7f6;
+  /* Warm-neutral light surfaces: a whisper of warmth over clinical pure-white (not beige).
+     Elevated cards stay crisp white so they lift cleanly off the warm canvas. */
+  --background: #faf9f7;
+  --surface: #f1f0ec;
   --surface-elevated: #ffffff;
-  --border: #e4e7e6;
-  --text-primary: #14181a;
-  --text-secondary: #56616a;
-  --text-muted: #8b959c;
+  --border: #e7e4df;
+  --text-primary: #16191a;
+  --text-secondary: #586068;
+  --text-muted: #8c948f;
   --accent: #1faa6a;
   --accent-strong: #178c57;
   --accent-soft: #e6f6ee;
@@ -33,21 +35,28 @@
   --overlay: rgba(20, 26, 24, 0.34);
   --shadow: 0 18px 50px rgba(20, 30, 26, 0.1);
 
+  /* Type system: a clean sans for the UI, an elegant serif (with CJK serif fallbacks) reserved
+     for the hero/wordmark — a touch of Claude-Desktop refinement without a webfont dependency. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-display: ui-serif, "New York", "Iowan Old Style", Georgia, "Songti SC", "STSong",
+    "Noto Serif CJK SC", serif;
+
   color: var(--text-primary);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 :root[data-theme="dark"] {
-  --background: #0d0f10;
-  --surface: #16191b;
-  --surface-elevated: #1d2123;
-  --border: #2b3133;
-  --text-primary: #eef1f1;
-  --text-secondary: #aab4b9;
-  --text-muted: #79858b;
+  /* Warm-neutral near-black (R≈G≥B) instead of the cool blue-leaning dark — calmer, less clinical. */
+  --background: #0f0f0e;
+  --surface: #1a1a18;
+  --surface-elevated: #212220;
+  --border: #2f302d;
+  --text-primary: #f0f1ee;
+  --text-secondary: #b0b4ac;
+  --text-muted: #7f857c;
   --accent: #34d18a;
   --accent-strong: #29b475;
   --accent-soft: #16302a;
@@ -72,6 +81,39 @@ body {
   min-height: 680px;
   background: var(--background);
 }
+
+/* ── Visual polish pass: brand selection, focus rings, custom scrollbars ───────────
+   Small global refinements that make the whole app feel considered. Brand-tinted
+   selection + focus replace the default browser blue everywhere. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Pointer interactions shouldn't show the keyboard ring. */
+:focus:not(:focus-visible) { outline: none; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 38%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-track { background: transparent; }
 
 button,
 textarea,
@@ -159,9 +201,20 @@ nav {
 h1 {
   margin: 0 0 22px;
   text-align: center;
-  font-size: 34px;
-  font-weight: 760;
-  letter-spacing: 0;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 560;
+  letter-spacing: -0.015em;
+}
+
+/* Calm entrance for the empty-home hero (title + composer + examples ease up into place). */
+.center-stage .composer-wrap { animation: hero-rise 0.5s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+.center-stage .composer-wrap > * { animation: hero-rise 0.5s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+.center-stage .composer-wrap > *:nth-child(2) { animation-delay: 0.06s; }
+.center-stage .composer-wrap > *:nth-child(3) { animation-delay: 0.12s; }
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }
 
 h2 {
@@ -212,12 +265,17 @@ h3 {
 }
 
 .send-button {
-  background: var(--accent);
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: var(--on-accent);
+  box-shadow: 0 3px 12px var(--accent-glow);
+  transition: transform 0.14s cubic-bezier(0.3, 0.9, 0.4, 1.2), box-shadow 0.2s ease, filter 0.15s ease;
 }
+.send-button:not(:disabled):hover { filter: brightness(1.04); box-shadow: 0 4px 16px var(--accent-glow); }
+.send-button:not(:disabled):active { transform: scale(0.92); }
 
 .send-button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
+  box-shadow: none;
   cursor: default;
 }
 
@@ -462,12 +520,24 @@ h3 {
 
 .status-pill {
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 8px;
-  padding: 4px 9px;
+  padding: 4px 11px 4px 9px;
   border-radius: 999px;
   background: var(--surface);
   color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 560;
+}
+/* Leading status dot inherits the pill's text color for a tidy at-a-glance indicator. */
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
 }
 
 .status-pill.failed {
@@ -2205,9 +2275,9 @@ button.list-row {
 }
 .sidebar-section-label {
   padding: 6px 10px 2px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-muted);
   text-align: left;
@@ -2442,8 +2512,15 @@ button.list-row {
 }
 
 .modal-overlay { animation: overlay-fade 0.16s ease; }
-[data-fx="rich"] .modal-overlay { backdrop-filter: blur(6px); }
+/* Frosted glass behind floating surfaces — a touch of depth like Claude Desktop. */
+[data-fx="rich"] .modal-overlay { backdrop-filter: blur(10px) saturate(1.05); }
 .modal-surface { animation: modal-pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.15); }
+/* Layered elevation: a soft ambient shadow + a tight contact shadow + a hairline ring. */
+[data-fx="rich"] :where(.modal-surface) {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--surface-elevated) 80%, transparent) inset,
+    0 24px 70px -12px color-mix(in srgb, #000 28%, transparent),
+    0 8px 24px -8px color-mix(in srgb, #000 18%, transparent);
+}
 .plus-menu,
 .popover { animation: menu-pop 0.14s ease; }
 /* Fixed-placed panels are clamped to the viewport — fade only, so no transform overshoot
@@ -2995,7 +3072,107 @@ textarea:focus-visible {
 .chat-output-main { display: flex; flex-direction: column; min-width: 0; }
 .chat-output-main strong { font-size: 13px; }
 .chat-output-main small { font-size: 11px; max-width: 380px; }
-.chat-working { display: flex; align-items: center; gap: 8px; }
+.chat-working { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.chat-streaming { position: relative; }
+.stream-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  border-radius: 1px;
+  animation: cursor-blink 1s step-end infinite;
+}
+@keyframes cursor-blink { 50% { opacity: 0; } }
+.chat-stop {
+  align-self: flex-start;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.chat-stop:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ── Message hover actions (copy / regenerate) ─────────────────────────────────── */
+.chat-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.chat-msg.yanshi:hover .chat-actions,
+.chat-actions:focus-within { opacity: 1; }
+.chat-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.chat-actions button:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* ── Composer model chip + home example prompts ────────────────────────────────── */
+.composer-meta { display: flex; justify-content: flex-end; padding: 6px 4px 0; }
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.model-chip:not(:disabled):hover { color: var(--accent); border-color: var(--accent); }
+.home-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 18px;
+}
+.example-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.example-chip:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* ── Atelier live-work cue + idle queue note ───────────────────────────────────── */
+.chrome-button.chrome-busy { color: var(--accent); position: relative; }
+.chrome-button.chrome-busy::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent);
+  animation: busy-pulse 1.4s ease-out infinite;
+}
+@keyframes busy-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+.agent-idle { margin: 6px 0 0; font-size: 12.5px; }
 .working-dots { display: inline-flex; gap: 3px; }
 .working-dots i {
   width: 5px;
@@ -3011,18 +3188,132 @@ textarea:focus-visible {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 .chat-raw { align-self: stretch; }
-.chat-foot { padding: 10px 4px 16px; display: flex; justify-content: center; }
+.chat-turn { display: flex; flex-direction: column; gap: 14px; }
+.review-note { margin: 4px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+
+/* ── Markdown rendering for assistant answers ──────────────────────────────────── */
+.md { color: var(--text-primary); line-height: 1.55; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+/* Each block eases in once as it appears (new blocks during streaming animate as they arrive;
+   existing blocks keep their DOM node and don't re-animate). */
+.md > * { animation: md-block-in 0.34s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+@keyframes md-block-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .md > * { animation: none; } }
+.md-p { margin: 8px 0; white-space: pre-wrap; }
+.md-h { margin: 12px 0 6px; font-weight: 660; line-height: 1.3; }
+.md-list { margin: 8px 0; padding-left: 22px; display: grid; gap: 4px; }
+.md-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  background: var(--accent-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.md-pre {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.md-pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  white-space: pre;
+  background: none;
+  padding: 0;
+}
+.md a { color: var(--accent); text-decoration: underline; }
+
+/* ── Persistent follow-up composer (multi-turn chat) ───────────────────────────── */
+.chat-foot { padding: 10px 4px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.chat-reply {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  transition: border-color 0.15s ease;
+}
+.chat-reply:focus-within { border-color: var(--accent); }
+.chat-reply-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  resize: none;
+  max-height: 160px;
+  font: inherit;
+  color: var(--text-primary);
+  padding: 6px 0;
+  outline: none;
+}
+.chat-reply-send {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+.chat-reply-send:disabled { opacity: 0.4; cursor: default; }
+.chat-reply-send:not(:disabled):hover { filter: brightness(1.05); }
+.chat-cta {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.chat-cta:hover { background: var(--accent); color: #fff; }
 .chat-new {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
+  padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
 }
-.chat-new:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.chat-new:hover { color: var(--accent); }
+
+/* ── Global setup banner (provider not configured) ─────────────────────────────── */
+.setup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 9px 16px;
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.setup-banner button {
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.setup-banner button:hover { filter: brightness(1.05); }
 
 /* ── Sidebar recents: selected highlight ───────────────────────────────────────── */
 .recent-item.active { background: var(--accent-soft); }
@@ -3365,3 +3656,132 @@ textarea:focus-visible {
   background: var(--surface);
   color: var(--text-secondary);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════
+   Visual polish pass (designer): view entrance, hover lifts, refined nav + answer
+   identity. Additive — layered on top of the existing layout; reduced-motion safe.
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+/* Soft cross-fade as the main view changes (each view remounts, so this fires on switch). */
+.main-pane > section,
+.main-pane > div { animation: view-in 0.32s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Tactile hover lift for card- and chip-like surfaces (Claude-Desktop-style micro-feedback). */
+.example-chip,
+.model-chip,
+.chat-output-card,
+.integration-row,
+.list-row,
+.library-row {
+  transition: transform 0.16s cubic-bezier(0.3, 0.9, 0.4, 1.1), box-shadow 0.18s ease,
+    background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.example-chip:hover,
+.chat-output-card:hover,
+.integration-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.example-chip:active,
+.model-chip:active { transform: translateY(0) scale(0.98); }
+
+/* Send / primary round buttons get a gentle press + glow. */
+.chat-reply-send,
+.composer .icon-button:last-child {
+  transition: transform 0.14s cubic-bezier(0.3, 0.9, 0.4, 1.2), filter 0.15s ease, box-shadow 0.2s ease;
+}
+.chat-reply-send:not(:disabled):hover { box-shadow: 0 0 0 4px var(--accent-soft); }
+.chat-reply-send:not(:disabled):active { transform: scale(0.92); }
+
+/* Sidebar active item: a soft mint accent bar + smoother state. */
+.nav-item, .recent-item { position: relative; }
+.nav-item.active::before,
+.recent-item.active::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Assistant identity: a small Yanshi mark beside the author label, like Claude's avatar. */
+.chat-author-row { display: flex; align-items: center; gap: 7px; margin-bottom: 1px; }
+.yanshi-avatar {
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.yanshi-avatar svg { width: 12px; height: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .main-pane > section,
+  .main-pane > div,
+  .center-stage .composer-wrap,
+  .center-stage .composer-wrap > * { animation: none; }
+  .example-chip:hover,
+  .chat-output-card:hover,
+  .integration-row:hover { transform: none; }
+}
+
+/* ── Skeleton / shimmer loading states ─────────────────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  border-radius: 7px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--surface-elevated) 70%, transparent),
+    transparent
+  );
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+.skeleton-row { height: 13px; margin: 9px 0; }
+.skel-recent { margin: 4px 8px; height: 17px; border-radius: 8px; }
+.skel-lib-group { margin: 14px 0 6px; }
+.skel-lib-item { margin: 8px 0; height: 15px; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } }
+
+/* ── Warmer empty states ───────────────────────────────────────────────────────── */
+.empty-rich {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 64px 24px;
+  color: var(--text-muted);
+  text-align: center;
+  animation: view-in 0.4s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+.empty-rich .empty-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.empty-rich p { margin: 0; font-size: 13.5px; }

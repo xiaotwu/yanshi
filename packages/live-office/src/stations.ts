@@ -27,18 +27,20 @@ export type WorkerMovementReason =
   | "wander"
   | "return_home";
 
-/** Default office positions (x, z). Home stations + shared areas (spec §17). */
+/** Default office positions (x, z). Home stations + shared areas (spec §17). The six home
+ *  stations form a balanced 2×3 grid across the floor (7×5 plane) so workers read as spread
+ *  out rather than bunched in one corner; shared areas sit on the central band between rows. */
 export const DEFAULT_STATIONS: Record<StationId, [number, number]> = {
-  manager: [-2.4, -0.6],
-  browser: [-0.9, -1.3],
-  computer: [0.9, -1.3],
-  file: [2.4, -0.6],
-  reviewer: [0, 1.0],
-  terminal: [2.2, 1.2],
-  coffee: [-2.7, 1.4],
-  break: [2.8, -1.7],
-  rest: [-2.8, -1.7],
-  meeting: [0, -0.1],
+  manager: [-2.6, -1.5],
+  browser: [0, -1.5],
+  computer: [2.6, -1.5],
+  file: [-2.6, 1.5],
+  reviewer: [0, 1.5],
+  terminal: [2.6, 1.5],
+  coffee: [-3.1, 0],
+  rest: [-1.3, 0],
+  meeting: [1.3, 0],
+  break: [3.1, 0],
 };
 
 export const HOME_STATIONS: StationId[] = ["manager", "browser", "computer", "file", "reviewer", "terminal"];

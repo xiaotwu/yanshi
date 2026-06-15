@@ -370,7 +370,7 @@ function StationDesk({ role, position, dark }: { role: string; position: [number
 }
 
 function Furniture({ dark }: { dark: boolean }) {
-  const floor = dark ? "#1a1e20" : "#eef1f0";
+  const floor = dark ? "#1c1b19" : "#f0eeea";
   const padWork = dark ? "#23282b" : "#d9e4de";
   const padRest = dark ? "#2a2420" : "#e7ddd0";
   return (
@@ -434,8 +434,25 @@ function Scene({
 }) {
   return (
     <>
-      <ambientLight intensity={dark ? 0.7 : 1.15} />
-      <directionalLight castShadow position={[2, 5, 3]} intensity={dark ? 0.9 : 1.5} />
+      <ambientLight intensity={dark ? 0.62 : 1.05} />
+      {/* Warm key light with a tight, soft shadow camera sized to the 7×5 floor. */}
+      <directionalLight
+        castShadow
+        position={[2.6, 5.2, 3]}
+        intensity={dark ? 0.95 : 1.45}
+        color={dark ? "#cfe2ff" : "#fff4e2"}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-radius={6}
+        shadow-camera-near={1}
+        shadow-camera-far={16}
+        shadow-camera-left={-5}
+        shadow-camera-right={5}
+        shadow-camera-top={5}
+        shadow-camera-bottom={-5}
+      />
+      {/* Cool fill from the opposite side for gentle dimensional separation (no extra shadow). */}
+      <directionalLight position={[-3, 2.4, -2]} intensity={dark ? 0.3 : 0.45} color={dark ? "#3a4658" : "#dfe8ff"} />
       <Furniture dark={dark} />
       {furniture.map((item) => (
         <FurnitureMesh key={item.id} item={item} />
@@ -475,7 +492,7 @@ export function LiveOfficeScene({
       camera={{ position: cameraPosition, fov: compact ? 42 : 38 }}
       dpr={lowPower ? [0.75, 1] : [1, 1.5]}
       frameloop={reduceMotion ? "demand" : "always"}
-      shadows={!lowPower}
+      shadows={lowPower ? false : "soft"}
     >
       <FreeContextOnUnmount />
       <Suspense fallback={null}>
