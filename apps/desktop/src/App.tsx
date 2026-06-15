@@ -71,7 +71,13 @@ export function App() {
   const progressTouchedRef = useRef(false);
   const { hydrate, connectEvents, approvals, events, appSettings, runs, projects, setActiveProject, setActiveRun, saveAppSettings, createRun, deleteProject } =
     useRuntimeStore();
+  const runtimeStatus = useRuntimeStore((state) => state.status);
   const activeRunId = useRuntimeStore((state) => state.activeRunId);
+  const needsProvider = runtimeStatus?.missingRequirements?.includes("model_provider") ?? false;
+  const configureProvider = useCallback(() => setSettingsOpen("providers"), []);
+  // Live coupling cue: the Atelier button pulses while any worker is actually working.
+  const agentsWorking = useRuntimeStore((state) => state.liveAgents.some((agent) => agent.status === "working"));
+  const ready = useRuntimeStore((state) => state.ready);
   const developerEnabled = appSettings?.developerMode ?? false;
   const theme = appSettings?.theme ?? "system";
   const gpuAcceleration = appSettings?.gpuAcceleration ?? true;
@@ -324,7 +330,11 @@ export function App() {
           </button>
         </div>
         <div className="titlebar-right">
-          <button className={atelierOpen ? "chrome-button active" : "chrome-button"} title={t("chrome.toggleAtelier")} onClick={() => setAtelierOpen(true)}>
+          <button
+            className={`${atelierOpen ? "chrome-button active" : "chrome-button"}${agentsWorking ? " chrome-busy" : ""}`}
+            title={t("chrome.toggleAtelier")}
+            onClick={() => setAtelierOpen(true)}
+          >
             <Sparkles size={16} />
           </button>
           <button className={progressOpen ? "chrome-button active" : "chrome-button"} title={t("chrome.toggleProgress")} onClick={toggleProgress}>
@@ -380,7 +390,13 @@ export function App() {
 
             <div className="sidebar-section">
               <div className="sidebar-section-label">{t("nav.recents")}</div>
-              {recents.length === 0 ? (
+              {!ready ? (
+                <>
+                  {[68, 82, 56].map((width, index) => (
+                    <div key={index} className="skeleton skel-recent" style={{ width: `${width}%` }} />
+                  ))}
+                </>
+              ) : recents.length === 0 ? (
                 <div className="sidebar-empty muted">{t("project.noRuns")}</div>
               ) : (
                 recents.map((run) => {
@@ -408,10 +424,16 @@ export function App() {
       </aside>
 
       <main className="main-pane">
-        {view === "new-task" && <NewTaskView onRuns={() => navigate("runs")} />}
+        {needsProvider && (
+          <div className="setup-banner" role="status">
+            <span>{t("banner.providerSetup.text")}</span>
+            <button onClick={configureProvider}>{t("banner.providerSetup.action")}</button>
+          </div>
+        )}
+        {view === "new-task" && <NewTaskView onRuns={() => navigate("runs")} onOpenProviderSettings={configureProvider} />}
         {view === "projects" && <ProjectsView onOpenProject={openProject} />}
         {view === "project" && <ProjectHomeView onOpenTask={openTask} />}
-        {view === "runs" && <ChatView onNewChat={() => navigate("new-task")} />}
+        {view === "runs" && <ChatView onNewChat={() => navigate("new-task")} onConfigureProvider={configureProvider} progressOpen={progressOpen} />}
         {view === "library" && <LibraryView onOpenTask={openTask} />}
         {view === "approvals" && <ApprovalsView />}
         {view === "developer" && <DeveloperView />}
@@ -419,7 +441,7 @@ export function App() {
 
       {progressOpen && (
         <aside className="office-pane">
-          <ProgressPanel />
+          <ProgressPanel inChat={view === "runs"} />
         </aside>
       )}
       {atelierOpen && <AtelierModal onClose={() => setAtelierOpen(false)} />}

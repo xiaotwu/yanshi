@@ -188,6 +188,9 @@ export const zh: Record<TKey, string> = {
 
   // Composer
   "composer.title": "今天偃师能帮你做点什么？",
+  "home.example1": "总结这个工作区里的文件",
+  "home.example2": "用大白话解释什么是 AI 智能体",
+  "home.example3": "写一首关于秋天的短俳句",
   "composer.placeholder": "让偃师做任何事……",
   "composer.run": "运行",
   "composer.voice": "语音",
@@ -222,6 +225,57 @@ export const zh: Record<TKey, string> = {
   "tasks.artifact": "产物",
   "tasks.details": "详情",
   "tasks.risk": "风险：{level}",
+
+  // 运行状态（本地化的运行时内容）
+  "status.created": "排队中",
+  "status.running": "工作中",
+  "status.pending_approval": "等待审批",
+  "status.paused": "已暂停",
+  "status.completed": "已完成",
+  "status.failed": "已失败",
+  "status.cancelled": "已取消",
+
+  // 智能体角色名（本地化的运行时内容）
+  "agent.manager": "管理者",
+  "agent.browser": "浏览器",
+  "agent.computer": "电脑操作",
+  "agent.file": "文件",
+  "agent.reviewer": "审查员",
+  "agent.terminal": "终端",
+
+  // 智能体活动状态（本地化的运行时内容）
+  "agentState.idle": "空闲",
+  "agentState.working": "工作中",
+  "agentState.done": "已完成",
+  "agentState.failed": "已失败",
+  "agentState.busy": "忙碌",
+
+  // 已识别的阻塞（未配置模型供应商）——本地化且可操作
+  "chat.blocker.modelProvider": "请先连接一个模型供应商，偃师才能运行这个对话。",
+  "chat.blocker.configureProvider": "配置供应商",
+
+  // 审查遥测（显示在面板，而非对话中）
+  "review.title": "审查",
+  "review.passed": "已核对 {count} 项结果",
+  "review.failed": "发现未完成或失败的工作",
+
+  // 多轮对话
+  "chat.followUpPlaceholder": "回复偃师……",
+  "chat.send": "发送",
+
+  // 实时生成：阶段提示 + 停止
+  "chat.phase.planning": "规划中……",
+  "chat.phase.writing": "撰写中……",
+  "chat.stop": "停止",
+
+  // 消息操作
+  "chat.copy": "复制",
+  "chat.copied": "已复制",
+  "chat.regenerate": "重新生成",
+
+  // 全局设置引导条（未配置供应商）
+  "banner.providerSetup.text": "偃师需要一个模型供应商才能运行对话。",
+  "banner.providerSetup.action": "连接供应商",
 
   // Automations
   "automation.name": "名称",
@@ -313,6 +367,7 @@ export const zh: Record<TKey, string> = {
   "progress.status": "状态",
   "progress.plan": "计划",
   "progress.queue": "队列",
+  "progress.allIdle": "所有智能体空闲",
   "progress.noFiles": "暂无文件。",
   "progress.noArtifacts": "暂无产物。",
   "progress.noApprovals": "暂无待审批项。",
@@ -501,7 +556,7 @@ export const zh: Record<TKey, string> = {
   "providers.status.available": "可用",
   "providers.status.needsSetup": "需要配置",
   "providers.status.notImplemented": "尚未实现",
-  "providers.status.customEndpoint": "需自定义地址",
+  "providers.status.customEndpoint": "支持 · 需填写地址",
   "providers.status.configured": "已配置",
   "providers.status.notConfigured": "未配置",
   "providers.cap.reasoning": "推理",

@@ -1,6 +1,7 @@
 import {
   Check,
   ChevronRight,
+  Cpu,
   FolderMinus,
   FolderPlus,
   Gauge,
@@ -53,10 +54,24 @@ function PermissionIcon({ mode, size = 17 }: { mode: PermissionMode; size?: numb
  * Add-to-Project menu entry is hidden. Otherwise the project is chosen via the "+" menu —
  * "Standalone" is not a listed option: no selection simply means a standalone task.
  */
-export function Composer({ lockedProject = null, onSubmitted }: { lockedProject?: ProjectSummary | null; onSubmitted: () => void }) {
+export function Composer({
+  lockedProject = null,
+  onSubmitted,
+  initialText,
+  onOpenProviderSettings,
+}: {
+  lockedProject?: ProjectSummary | null;
+  onSubmitted: () => void;
+  initialText?: string;
+  onOpenProviderSettings?: () => void;
+}) {
   const { t } = useT();
   const [task, setTask] = useState("");
-  const { createRun, loading, appSettings, projects } = useRuntimeStore();
+  const { createRun, loading, appSettings, projects, providerSettings } = useRuntimeStore();
+  // Prefill from an example prompt chip (only when it changes to a non-empty value).
+  useEffect(() => {
+    if (initialText) setTask(initialText);
+  }, [initialText]);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(appSettings?.permissionModeDefault ?? "default");
   const [reasoning, setReasoning] = useState<Reasoning>(appSettings?.reasoning ?? "medium");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -313,6 +328,18 @@ export function Composer({ lockedProject = null, onSubmitted }: { lockedProject?
           event.target.value = "";
         }}
       />
+      {providerSettings?.model && (
+        <div className="composer-meta">
+          <button
+            className="model-chip"
+            onClick={onOpenProviderSettings}
+            disabled={!onOpenProviderSettings}
+            title={providerSettings.baseUrl}
+          >
+            <Cpu size={12} /> {providerSettings.model}
+          </button>
+        </div>
+      )}
       {(planFirst || tools.length > 0 || attachments.length > 0 || (!lockedProject && selectedProject)) && (
         <div className="composer-flags">
           {!lockedProject && selectedProject && (

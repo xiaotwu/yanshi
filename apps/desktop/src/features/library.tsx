@@ -103,6 +103,7 @@ function loadCollapsed(): Record<string, boolean> {
 export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => void }) {
   const { t } = useT();
   const { projects, runs } = useRuntimeStore();
+  const ready = useRuntimeStore((state) => state.ready);
   const [mode, setMode] = useState<LibraryMode>("grouped");
   const [sort, setSort] = useState<LibrarySort>("newest");
   const [filter, setFilter] = useState("");
@@ -278,9 +279,20 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
         </div>
       </header>
 
-      {mode === "grouped" ? (
+      {!ready ? (
+        <div className="library-groups" aria-hidden>
+          {[0, 1].map((group) => (
+            <div key={group} className="library-group">
+              <div className="skeleton skel-lib-group" style={{ width: "32%", height: 16 }} />
+              {[78, 64, 70].map((width, item) => (
+                <div key={item} className="skeleton skel-lib-item" style={{ width: `${width}%`, marginLeft: 18 }} />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : mode === "grouped" ? (
         groupedSections.length === 0 ? (
-          <p className="transcript-empty">{t("library.empty")}</p>
+          <div className="empty-rich"><span className="empty-icon"><Package size={20} /></span><p>{t("library.empty")}</p></div>
         ) : (
           <div className="library-groups">
             {groupedSections.map((section) => {
@@ -349,7 +361,7 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
           </div>
         )
       ) : flatItems.length === 0 ? (
-        <p className="transcript-empty">{t("library.empty")}</p>
+        <div className="empty-rich"><span className="empty-icon"><Package size={20} /></span><p>{t("library.empty")}</p></div>
       ) : (
         <div className="library-flat">{flatItems.map(renderItem)}</div>
       )}

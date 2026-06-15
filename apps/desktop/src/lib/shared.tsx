@@ -1,7 +1,11 @@
 import { Fragment } from "react";
-import type { MacosPermissionStatus } from "@yanshi/shared";
+import type { MacosPermissionStatus, RunSummary } from "@yanshi/shared";
 
 import { useT } from "../i18n";
+import type { TKey } from "../i18n/en";
+
+/** The translator returned by `useT()`. */
+export type Translator = (key: TKey, vars?: Record<string, string | number>) => string;
 
 // "runs" is the internal task-detail surface (reached from Recents / project task lists);
 // the user-facing top-level nav shows Library instead of a technical Runs page.
@@ -49,9 +53,60 @@ export const AGENT_LABELS: Record<string, string> = {
   agent_reviewer: "Reviewer",
 };
 
-export function agentLabel(agentId: unknown, brand = "Yanshi"): string {
-  if (typeof agentId === "string" && agentId in AGENT_LABELS) return AGENT_LABELS[agentId];
-  return brand;
+const AGENT_KEYS: Record<string, TKey> = {
+  agent_manager: "agent.manager",
+  agent_browser: "agent.browser",
+  agent_computer: "agent.computer",
+  agent_file: "agent.file",
+  agent_terminal: "agent.terminal",
+  agent_reviewer: "agent.reviewer",
+};
+
+/**
+ * Display name for an agent. When a translator is supplied the role name is localized;
+ * the no-translator form (used in tests/utilities) falls back to the English label.
+ */
+export function agentLabel(agentId: unknown, t?: Translator): string {
+  if (typeof agentId === "string" && agentId in AGENT_KEYS) {
+    return t ? t(AGENT_KEYS[agentId]) : AGENT_LABELS[agentId];
+  }
+  return t ? t("brand") : "Yanshi";
+}
+
+/** Localized display name for an agent in lists: core roles use the localized role label;
+ *  user-renamed/custom agents keep their own name. */
+export function agentDisplayName(agentId: string, fallbackName: string, t: Translator): string {
+  return agentId in AGENT_KEYS ? t(AGENT_KEYS[agentId]) : fallbackName;
+}
+
+const STATUS_KEYS: Record<RunSummary["status"], TKey> = {
+  created: "status.created",
+  running: "status.running",
+  pending_approval: "status.pending_approval",
+  paused: "status.paused",
+  completed: "status.completed",
+  failed: "status.failed",
+  cancelled: "status.cancelled",
+};
+
+/** Localized label for a run status (replaces the raw English `status.replace("_"," ")`). */
+export function statusLabel(status: RunSummary["status"], t: Translator): string {
+  const key = STATUS_KEYS[status];
+  return key ? t(key) : status.replace("_", " ");
+}
+
+const AGENT_STATE_KEYS: Record<string, TKey> = {
+  idle: "agentState.idle",
+  working: "agentState.working",
+  done: "agentState.done",
+  failed: "agentState.failed",
+  busy: "agentState.busy",
+};
+
+/** Localized label for an agent's bare activity state (idle/working/done/…). */
+export function agentStateLabel(state: string, t: Translator): string {
+  const key = AGENT_STATE_KEYS[state];
+  return key ? t(key) : state;
 }
 
 const DEFAULT_GROUP_LABELS = { today: "Today", standalone: "Standalone", project: "Project" };
@@ -116,7 +171,7 @@ export function TranscriptMessage({ event, developerMode }: { event: import("@ya
   const hasDetails = entries.length > 0 || developerMode;
   return (
     <article className={event.payload.error ? "event-card error" : "event-card"}>
-      <span>{agentLabel(event.payload.agentId ?? event.agentId, t("brand"))}</span>
+      <span>{agentLabel(event.payload.agentId ?? event.agentId, t)}</span>
       <p>{eventSummary(event.payload)}</p>
       {hasDetails && (
         <details className="msg-details">

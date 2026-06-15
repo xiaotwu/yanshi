@@ -94,6 +94,7 @@ export const runtimeApi = {
     projectId?: string | null,
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
+    parentRunId?: string | null,
   ) =>
     request<RunSummary>("/runs", {
       method: "POST",
@@ -103,6 +104,7 @@ export const runtimeApi = {
         ...(projectId ? { projectId } : {}),
         ...(planFirst ? { planFirst } : {}),
         ...(reasoning ? { reasoning } : {}),
+        ...(parentRunId ? { parentRunId } : {}),
       }),
     }),
   projectFiles: (projectId: string) => request<ProjectFilesResult>(`/projects/${projectId}/files`),
@@ -160,6 +162,12 @@ export const runtimeApi = {
       method: "POST",
       body: "{}",
     }),
+  cancelRun: (runId: string) =>
+    request<RunSummary>(`/runs/${runId}/cancel`, {
+      method: "POST",
+      body: "{}",
+    }),
+  runPartial: (runId: string) => request<{ text: string; done: boolean }>(`/runs/${runId}/partial`),
   approvals: () => request<ApprovalSummary[]>("/approvals"),
   agentTasks: (filters?: { runId?: string | null; projectId?: string | null; agentId?: string | null }) => {
     const params = new URLSearchParams();

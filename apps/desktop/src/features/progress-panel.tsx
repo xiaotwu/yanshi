@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { canRevealFiles, revealPath } from "../api/desktop";
 import { useT } from "../i18n";
-import { outputFileName } from "../lib/shared";
+import { agentDisplayName, agentStateLabel, outputFileName, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type PanelSection = "progress" | "files" | "approvals" | "agents";
@@ -21,21 +21,46 @@ const STATUS_TONE: Record<string, string> = {
  * Files (the user-facing Artifacts concept is gone — artifact records surface as file cards,
  * with a Web source link when the metadata carries a URL). No raw logs in normal mode.
  */
-export function ProgressPanel() {
+export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
   const { t } = useT();
   const { runs, activeRunId, liveAgents, approvals, events, decideApproval } = useRuntimeStore();
   const [section, setSection] = useState<PanelSection>("progress");
-  const run = runs.find((item) => item.id === activeRunId) ?? runs[0];
+  // The panel is contextual to the open chat. Outside a chat (new chat, Library, …) it must not
+  // bleed the last run's status/plan/files — it shows its idle/empty state instead.
+  const run = inChat ? runs.find((item) => item.id === activeRunId) ?? null : null;
   const developer = useRuntimeStore((state) => state.appSettings?.developerMode ?? false);
 
-  // Generated outputs = real artifact events presented as files.
-  const outputs = events.filter((entry) => entry.event.type === "artifact.created");
-  const fileOutputs = outputs.filter((entry) => typeof entry.event.payload.path === "string");
+  // Generated outputs for the active chat = its real artifact events presented as files.
+  const outputs = events.filter(
+    (entry) => entry.event.type === "artifact.created" && (!run || entry.event.runId === run.id),
+  );
+  const fileOutputs = run ? outputs.filter((entry) => typeof entry.event.payload.path === "string") : [];
+  const runApprovals = run ? approvals.filter((approval) => approval.runId === run.id) : [];
+
+  // Latest reviewer telemetry for the active chat (routed here out of the conversation). Built
+  // from structured output so it is localized rather than echoing the runtime's English string.
+  const reviewerEvent = run
+    ? [...events].reverse().find(
+        (entry) =>
+          entry.event.runId === run.id &&
+          entry.event.type === "observation.created" &&
+          entry.event.payload.type === "ReviewerObservation",
+      )
+    : undefined;
+  const reviewNote = (() => {
+    if (!reviewerEvent) return null;
+    const output = (reviewerEvent.event.payload.structuredOutput ?? {}) as Record<string, unknown>;
+    if (output.qualityPassed === false || Array.isArray(output.failedAgentTasks) && (output.failedAgentTasks as unknown[]).length > 0) {
+      return t("review.failed");
+    }
+    const completed = Array.isArray(output.completedAgentTasks) ? (output.completedAgentTasks as unknown[]).length : 0;
+    return t("review.passed", { count: completed });
+  })();
 
   const sections: Array<{ id: PanelSection; label: string; badge?: number }> = [
     { id: "progress", label: t("progress.tabProgress") },
     { id: "files", label: t("progress.tabFiles"), badge: fileOutputs.length || undefined },
-    { id: "approvals", label: t("progress.tabApprovals"), badge: approvals.length || undefined },
+    { id: "approvals", label: t("progress.tabApprovals"), badge: runApprovals.length || undefined },
     { id: "agents", label: t("progress.tabAgents") },
   ];
 
@@ -61,7 +86,7 @@ export function ProgressPanel() {
             <div className="progress-stack">
               <div className="progress-run">
                 <span className="muted">{t("progress.status")}</span>
-                <span className={`status-pill ${STATUS_TONE[run.status] ?? ""}`}>{run.status.replace("_", " ")}</span>
+                <span className={`status-pill ${STATUS_TONE[run.status] ?? ""}`}>{statusLabel(run.status, t)}</span>
               </div>
               <div className="progress-task">{run.task}</div>
               {run.plan.length > 0 && (
@@ -74,18 +99,32 @@ export function ProgressPanel() {
                   </ol>
                 </div>
               )}
+              {reviewNote && (
+                <div className="progress-section">
+                  <span className="muted">{t("review.title")}</span>
+                  <p className="review-note">{reviewNote}</p>
+                </div>
+              )}
               <div className="progress-section">
                 <span className="muted">{t("progress.queue")}</span>
-                <div className="agent-rows">
-                  {liveAgents.map((agent) => (
-                    <div key={agent.id} className="agent-row">
-                      <span className="agent-dot" style={{ background: agent.accent }} />
-                      <span className="agent-name">{agent.name}</span>
-                      <span className="agent-state muted">{agent.currentTask ?? agent.status}</span>
-                      {agent.queueCount > 0 && <b>{agent.queueCount}</b>}
+                {(() => {
+                  // At rest the full roster is noise — show only agents that are actually busy,
+                  // and a compact "all idle" line otherwise. The full roster lives in Agents.
+                  const active = liveAgents.filter((agent) => agent.status !== "idle" || agent.queueCount > 0);
+                  if (active.length === 0) return <p className="agent-idle muted">{t("progress.allIdle")}</p>;
+                  return (
+                    <div className="agent-rows">
+                      {active.map((agent) => (
+                        <div key={agent.id} className="agent-row">
+                          <span className="agent-dot" style={{ background: agent.accent }} />
+                          <span className="agent-name">{agentDisplayName(agent.id, agent.name, t)}</span>
+                          <span className="agent-state muted">{agent.currentTask ?? agentStateLabel(agent.status, t)}</span>
+                          {agent.queueCount > 0 && <b>{agent.queueCount}</b>}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
             </div>
           ) : (
@@ -133,11 +172,11 @@ export function ProgressPanel() {
         )}
 
         {section === "approvals" && (
-          approvals.length === 0 ? (
+          runApprovals.length === 0 ? (
             <p className="transcript-empty">{t("progress.noApprovals")}</p>
           ) : (
             <div className="progress-list">
-              {approvals.map((approval) => (
+              {runApprovals.map((approval) => (
                 <div key={approval.id} className="approval-mini">
                   <div className="approval-mini-head">
                     <Shield size={14} /> {approval.request}
@@ -161,8 +200,8 @@ export function ProgressPanel() {
             {liveAgents.map((agent) => (
               <div key={agent.id} className="agent-row">
                 <span className="agent-dot" style={{ background: agent.accent }} />
-                <span className="agent-name">{agent.name}</span>
-                <span className="agent-state muted">{agent.currentTask ?? agent.status}</span>
+                <span className="agent-name">{agentDisplayName(agent.id, agent.name, t)}</span>
+                <span className="agent-state muted">{agent.currentTask ?? agentStateLabel(agent.status, t)}</span>
                 {agent.queueCount > 0 && <b>{agent.queueCount}</b>}
               </div>
             ))}

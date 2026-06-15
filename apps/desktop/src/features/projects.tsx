@@ -10,7 +10,7 @@ import { useDismiss, useFloatingPanel } from "../lib/floating";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
 import type { TKey } from "../i18n/en";
-import { BEHAVIOR_OPTIONS, eventSummary, projectColor, projectIcon } from "../lib/shared";
+import { BEHAVIOR_OPTIONS, eventSummary, projectColor, projectIcon, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 import { AutomationsPanel } from "./automations";
 import { LiveOfficeScene } from "./live-office";
@@ -195,7 +195,7 @@ export function ProjectHomeView({ onOpenTask }: { onOpenTask: (runId: string) =>
               .map((run) => (
                 <button key={run.id} className="list-row" onClick={() => onOpenTask(run.id)}>
                   <strong className="ellipsis">{run.task}</strong>
-                  <span>{run.status.replace("_", " ")}</span>
+                  <span>{statusLabel(run.status, t)}</span>
                 </button>
               ))}
           </div>

@@ -48,6 +48,8 @@ interface RuntimeStore {
   agentInstances: AgentInstanceSummary[];
   officeState: LiveOfficeStateSummary | null;
   loading: boolean;
+  /** False until the first hydrate resolves — drives initial skeleton/shimmer states. */
+  ready: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
   createRun: (
@@ -56,7 +58,10 @@ interface RuntimeStore {
     projectId?: string | null,
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
+    parentRunId?: string | null,
   ) => Promise<void>;
+  /** Continue the currently-open chat with a follow-up turn (threaded to the active run). */
+  continueChat: (task: string) => Promise<void>;
   createProject: (name: string, description?: string, settings?: Record<string, unknown>) => Promise<string | undefined>;
   updateProject: (projectId: string, update: { name?: string; description?: string; settings?: Record<string, unknown> }) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
@@ -66,6 +71,7 @@ interface RuntimeStore {
   setWorkshopPackEnabled: (packId: string, enabled: boolean) => Promise<void>;
   decideApproval: (approvalId: string, decision: "approved" | "denied") => Promise<void>;
   pauseAllRuns: () => Promise<void>;
+  cancelRun: (runId: string) => Promise<void>;
   restartRuntime: () => Promise<void>;
   refreshMacosPermissions: () => Promise<void>;
   saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<void>;
@@ -258,6 +264,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   agentInstances: [],
   officeState: null,
   loading: false,
+  ready: false,
   error: null,
 
   hydrate: async () => {
@@ -299,20 +306,21 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         activeProjectId,
         activeRunId: get().activeRunId ?? runs[0]?.id ?? null,
         loading: false,
+        ready: true,
       });
     } catch (error) {
       reportError("YANSHI_RUNTIME_001", error);
-      set({ error: error instanceof Error ? error.message : "Runtime unavailable.", loading: false });
+      set({ error: error instanceof Error ? error.message : "Runtime unavailable.", loading: false, ready: true });
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
       set({ desktopStatus, macosPermissions });
     }
   },
 
-  createRun: async (task, permissionMode, projectId, planFirst, reasoning) => {
+  createRun: async (task, permissionMode, projectId, planFirst, reasoning, parentRunId) => {
     set({ loading: true, error: null });
     try {
       const previousProjectId = get().activeProjectId;
-      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning);
+      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning, parentRunId);
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
       const nextProjectId = projectId === undefined ? previousProjectId : (projectId ?? null);
       set({
@@ -332,6 +340,15 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Could not create run.", loading: false });
     }
+  },
+
+  continueChat: async (task) => {
+    const state = get();
+    const parent = state.runs.find((item) => item.id === state.activeRunId);
+    if (!parent) return;
+    // Follow-up turn: same project, threaded to the active run so the runtime carries
+    // the prior conversation into the new turn's synthesis.
+    await state.createRun(task, "default", parent.projectId ?? null, false, undefined, parent.id);
   },
 
   createProject: async (name, description, settings) => {
@@ -437,6 +454,16 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     } catch (error) {
       reportError("YANSHI_RUNTIME_001", error);
       set({ error: error instanceof Error ? error.message : "Could not decide approval.", loading: false });
+    }
+  },
+
+  cancelRun: async (runId) => {
+    try {
+      await runtimeApi.cancelRun(runId);
+      const runs = await runtimeApi.runs(get().activeProjectId);
+      set({ runs });
+    } catch (error) {
+      reportError("YANSHI_RUNTIME_001", error);
     }
   },
 

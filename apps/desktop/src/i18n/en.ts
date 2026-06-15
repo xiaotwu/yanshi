@@ -186,6 +186,9 @@ export const en = {
 
   // Composer
   "composer.title": "How can Yanshi help you today?",
+  "home.example1": "Summarize the files in this workspace",
+  "home.example2": "Explain what an AI agent is, in plain words",
+  "home.example3": "Write a short haiku about autumn",
   "composer.placeholder": "Ask Yanshi to do anything...",
   "composer.run": "Run",
   "composer.voice": "Voice",
@@ -220,6 +223,57 @@ export const en = {
   "tasks.artifact": "Artifact",
   "tasks.details": "Details",
   "tasks.risk": "{level} risk",
+
+  // Run status labels (localized runtime content)
+  "status.created": "Queued",
+  "status.running": "Working",
+  "status.pending_approval": "Awaiting approval",
+  "status.paused": "Paused",
+  "status.completed": "Completed",
+  "status.failed": "Failed",
+  "status.cancelled": "Cancelled",
+
+  // Agent role names (localized runtime content)
+  "agent.manager": "Manager",
+  "agent.browser": "Browser",
+  "agent.computer": "Computer",
+  "agent.file": "File",
+  "agent.reviewer": "Reviewer",
+  "agent.terminal": "Terminal",
+
+  // Agent activity states (localized runtime content)
+  "agentState.idle": "Idle",
+  "agentState.working": "Working",
+  "agentState.done": "Done",
+  "agentState.failed": "Failed",
+  "agentState.busy": "Busy",
+
+  // Recognized blocker (model provider not configured) — localized + actionable
+  "chat.blocker.modelProvider": "Connect a model provider before Yanshi can run this chat.",
+  "chat.blocker.configureProvider": "Configure provider",
+
+  // Reviewer telemetry (shown in the panel, not the conversation)
+  "review.title": "Review",
+  "review.passed": "Checked {count} agent result(s)",
+  "review.failed": "Found incomplete or failed work",
+
+  // Multi-turn chat
+  "chat.followUpPlaceholder": "Reply to Yanshi…",
+  "chat.send": "Send",
+
+  // Live generation: phase indicator + stop
+  "chat.phase.planning": "Planning…",
+  "chat.phase.writing": "Writing…",
+  "chat.stop": "Stop",
+
+  // Message actions
+  "chat.copy": "Copy",
+  "chat.copied": "Copied",
+  "chat.regenerate": "Regenerate",
+
+  // Global setup banner (provider not configured)
+  "banner.providerSetup.text": "Yanshi needs a model provider to run chats.",
+  "banner.providerSetup.action": "Connect a provider",
 
   // Automations
   "automation.name": "Name",
@@ -312,6 +366,7 @@ export const en = {
   "progress.status": "Status",
   "progress.plan": "Plan",
   "progress.queue": "Queue",
+  "progress.allIdle": "All agents idle",
   "progress.noFiles": "No files.",
   "progress.noArtifacts": "No artifacts yet.",
   "progress.noApprovals": "No approvals pending.",
@@ -502,7 +557,7 @@ export const en = {
   "providers.status.available": "Available",
   "providers.status.needsSetup": "Needs setup",
   "providers.status.notImplemented": "Not implemented yet",
-  "providers.status.customEndpoint": "Custom endpoint required",
+  "providers.status.customEndpoint": "Supported · add endpoint",
   "providers.status.configured": "Configured",
   "providers.status.notConfigured": "Not configured",
   "providers.cap.reasoning": "Reasoning",
