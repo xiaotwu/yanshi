@@ -118,8 +118,33 @@ body {
 button,
 textarea,
 input,
+/* Unified select control: custom chevron + border/focus so it matches the rest of the UI
+   instead of rendering OS chrome. Chip-wrapped selects opt out below. */
 select {
   font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 7px 30px 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background-color: var(--surface-elevated);
+  color: var(--text-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c948f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+select:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+/* Chip- and inline-wrapped selects keep their own borderless chrome. */
+.select-chip select,
+.inline-select select {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-image: none;
+  background-color: transparent;
 }
 
 button {
@@ -840,9 +865,21 @@ pre {
 .empty-view {
   display: grid;
   place-content: center;
+  justify-items: center;
   gap: 8px;
   min-height: calc(100vh - 56px);
   text-align: center;
+  animation: view-in 0.4s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+.empty-view-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text-muted);
 }
 
 .empty-view p {
@@ -3213,6 +3250,41 @@ textarea:focus-visible {
   border-radius: 5px;
   padding: 1px 5px;
 }
+.md-codeblock {
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.md-codeblock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+}
+.md-lang {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  color: var(--text-muted);
+}
+.md-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.md-copy:hover { background: var(--accent-soft); color: var(--accent); }
+.md-codeblock .md-pre { margin: 0; border: 0; border-radius: 0; background: transparent; }
 .md-pre {
   margin: 10px 0;
   padding: 12px 14px;
@@ -3330,16 +3402,47 @@ textarea:focus-visible {
 .workshop-body .agent-fields { gap: 12px; }
 
 /* ── Right panel: compact dropdown, no chrome duplication ──────────────────────── */
-.panel-select {
-  margin: 12px 14px 4px;
-  padding: 7px 11px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
+/* Right-panel segmented tabs (replaces the section <select>). */
+.panel-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 10px 12px 6px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface);
+}
+.panel-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 560;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+.panel-tab:hover { color: var(--text-primary); }
+.panel-tab.active {
   background: var(--surface-elevated);
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
+.panel-tab-badge {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.progress-body { animation: view-in 0.22s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) { .progress-body { animation: none; } }
 .file-output { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .progress-item-main {
   display: flex;
@@ -3785,3 +3888,77 @@ textarea:focus-visible {
   color: var(--text-muted);
 }
 .empty-rich p { margin: 0; font-size: 13.5px; }
+
+/* ── Plan stepper (vertical, connectors, number/check badges) ──────────────────── */
+.plan-steps {
+  list-style: none;
+  margin: 8px 0 2px;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.plan-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  padding-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.plan-step:last-child { padding-bottom: 0; }
+/* Connector line between badges. */
+.plan-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 20px;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--border);
+}
+.plan-badge {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.plan-steps.done .plan-badge {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.plan-steps.done .plan-step:not(:last-child)::before { background: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.plan-step-text { padding-top: 2px; line-height: 1.4; }
+
+/* ── Recents: inline filter + day-bucket groups ────────────────────────────────── */
+.recent-filter {
+  margin: 2px 8px 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.recent-filter:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.recent-filter::placeholder { color: var(--text-muted); }
+.recent-group + .recent-group { margin-top: 8px; }
+.recent-group-label {
+  padding: 2px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.85;
+}

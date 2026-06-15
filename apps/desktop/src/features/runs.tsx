@@ -1,11 +1,11 @@
-import { ArrowUp, Check, Copy, FileText, FolderOpen, RefreshCw, Shield, Sparkles, Square, SquarePen, X } from "lucide-react";
+import { ArrowUp, Check, Copy, FileText, FolderOpen, MessageSquare, RefreshCw, Shield, Sparkles, Square, SquarePen, X } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { runtimeApi } from "../api/client";
 import { canRevealFiles, revealPath } from "../api/desktop";
 import { Markdown } from "../components/markdown";
 import { useT } from "../i18n";
-import { EmptyView, agentLabel, eventSummary, projectIcon, statusLabel } from "../lib/shared";
+import { EmptyView, PlanSteps, agentLabel, eventSummary, projectIcon, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 export const TRANSCRIPT_EVENT_TYPES = new Set(["observation.created", "artifact.created"]);
@@ -103,7 +103,7 @@ export function ChatView({
     if (el) el.scrollTop = el.scrollHeight;
   }, [events.length, liveTurn?.status, turns.length, streamText]);
 
-  if (!activeRun) return <EmptyView title={t("project.tasks")} text={t("project.noTasks")} />;
+  if (!activeRun) return <EmptyView title={t("project.tasks")} text={t("project.noTasks")} icon={<MessageSquare size={22} />} />;
 
   const project = activeRun.projectId ? projects.find((p) => p.id === activeRun.projectId) : null;
 
@@ -234,11 +234,7 @@ function ChatTurn({
       {showPlan && turn.plan.length > 0 && (
         <details className="chat-plan">
           <summary>{t("tasks.plan", { count: turn.plan.length })}</summary>
-          <ol>
-            {turn.plan.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
+          <PlanSteps steps={turn.plan} done={turn.status === "completed"} />
         </details>
       )}
 

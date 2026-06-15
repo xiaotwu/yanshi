@@ -1,4 +1,5 @@
-import { Fragment } from "react";
+import { Check } from "lucide-react";
+import { Fragment, type ReactNode } from "react";
 import type { MacosPermissionStatus, RunSummary } from "@yanshi/shared";
 
 import { useT } from "../i18n";
@@ -35,12 +36,31 @@ export function ProjectGlyph({ project, size = "sm" }: { project: { settings?: R
   );
 }
 
-export function EmptyView({ title, text }: { title: string; text: string }) {
+export function EmptyView({ title, text, icon }: { title: string; text: string; icon?: ReactNode }) {
   return (
     <section className="empty-view">
+      {icon && <span className="empty-view-icon">{icon}</span>}
       <h2>{title}</h2>
       <p>{text}</p>
     </section>
+  );
+}
+
+/**
+ * Plan rendered as a vertical stepper with connectors. Honest about state: when the run has
+ * completed (`done`), steps show a check; otherwise numbered badges (we don't fake per-step
+ * "active" state the runtime doesn't track).
+ */
+export function PlanSteps({ steps, done = false }: { steps: string[]; done?: boolean }) {
+  return (
+    <ol className={done ? "plan-steps done" : "plan-steps"}>
+      {steps.map((step, index) => (
+        <li key={index} className="plan-step">
+          <span className="plan-badge">{done ? <Check size={11} /> : index + 1}</span>
+          <span className="plan-step-text">{step}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

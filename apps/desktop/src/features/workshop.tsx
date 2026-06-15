@@ -84,7 +84,10 @@ export function WorkshopInstalled() {
       {result && <p className="muted">{result}</p>}
       <div className="event-feed">
         {workshopPacks.length === 0 ? (
-          <p className="transcript-empty">{t("workshop.noPacks")}</p>
+          <div className="empty-rich">
+            <span className="empty-icon"><Archive size={20} /></span>
+            <p>{t("workshop.noPacks")}</p>
+          </div>
         ) : (
           workshopPacks.map((pack) => (
             <article key={pack.id} className="workshop-pack-row" onContextMenu={(event) => openContextMenu(event, packMenu(pack))}>

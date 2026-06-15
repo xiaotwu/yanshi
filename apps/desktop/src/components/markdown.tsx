@@ -1,4 +1,7 @@
-import { Fragment, type ReactNode } from "react";
+import { Check, Copy } from "lucide-react";
+import { Fragment, type ReactNode, useState } from "react";
+
+import { useT } from "../i18n";
 
 /**
  * Minimal, dependency-free, injection-safe Markdown renderer for assistant answers. Builds React
@@ -141,6 +144,34 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return nodes;
 }
 
+/** Fenced code block with a header (language label + copy button). */
+function CodeBlock({ lang, text }: { lang: string; text: string }) {
+  const { t } = useT();
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+  return (
+    <div className="md-codeblock">
+      <div className="md-codeblock-head">
+        <span className="md-lang">{lang || "code"}</span>
+        <button className="md-copy" onClick={copy} title={t("chat.copy")} aria-label={t("chat.copy")}>
+          {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? t("chat.copied") : t("chat.copy")}
+        </button>
+      </div>
+      <pre className="md-pre">
+        <code>{text}</code>
+      </pre>
+    </div>
+  );
+}
+
 export function Markdown({ text }: { text: string }) {
   const blocks = parseBlocks(text);
   return (
@@ -149,11 +180,7 @@ export function Markdown({ text }: { text: string }) {
         const key = `b${index}`;
         switch (block.kind) {
           case "code":
-            return (
-              <pre key={key} className="md-pre">
-                <code>{block.text}</code>
-              </pre>
-            );
+            return <CodeBlock key={key} lang={block.lang} text={block.text} />;
           case "heading": {
             const Tag = (`h${Math.min(block.level + 2, 6)}`) as "h3" | "h4" | "h5" | "h6";
             return <Tag key={key} className="md-h">{renderInline(block.text, key)}</Tag>;

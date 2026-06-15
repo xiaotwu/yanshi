@@ -268,6 +268,12 @@ export const zh: Record<TKey, string> = {
   "chat.phase.writing": "撰写中……",
   "chat.stop": "停止",
 
+  // 最近对话分组 + 筛选
+  "recents.today": "今天",
+  "recents.yesterday": "昨天",
+  "recents.older": "更早",
+  "recents.filter": "筛选对话……",
+
   // 消息操作
   "chat.copy": "复制",
   "chat.copied": "已复制",

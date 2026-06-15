@@ -230,11 +230,29 @@ export function App() {
     return items;
   }, [approvals.length, developerEnabled]);
 
-  // Recents: latest runs first (standalone + project), always shown below Projects.
+  // Recents: latest runs first, filtered by the inline query and grouped by day bucket.
+  const [recentFilter, setRecentFilter] = useState("");
   const recents = useMemo(
-    () => [...runs].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")).slice(0, 8),
+    () => [...runs].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")).slice(0, 30),
     [runs],
   );
+  const recentGroups = useMemo(() => {
+    const query = recentFilter.trim().toLowerCase();
+    const filtered = query ? recents.filter((run) => run.task.toLowerCase().includes(query)) : recents;
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const buckets: Array<{ key: "today" | "yesterday" | "older"; runs: typeof filtered }> = [
+      { key: "today", runs: [] },
+      { key: "yesterday", runs: [] },
+      { key: "older", runs: [] },
+    ];
+    for (const run of filtered) {
+      const day = (run.updatedAt ?? run.createdAt ?? "").slice(0, 10);
+      const bucket = day === today ? buckets[0] : day === yesterday ? buckets[1] : buckets[2];
+      bucket.runs.push(run);
+    }
+    return buckets.filter((bucket) => bucket.runs.length > 0);
+  }, [recents, recentFilter]);
 
   // Non-blocking demo: open the (real, animated) Atelier + progress panel immediately and start a real
   // run in the background so a slow/unreachable runtime can never freeze the UI.
@@ -390,6 +408,15 @@ export function App() {
 
             <div className="sidebar-section">
               <div className="sidebar-section-label">{t("nav.recents")}</div>
+              {ready && recents.length > 6 && (
+                <input
+                  className="recent-filter"
+                  value={recentFilter}
+                  onChange={(event) => setRecentFilter(event.target.value)}
+                  placeholder={t("recents.filter")}
+                  aria-label={t("recents.filter")}
+                />
+              )}
               {!ready ? (
                 <>
                   {[68, 82, 56].map((width, index) => (
@@ -399,21 +426,28 @@ export function App() {
               ) : recents.length === 0 ? (
                 <div className="sidebar-empty muted">{t("project.noRuns")}</div>
               ) : (
-                recents.map((run) => {
-                  const project = run.projectId ? projects.find((p) => p.id === run.projectId) : null;
-                  return (
-                    <button
-                      key={run.id}
-                      className={view === "runs" && run.id === activeRunId ? "recent-item active" : "recent-item"}
-                      onClick={() => openTask(run.id)}
-                      onContextMenu={(event) => openContextMenu(event, recentContextItems(run))}
-                      title={run.task}
-                    >
-                      <span className="ellipsis">{run.task}</span>
-                      {project && <small className="recent-project ellipsis">{projectIcon(project)} {project.name}</small>}
-                    </button>
-                  );
-                })
+                recentGroups.map((group) => (
+                  <div key={group.key} className="recent-group">
+                    <div className="recent-group-label">
+                      {t(group.key === "today" ? "recents.today" : group.key === "yesterday" ? "recents.yesterday" : "recents.older")}
+                    </div>
+                    {group.runs.map((run) => {
+                      const project = run.projectId ? projects.find((p) => p.id === run.projectId) : null;
+                      return (
+                        <button
+                          key={run.id}
+                          className={view === "runs" && run.id === activeRunId ? "recent-item active" : "recent-item"}
+                          onClick={() => openTask(run.id)}
+                          onContextMenu={(event) => openContextMenu(event, recentContextItems(run))}
+                          title={run.task}
+                        >
+                          <span className="ellipsis">{run.task}</span>
+                          {project && <small className="recent-project ellipsis">{projectIcon(project)} {project.name}</small>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
               )}
             </div>
           </div>

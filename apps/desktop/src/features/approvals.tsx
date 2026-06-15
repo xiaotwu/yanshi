@@ -7,7 +7,7 @@ import { useRuntimeStore } from "../stores/runtimeStore";
 export function ApprovalsView() {
   const { t } = useT();
   const { approvals, decideApproval, loading } = useRuntimeStore();
-  if (approvals.length === 0) return <EmptyView title={t("approvals.title")} text={t("approvals.empty")} />;
+  if (approvals.length === 0) return <EmptyView title={t("approvals.title")} text={t("approvals.empty")} icon={<Shield size={22} />} />;
   return (
     <section className="content-stack">
       <h2>{t("approvals.title")}</h2>

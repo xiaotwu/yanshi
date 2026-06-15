@@ -2,7 +2,9 @@ import {
   Check,
   ChevronRight,
   Cpu,
+  FileText,
   FolderMinus,
+  Image as ImageIcon,
   FolderPlus,
   Gauge,
   Globe,
@@ -358,6 +360,7 @@ export function Composer({
           ))}
           {attachments.map((file, index) => (
             <span key={file.path} className="flag-chip file-chip">
+              {/^.+\.(png|jpe?g|gif|webp|svg|bmp|heic)$/i.test(file.name) ? <ImageIcon size={12} /> : <FileText size={12} />}
               {file.name}
               <button onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))} title={t("composer.remove")}>
                 <X size={12} />

@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { canRevealFiles, revealPath } from "../api/desktop";
 import { useT } from "../i18n";
-import { agentDisplayName, agentStateLabel, outputFileName, statusLabel } from "../lib/shared";
+import { PlanSteps, agentDisplayName, agentStateLabel, outputFileName, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type PanelSection = "progress" | "files" | "approvals" | "agents";
@@ -66,21 +66,22 @@ export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
 
   return (
     <section className="progress-panel">
-      <select
-        className="panel-select"
-        value={section}
-        onChange={(event) => setSection(event.target.value as PanelSection)}
-        aria-label={t("progress.tabProgress")}
-      >
+      <div className="panel-tabs" role="tablist" aria-label={t("progress.tabProgress")}>
         {sections.map((item) => (
-          <option key={item.id} value={item.id}>
+          <button
+            key={item.id}
+            role="tab"
+            aria-selected={section === item.id}
+            className={section === item.id ? "panel-tab active" : "panel-tab"}
+            onClick={() => setSection(item.id)}
+          >
             {item.label}
-            {item.badge ? ` (${item.badge})` : ""}
-          </option>
+            {item.badge ? <span className="panel-tab-badge">{item.badge}</span> : null}
+          </button>
         ))}
-      </select>
+      </div>
 
-      <div className="progress-body">
+      <div className="progress-body" key={section}>
         {section === "progress" && (
           run ? (
             <div className="progress-stack">
@@ -92,11 +93,7 @@ export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
               {run.plan.length > 0 && (
                 <div className="progress-section">
                   <span className="muted">{t("progress.plan")}</span>
-                  <ol className="plan-list">
-                    {run.plan.map((step, index) => (
-                      <li key={index}>{step}</li>
-                    ))}
-                  </ol>
+                  <PlanSteps steps={run.plan} done={run.status === "completed"} />
                 </div>
               )}
               {reviewNote && (

@@ -266,6 +266,12 @@ export const en = {
   "chat.phase.writing": "Writing…",
   "chat.stop": "Stop",
 
+  // Recents grouping + filter
+  "recents.today": "Today",
+  "recents.yesterday": "Yesterday",
+  "recents.older": "Earlier",
+  "recents.filter": "Filter chats…",
+
   // Message actions
   "chat.copy": "Copy",
   "chat.copied": "Copied",
