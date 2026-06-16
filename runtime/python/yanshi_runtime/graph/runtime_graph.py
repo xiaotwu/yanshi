@@ -413,8 +413,17 @@ class RuntimeGraph:
 
         results: list[AgentExecutionResult] = []
         for assignment in tool_assignments:
+            # Cooperative cancellation: stop launching further tool steps the moment the user
+            # cancels. The finalizer sees the cancelled flag and keeps the run cancelled.
+            if self._is_cancelled(run_id):
+                break
             result = self._execute_tool_assignment(state, assignment)
             results.append(result)
+
+        # Skip synthesis/review entirely if cancelled — don't spend a provider call or write a final
+        # answer for a run the user stopped.
+        if self._is_cancelled(run_id):
+            return {**state, "result_summary": "Run cancelled."}
 
         failed_results = [result for result in results if not result["ok"]]
         manager_results: list[AgentExecutionResult] = []

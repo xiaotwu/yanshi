@@ -1585,6 +1585,27 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert reopened.reconcile_interrupted_runs() == 0
 
 
+def test_execute_node_short_circuits_when_cancelled(tmp_path: Path) -> None:
+    """Cooperative cancellation: once a run is cancelled, the executor stops launching tool steps
+    and skips synthesis instead of producing a final answer."""
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.providers import OpenAICompatibleProvider
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "yanshi.db", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "checkpoints.db",
+        workspace_root=tmp_path / "workspaces",
+        provider=OpenAICompatibleProvider(None),
+    )
+    graph.request_cancel("run_x")
+    result = graph._execute_node(
+        {"run_id": "run_x", "task": "do things", "agent_tasks": [{"agentId": "agent_terminal", "task": "x", "taskId": None}]}
+    )
+    assert result["result_summary"] == "Run cancelled."
+
+
 def test_net_guard_blocks_internal_and_metadata_targets() -> None:
     from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
 
