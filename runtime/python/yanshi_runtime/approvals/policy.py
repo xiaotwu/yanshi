@@ -14,6 +14,10 @@ class PermissionDecision:
 
 
 class PermissionPolicy:
+    # Substring matches against a space-padded, lowercased task. zh-CN terms are included because the
+    # app is macOS/zh-first; CJK has no word boundaries, so plain substring matching is correct for
+    # them. (Natural-language matching is a backstop — per-action/tool risk gating is the stronger
+    # control and is tracked separately.)
     critical_blocklist = (
         "payment",
         "pay ",
@@ -25,9 +29,54 @@ class PermissionPolicy:
         "change system settings",
         "system settings",
         "external transfer",
+        # zh-CN
+        "付款",
+        "支付",
+        "转账",
+        "汇款",
+        "购买",
+        "下单",
+        "发送邮件",
+        "发邮件",
+        "发送消息",
+        "发消息",
+        "删除重要",
+        "系统设置",
+        "修改系统",
     )
-    high_risk_terms = ("delete", "move files", "move file", "run command", "upload", "submit form", "terminal")
-    medium_risk_terms = ("click", "type", "open app", "browser", "computer", "shortcut")
+    high_risk_terms = (
+        "delete",
+        "move files",
+        "move file",
+        "run command",
+        "upload",
+        "submit form",
+        "terminal",
+        # zh-CN
+        "删除",
+        "移动文件",
+        "运行命令",
+        "执行命令",
+        "上传",
+        "提交表单",
+        "终端",
+        "命令行",
+    )
+    medium_risk_terms = (
+        "click",
+        "type",
+        "open app",
+        "browser",
+        "computer",
+        "shortcut",
+        # zh-CN
+        "点击",
+        "输入",
+        "打开应用",
+        "浏览器",
+        "电脑",
+        "快捷键",
+    )
 
     def classify_task(self, task: str) -> RiskLevel:
         normalized = f" {task.lower()} "

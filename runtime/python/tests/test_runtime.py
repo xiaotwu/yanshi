@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import pytest
 import subprocess
 import sys
 import threading
@@ -1582,6 +1583,46 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert "interrupted" in (recovered.resultSummary or "").lower()
     # Idempotent: a second reconcile finds nothing.
     assert reopened.reconcile_interrupted_runs() == 0
+
+
+def test_net_guard_blocks_internal_and_metadata_targets() -> None:
+    from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
+
+    # Cloud metadata is blocked for everyone, even with block_private=False.
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://169.254.169.254/latest/meta-data/", block_private=False)
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://metadata.google.internal/", block_private=False)
+    # Non-http(s) schemes are blocked.
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("file:///etc/passwd", block_private=True)
+    # Browser-style guard blocks loopback/private.
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://127.0.0.1:8765/", block_private=True)
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://192.168.1.1/", block_private=True)
+    # Provider-style guard allows loopback (local model servers) but never metadata.
+    validate_outbound_url("http://127.0.0.1:11434/v1", block_private=False)
+
+
+def test_terminal_run_status_is_frozen(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage((tmp_path / "yanshi.db"), "test")
+    run = storage.create_run("task")
+    storage.update_run(run.id, status="completed", completed=True)
+    # A late finalizer / stray cancel must not move it back to a non-terminal state.
+    after = storage.update_run(run.id, status="running")
+    assert after.status == "completed"
+    # Nor flip one terminal state to another.
+    assert storage.update_run(run.id, status="cancelled").status == "completed"
+
+
+def test_followup_run_rejects_unknown_parent(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    created = client.post("/runs", json={"task": "follow up", "parentRunId": "run_does_not_exist"})
+    assert created.status_code == 400
+    assert "does not exist" in created.text
 
 
 def test_unexpected_errors_return_a_coded_envelope(tmp_path: Path) -> None:

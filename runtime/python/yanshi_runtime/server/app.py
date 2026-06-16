@@ -5,8 +5,10 @@ import asyncio
 import io
 import json
 import logging
+import os
 import queue
 import re
+import secrets
 import shutil
 import threading
 import time
@@ -152,6 +154,8 @@ class RuntimeService:
             run = self.storage.create_run(request.task.strip(), request.projectId, request.parentRunId)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         reasoning = request.reasoning or self.storage.get_app_settings().reasoning
         self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
         self._dispatch_run(run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning)
@@ -214,17 +218,18 @@ class RuntimeService:
         return self.storage.list_artifacts(project_id=project_id, run_id=run_id)
 
     def image_preview(self, project_id: str | None, path: str) -> "FileResponse":
-        """Serve a workspace/artifact image for an inline preview. Guards against path traversal
-        (the resolved file must live under the project workspace, the workspace root, or the
-        artifacts root), restricts to known image types, and caps the size."""
+        """Serve a workspace/artifact image for an inline preview. Guards against path traversal:
+        the resolved file must live under *this* project's workspace (not the shared workspace root,
+        which would let one project read another's files) or the artifacts root. Restricts to known
+        image types and caps the size."""
         from fastapi.responses import FileResponse
 
         workspace = self._workspace_for_project(project_id)
         # Workspace listings hand back paths relative to the workspace; artifacts use absolute paths.
         candidate = (Path(path) if Path(path).is_absolute() else workspace / path).resolve()
+        # Scoped to the specific project workspace + artifacts root only — no global workspace_root.
         allowed_roots = [
             workspace.resolve(),
-            self.settings.workspace_root.resolve(),
             self.settings.artifacts_root.resolve(),
         ]
         if not any(candidate == root or root in candidate.parents for root in allowed_roots):
@@ -257,8 +262,14 @@ class RuntimeService:
             # Resolve and confirm the destination stays inside the uploads dir (path traversal guard).
             if uploads_dir.resolve() not in target.resolve().parents and target.resolve() != (uploads_dir / name).resolve():
                 raise HTTPException(status_code=400, detail="Unsafe upload path.")
+            # Refuse to write through a pre-planted symlink: reject an existing symlink and open with
+            # O_NOFOLLOW so the write lands on a regular file inside uploads_dir, never elsewhere.
+            if target.is_symlink():
+                raise HTTPException(status_code=400, detail="Unsafe upload path.")
             total = 0
-            with target.open("wb") as handle:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(target, flags, 0o600)
+            with os.fdopen(fd, "wb") as handle:
                 while True:
                     chunk = await upload.read(UPLOAD_CHUNK_BYTES)
                     if not chunk:
@@ -620,25 +631,34 @@ def resolve_api_token(settings: RuntimeSettings) -> str:
     if settings.api_token:
         return settings.api_token
     path = settings.token_path
+    # Only trust an existing token if it's a real file we own — not a symlink another local process
+    # planted to redirect the read.
     try:
-        if path.exists():
+        if path.is_file() and not path.is_symlink():
             existing = path.read_text(encoding="utf-8").strip()
             if existing:
                 return existing
     except OSError:
         pass
-    import os
-    import secrets as _secrets
-
-    token = _secrets.token_urlsafe(32)
+    token = secrets.token_urlsafe(32)
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # Drop any pre-existing symlink, then create without following symlinks (O_NOFOLLOW) at
+        # 0600 so the write can't be redirected outside the data dir.
+        if path.is_symlink():
+            path.unlink()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path, flags, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(token)
         os.chmod(path, 0o600)
     except OSError:
         logger.warning("could not persist runtime token to %s", path)
     return token
+
+
+def token_matches(candidate: str | None, token: str) -> bool:
+    """Constant-time token comparison (avoids leaking the token via response timing)."""
+    return bool(candidate) and secrets.compare_digest(candidate, token)
 
 
 def get_service(app: FastAPI) -> RuntimeService:
@@ -699,13 +719,14 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         if request.method == "OPTIONS" or request.url.path in _PUBLIC_PATHS:
             return await call_next(request)
         token = get_service(app).api_token
-        provided = request.headers.get("authorization", "")
+        auth = request.headers.get("authorization", "")
+        bearer = auth[len("Bearer ") :] if auth.startswith("Bearer ") else ""
         # Header is the norm; the query param is the escape hatch for browser-initiated GET
         # downloads (window.open) and the WS, which can't attach an Authorization header.
-        if (
-            provided != f"Bearer {token}"
-            and request.headers.get("x-yanshi-token") != token
-            and request.query_params.get("token") != token
+        if not (
+            token_matches(bearer, token)
+            or token_matches(request.headers.get("x-yanshi-token"), token)
+            or token_matches(request.query_params.get("token"), token)
         ):
             from fastapi.responses import JSONResponse
 
@@ -1028,7 +1049,7 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         # param (or header for non-browser clients). Reject before accepting if it doesn't match.
         token = service.api_token
         provided = websocket.query_params.get("token") or websocket.headers.get("x-yanshi-token")
-        if provided != token:
+        if not token_matches(provided, token):
             await websocket.close(code=4401)
             return
         await websocket.accept()

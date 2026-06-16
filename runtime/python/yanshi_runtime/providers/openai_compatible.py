@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from yanshi_runtime.models import ChatMessage, ProviderHealth
+from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
 
 logger = logging.getLogger("yanshi.provider")
 
@@ -96,9 +97,26 @@ class OpenAICompatibleProvider:
     def update_config(self, config: ProviderConfig | None) -> None:
         self._config = config
 
+    def _ensure_endpoint_allowed(self) -> None:
+        """Block requests to cloud-metadata / unroutable hosts. Loopback and private space stay
+        allowed because local model servers (Ollama/LM Studio/vLLM on 127.0.0.1 or the LAN) are a
+        supported configuration."""
+        assert self._config is not None
+        validate_outbound_url(self._config.base_url, block_private=False)
+
     def healthcheck(self) -> ProviderHealth:
         if self._config is None:
             return ProviderHealth(ok=False, status="not_configured", detail="Model provider is not configured.")
+        try:
+            self._ensure_endpoint_allowed()
+        except BlockedHostError as exc:
+            return ProviderHealth(
+                ok=False,
+                status="failed",
+                detail=f"Provider endpoint is blocked: {exc}",
+                baseUrl=self._config.base_url,
+                model=self._config.model,
+            )
         try:
             with httpx.Client(timeout=_HEALTH_TIMEOUT_SECONDS) as client:
                 response = client.get(
@@ -132,6 +150,10 @@ class OpenAICompatibleProvider:
     def chat_completion(self, messages: list[ChatMessage]) -> str:
         if self._config is None:
             raise ProviderCallError("Model provider is not configured.")
+        try:
+            self._ensure_endpoint_allowed()
+        except BlockedHostError as exc:
+            raise ProviderCallError(f"Provider endpoint is blocked: {exc}") from exc
         payload = {
             "model": self._config.model,
             "messages": [message.model_dump() for message in messages],
@@ -192,6 +214,10 @@ class OpenAICompatibleProvider:
         want the whole string can ``"".join(...)`` the chunks."""
         if self._config is None:
             raise ProviderCallError("Model provider is not configured.")
+        try:
+            self._ensure_endpoint_allowed()
+        except BlockedHostError as exc:
+            raise ProviderCallError(f"Provider endpoint is blocked: {exc}") from exc
         payload = {
             "model": self._config.model,
             "messages": [message.model_dump() for message in messages],

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from yanshi_runtime.models import ToolResult
+from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
 
 
 URL_RE = re.compile(r"https?://[^\s)>\]}\"']+", re.IGNORECASE)
@@ -48,6 +49,17 @@ class BrowserTool:
                 summary="Browser Agent only navigates http(s) URLs.",
                 missingRequirement="browser_url",
                 structuredOutput={"url": url, "acceptedSchemes": ["http", "https"]},
+            )
+        # SSRF guard: refuse to navigate to internal/loopback/metadata targets. The browser tool
+        # has no local-browsing requirement, so private space is blocked outright.
+        try:
+            validate_outbound_url(url, block_private=True)
+        except BlockedHostError as exc:
+            return ToolResult(
+                ok=False,
+                summary=f"Browser Agent refused an internal or unsafe URL: {exc}",
+                missingRequirement="browser_url_blocked",
+                structuredOutput={"url": url},
             )
 
         try:

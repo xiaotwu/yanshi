@@ -114,6 +114,9 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
 # declarative schema is the v1 baseline.
 _SCHEMA_VERSION = 1
 
+# Once a run reaches one of these it is finished; its status must not change again.
+_TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
 
 class Storage:
     def __init__(
@@ -411,11 +414,14 @@ class Storage:
         migrations: dict[int, Callable[[], None]] = {}
         for version in range(current + 1, _SCHEMA_VERSION + 1):
             step = migrations.get(version)
-            if step is not None:
-                step()
-            # PRAGMA can't bind params; version is an int we control, so the f-string is safe.
-            self.conn.execute(f"PRAGMA user_version = {version}")
-            self.conn.commit()
+            # Each step + its version bump is one transaction: on failure it rolls back together, so
+            # the schema is never left half-migrated. (`PRAGMA user_version` is journaled with the
+            # transaction.) Steps must still be written idempotently in case of a crash mid-commit.
+            with self.conn:
+                if step is not None:
+                    step()
+                # PRAGMA can't bind params; version is an int we control, so the f-string is safe.
+                self.conn.execute(f"PRAGMA user_version = {version}")
 
     @locked_storage_method
     def create_project(self, name: str, *, description: str | None = None, workspace_root: Path) -> ProjectSummary:
@@ -510,8 +516,16 @@ class Storage:
             (run_id, project_id, 0 if project_id else 1, task, "created", "[]", now, now),
         )
         # Record conversation threading: a follow-up inherits its parent's thread; the first
-        # turn of a chat seeds a thread keyed by its own id.
+        # turn of a chat seeds a thread keyed by its own id. The parent must exist (and, when this
+        # run belongs to a project, share it) — otherwise _thread_for would silently graft the run
+        # onto a fabricated parent id and create an orphan thread.
         if parent_run_id:
+            try:
+                parent = self.get_run(parent_run_id)
+            except KeyError as exc:
+                raise ValueError(f"Parent run {parent_run_id} does not exist.") from exc
+            if project_id and parent.projectId not in (None, project_id):
+                raise ValueError("Parent run belongs to a different project.")
             parent_thread, _ = self._thread_for(parent_run_id)
             self.conn.execute(
                 "INSERT OR REPLACE INTO run_threads (run_id, thread_id, parent_run_id) VALUES (?, ?, ?)",
@@ -594,6 +608,11 @@ class Storage:
     ) -> RunSummary:
         current = self.get_run(run_id)
         next_status = status or current.status
+        # Terminal states are frozen: once a run is completed/failed/cancelled, nothing may move it
+        # back to running/paused/etc. (e.g. a finalizer finishing after the user already cancelled).
+        # Status is pinned to the existing terminal value; summary/plan may still be recorded.
+        if current.status in _TERMINAL_RUN_STATUSES and next_status != current.status:
+            next_status = current.status
         now = utc_now()
         self.conn.execute(
             """
