@@ -108,6 +108,10 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
+        # Short-lived, scoped tickets for the header-less callers (WS, <img> preview, download links)
+        # so the real bearer token never rides in a URL. ticket -> (scope, expiry epoch).
+        self._tickets: dict[str, tuple[str, float]] = {}
+        self._tickets_lock = threading.Lock()
         # Bounded run execution: a fixed pool of plain worker threads drains a queue. Plain threads
         # (not a ThreadPoolExecutor) are required — LangGraph's invoke() breaks when run inside a
         # pooled executor's worker context. The pool size caps concurrency; excess runs wait in the
@@ -189,6 +193,37 @@ class RuntimeService:
         for _ in self._run_workers:
             self._run_queue.put(None)
         self.acp.shutdown()
+
+    # --- Scoped tickets ------------------------------------------------------------------------
+    TICKET_SCOPES = {"events", "preview", "export"}
+    _TICKET_TTL_SECONDS = 120.0
+
+    def mint_ticket(self, scope: str) -> tuple[str, float]:
+        """Issue a short-lived ticket bound to a scope. Callers must already be authenticated (the
+        mint endpoint requires the bearer token); the ticket then authorizes one header-less use
+        path (WS / preview / export) without exposing the real token in a URL."""
+        if scope not in self.TICKET_SCOPES:
+            raise HTTPException(status_code=400, detail="Unknown ticket scope.")
+        ticket = secrets.token_urlsafe(24)
+        expiry = time.time() + self._TICKET_TTL_SECONDS
+        with self._tickets_lock:
+            now = time.time()
+            self._tickets = {key: value for key, value in self._tickets.items() if value[1] > now}
+            self._tickets[ticket] = (scope, expiry)
+        return ticket, expiry
+
+    def check_ticket(self, ticket: str | None, scope: str) -> bool:
+        if not ticket:
+            return False
+        with self._tickets_lock:
+            entry = self._tickets.get(ticket)
+            if entry is None:
+                return False
+            entry_scope, expiry = entry
+            if entry_scope != scope or time.time() > expiry:
+                self._tickets.pop(ticket, None)
+                return False
+            return True
 
     def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium") -> None:
         started = time.monotonic()
@@ -720,25 +755,28 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     # the local-CSRF hole: a malicious web page can fire requests at localhost but doesn't know the
     # token, so they're rejected. The trusted shell reads the token from <data_dir>/runtime.token.
     _PUBLIC_PATHS = {"/health"}
+    # GET endpoints reachable by header-less browser callers via a scoped ticket query param.
+    _TICKET_SCOPED_PATHS = {"/preview": "preview", "/workshop/export": "export"}
 
     @app.middleware("http")
     async def require_token(request, call_next):
         if request.method == "OPTIONS" or request.url.path in _PUBLIC_PATHS:
             return await call_next(request)
-        token = get_service(app).api_token
+        service = get_service(app)
+        token = service.api_token
         auth = request.headers.get("authorization", "")
         bearer = auth[len("Bearer ") :] if auth.startswith("Bearer ") else ""
-        # Header is the norm; the query param is the escape hatch for browser-initiated GET
-        # downloads (window.open) and the WS, which can't attach an Authorization header.
-        if not (
-            token_matches(bearer, token)
-            or token_matches(request.headers.get("x-yanshi-token"), token)
-            or token_matches(request.query_params.get("token"), token)
-        ):
-            from fastapi.responses import JSONResponse
+        if token_matches(bearer, token) or token_matches(request.headers.get("x-yanshi-token"), token):
+            return await call_next(request)
+        # Header auth is the norm. The real token must never appear in a URL, so the only query-param
+        # path is a short-lived, scope-bound ticket for the specific header-less GET endpoints
+        # (browser <img> previews and window.open downloads). The WS validates its own ticket.
+        scope = _TICKET_SCOPED_PATHS.get(request.url.path)
+        if scope and service.check_ticket(request.query_params.get("ticket"), scope):
+            return await call_next(request)
+        from fastapi.responses import JSONResponse
 
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
-        return await call_next(request)
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
     @app.exception_handler(Exception)
     async def unhandled_error(request, exc):
@@ -761,6 +799,13 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.get("/health", response_model=RuntimeHealth)
     def health(service: RuntimeService = Depends(service_dep)):
         return service.health()
+
+    @app.post("/auth/ticket")
+    def mint_ticket(body: dict, service: RuntimeService = Depends(service_dep)):
+        # Header-authenticated (enforced by the middleware). Returns a short-lived ticket the
+        # browser can put in a WS/preview/export URL instead of the real token.
+        ticket, expiry = service.mint_ticket(str(body.get("scope", "")))
+        return {"ticket": ticket, "expiresAt": datetime.fromtimestamp(expiry, UTC).isoformat()}
 
     @app.get("/runtime/status", response_model=RuntimeStatus)
     def runtime_status(service: RuntimeService = Depends(service_dep)):
@@ -1051,11 +1096,10 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.websocket("/events")
     async def events_socket(websocket: WebSocket):
         service = get_service(app)
-        # The WS can't carry an Authorization header from a browser, so the token rides as a query
-        # param (or header for non-browser clients). Reject before accepting if it doesn't match.
-        token = service.api_token
-        provided = websocket.query_params.get("token") or websocket.headers.get("x-yanshi-token")
-        if not token_matches(provided, token):
+        # The WS can't carry an Authorization header from a browser. Accept either a header token
+        # (non-browser clients) or a short-lived events-scoped ticket — never the raw token in the URL.
+        header_token = websocket.headers.get("x-yanshi-token")
+        if not (token_matches(header_token, service.api_token) or service.check_ticket(websocket.query_params.get("ticket"), "events")):
             await websocket.close(code=4401)
             return
         await websocket.accept()

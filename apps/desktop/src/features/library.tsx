@@ -69,12 +69,25 @@ function fileItem(file: WorkspaceFile, projectId: string): LibraryItem {
  *  or unsupported type like HEIC in this webview). */
 function LibraryThumb({ item }: { item: LibraryItem }) {
   const [failed, setFailed] = useState(false);
+  const [src, setSrc] = useState<string | null>(null);
   const isImage = fileCategory(item.name, item.type) === "image";
-  if (isImage && !failed) {
+  useEffect(() => {
+    if (!isImage) return;
+    let cancelled = false;
+    // previewUrl is async (it mints a short-lived preview ticket); fall back to the icon on failure.
+    runtimeApi
+      .previewUrl(item.path, item.projectId)
+      .then((url) => !cancelled && setSrc(url))
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [isImage, item.path, item.projectId]);
+  if (isImage && !failed && src) {
     return (
       <img
         className="library-thumb"
-        src={runtimeApi.previewUrl(item.path, item.projectId)}
+        src={src}
         alt=""
         loading="lazy"
         decoding="async"

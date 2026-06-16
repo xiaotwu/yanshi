@@ -1585,6 +1585,25 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert reopened.reconcile_interrupted_runs() == 0
 
 
+def test_scoped_tickets_replace_the_url_token(tmp_path: Path) -> None:
+    """The raw token is header-only; header-less callers use short-lived, scope-bound tickets."""
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", api_token="test-token", synchronous_runs=True)
+    app = create_app(settings)
+    authed = TestClient(app, headers={"Authorization": "Bearer test-token"})
+    anon = TestClient(app)
+
+    # The raw token in a URL no longer authorizes anything.
+    assert anon.get("/preview", params={"path": "x.png", "token": "test-token"}).status_code == 401
+    # Minting a ticket requires the header.
+    assert anon.post("/auth/ticket", json={"scope": "preview"}).status_code == 401
+
+    preview_ticket = authed.post("/auth/ticket", json={"scope": "preview"}).json()["ticket"]
+    events_ticket = authed.post("/auth/ticket", json={"scope": "events"}).json()["ticket"]
+    # Wrong scope is rejected; correct scope authorizes (then 404 for the missing file).
+    assert anon.get("/preview", params={"path": "missing.png", "ticket": events_ticket}).status_code == 401
+    assert anon.get("/preview", params={"path": "missing.png", "ticket": preview_ticket}).status_code == 404
+
+
 def test_integration_env_secrets_stay_out_of_db_and_api(tmp_path: Path) -> None:
     """ACP/MCP env values are stored in the SecretStore (off-DB) and never returned raw; the masked
     round-trip preserves a saved secret, and connect resolves it back."""

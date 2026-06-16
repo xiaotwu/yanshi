@@ -757,14 +757,22 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     };
 
     const connectWs = () => {
-      let next: WebSocket;
-      try {
-        next = new WebSocket(runtimeApi.eventsUrl(lastEventSeq));
-      } catch {
-        startPolling();
-        scheduleWsRetry();
-        return;
-      }
+      // Mint a fresh events ticket each (re)connect (they're short-lived); polling covers the gap
+      // while it resolves. The token is never placed in the WS URL.
+      void runtimeApi.eventsTicket().then((ticket) => {
+        let next: WebSocket;
+        try {
+          next = new WebSocket(runtimeApi.eventsUrl(lastEventSeq, ticket));
+        } catch {
+          startPolling();
+          scheduleWsRetry();
+          return;
+        }
+        wireSocket(next);
+      });
+    };
+
+    const wireSocket = (next: WebSocket) => {
       socket = next;
       next.onopen = () => {
         wsAttempts = 0;
@@ -783,9 +791,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     };
 
     setStreamStatus("connecting");
-    // The WS carries the session token as a query param (it can't send an Authorization header), so
-    // resolve+cache it before the first connect; reconnects read the cached value synchronously.
-    void runtimeApi.ensureToken().then(connectWs);
+    connectWs();
   },
 }));
 

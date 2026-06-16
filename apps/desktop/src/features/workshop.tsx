@@ -61,7 +61,7 @@ export function WorkshopInstalled() {
     }
   };
   const packMenu = () => [
-    { id: "export", label: t("workshop.exportPack"), icon: Download, onSelect: () => safeOpenExternal(runtimeApi.exportPackUrl()) },
+    { id: "export", label: t("workshop.exportPack"), icon: Download, onSelect: () => void runtimeApi.exportPackUrl().then(safeOpenExternal) },
     "divider" as const,
     {
       id: "remove",
@@ -478,7 +478,7 @@ export function WorkshopExport() {
   const download = async () => {
     setStatus(t("workshop.exporting"));
     try {
-      const response = await fetch(runtimeApi.exportPackUrl());
+      const response = await fetch(await runtimeApi.exportPackUrl());
       if (!response.ok) throw new Error(await response.text());
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

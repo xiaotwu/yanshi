@@ -24,9 +24,8 @@ import type {
 const runtimeUrl = import.meta.env.VITE_RUNTIME_URL || "http://127.0.0.1:8765";
 
 // Per-session token gate: the runtime rejects every request (except /health) without it. The token
-// comes from the Tauri shell (which minted it and shares it with the sidecar) or, in the browser
-// dev flow, from VITE_RUNTIME_TOKEN. Resolved once and cached; the WS reads the cached value too.
-let cachedToken: string | null = null;
+// is sent only as an Authorization header — never in a URL. It comes from the Tauri shell (which
+// minted it and shares it with the sidecar) or, in the browser dev flow, from VITE_RUNTIME_TOKEN.
 let tokenPromise: Promise<string | null> | null = null;
 
 async function resolveToken(): Promise<string | null> {
@@ -44,16 +43,39 @@ async function resolveToken(): Promise<string | null> {
 }
 
 function ensureToken(): Promise<string | null> {
-  if (!tokenPromise) {
-    tokenPromise = resolveToken().then((token) => {
-      cachedToken = token;
-      return token;
-    });
-  }
+  if (!tokenPromise) tokenPromise = resolveToken();
   return tokenPromise;
 }
-// Kick off resolution eagerly so the token is cached before the event stream connects.
 void ensureToken();
+
+// Header-less callers (the event WebSocket, <img> preview src, window.open downloads) can't send the
+// Authorization header, so they use short-lived, scope-bound tickets instead of the raw token. The
+// runtime mints them at /auth/ticket (header-authenticated). Cache per scope and refresh near expiry.
+type CachedTicket = { value: string; expiresAtMs: number };
+const ticketCache: Record<string, CachedTicket> = {};
+const ticketInFlight: Record<string, Promise<string | null> | undefined> = {};
+
+async function ensureTicket(scope: "events" | "preview" | "export"): Promise<string | null> {
+  const cached = ticketCache[scope];
+  if (cached && cached.expiresAtMs - 10_000 > Date.now()) return cached.value;
+  if (!ticketInFlight[scope]) {
+    ticketInFlight[scope] = (async () => {
+      try {
+        const res = await request<{ ticket: string; expiresAt: string }>("/auth/ticket", {
+          method: "POST",
+          body: JSON.stringify({ scope }),
+        });
+        ticketCache[scope] = { value: res.ticket, expiresAtMs: Date.parse(res.expiresAt) };
+        return res.ticket;
+      } catch {
+        return null;
+      } finally {
+        ticketInFlight[scope] = undefined;
+      }
+    })();
+  }
+  return ticketInFlight[scope]!;
+}
 
 async function authHeaders(extra?: HeadersInit): Promise<HeadersInit> {
   const token = await ensureToken();
@@ -185,12 +207,12 @@ export const runtimeApi = {
       method: "PUT",
       body: JSON.stringify(update),
     }),
-  exportPackUrl: (projectId?: string | null) => {
-    // Opened directly via window.open / used as a download href, so the token must ride in the
-    // query string (a GET download can't attach an Authorization header).
+  exportPackUrl: async (projectId?: string | null) => {
+    // Opened via window.open (no Authorization header), so it carries a short-lived export ticket.
+    const ticket = await ensureTicket("export");
     const params = new URLSearchParams();
     if (projectId) params.set("projectId", projectId);
-    if (cachedToken) params.set("token", cachedToken);
+    if (ticket) params.set("ticket", ticket);
     const qs = params.toString();
     return `${runtimeUrl}/workshop/export${qs ? `?${qs}` : ""}`;
   },
@@ -225,25 +247,25 @@ export const runtimeApi = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
-  /** Resolve+cache the session token; callers await this before opening the WS (which can't send
-   *  an Authorization header, so the token rides as a query param via {@link eventsUrl}). */
-  ensureToken,
-  eventsUrl: (after = 0) => {
+  /** Mint a fresh events-scoped ticket for the WS. The store awaits this before (re)connecting. */
+  eventsTicket: () => ensureTicket("events"),
+  eventsUrl: (after = 0, ticket?: string | null) => {
     const params = new URLSearchParams();
     if (after > 0) params.set("after", String(after));
-    if (cachedToken) params.set("token", cachedToken);
+    if (ticket) params.set("ticket", ticket);
     const qs = params.toString();
     return `${runtimeUrl.replace(/^http/, "ws")}/events${qs ? `?${qs}` : ""}`;
   },
   /** REST view of the same event log as the WebSocket (`{seq, event}` rows after a cursor) —
    *  used as the polling fallback when ws:// is blocked (packaged WKWebView secure context). */
   events: (after = 0) => request<Array<{ seq: number; event: YanshiEvent }>>(`/events?after=${after}`),
-  /** URL for an inline image preview (used directly as an <img src>, which can't set headers — so
-   *  the token rides in the query string like {@link eventsUrl}). */
-  previewUrl: (path: string, projectId?: string | null) => {
+  /** URL for an inline image preview (used as an <img src>, which can't set headers — so it carries
+   *  a short-lived preview ticket instead of the token). Async because it may mint the ticket. */
+  previewUrl: async (path: string, projectId?: string | null) => {
+    const ticket = await ensureTicket("preview");
     const params = new URLSearchParams({ path });
     if (projectId) params.set("projectId", projectId);
-    if (cachedToken) params.set("token", cachedToken);
+    if (ticket) params.set("ticket", ticket);
     return `${runtimeUrl}/preview?${params.toString()}`;
   },
   validatePack: async (file: File) => {
