@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,11 +11,23 @@ import httpx
 
 from yanshi_runtime.models import ChatMessage, ProviderHealth
 
+logger = logging.getLogger("yanshi.provider")
+
 # Local models (Ollama/LM Studio/vLLM) and reasoning models can take a while to generate,
 # especially on CPU and on a second/third sequential call. Keep generous timeouts so real runs
 # don't fail spuriously.
 _CHAT_TIMEOUT_SECONDS = 300.0
 _HEALTH_TIMEOUT_SECONDS = 15.0
+
+# Transient-failure retry policy. Only the *connection* / pre-stream phase is retried, so we never
+# duplicate a partially-streamed answer.
+_MAX_ATTEMPTS = 3
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+_RETRYABLE_EXC = (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError)
+
+
+def _backoff_seconds(attempt: int) -> float:
+    return min(4.0, 0.5 * (2 ** attempt))
 
 # Some reasoning models inline their chain-of-thought in the message content using
 # <think>…</think> (or <thinking>…</thinking>) tags rather than a separate field.
@@ -123,33 +137,54 @@ class OpenAICompatibleProvider:
             "messages": [message.model_dump() for message in messages],
             "stream": False,
         }
-        try:
-            with httpx.Client(timeout=_CHAT_TIMEOUT_SECONDS) as client:
-                response = client.post(
-                    f"{self._config.base_url}/chat/completions",
-                    headers=self._headers(),
-                    json=payload,
-                )
-            if response.status_code >= 400:
-                raise ProviderCallError(f"Provider chat completion failed with HTTP {response.status_code}.")
-            body = response.json()
-            choices = body.get("choices") or []
-            if not choices:
-                raise ProviderCallError("Provider returned no choices.")
-            message = choices[0].get("message") or {}
-            content = message.get("content")
-            text = strip_reasoning(content) if isinstance(content, str) else ""
-            if not text:
-                # Some reasoning models put everything in the reasoning channel and leave content
-                # empty for certain prompts. Fall back to the reasoning so the run still produces
-                # an answer instead of failing.
-                reasoning = message.get("reasoning")
-                text = strip_reasoning(reasoning) if isinstance(reasoning, str) else ""
-            if not text:
-                raise ProviderCallError("Provider returned an empty assistant message.")
-            return text
-        except httpx.HTTPError as exc:
-            raise ProviderCallError(f"Provider chat completion failed: {exc.__class__.__name__}.") from exc
+        last_error: Exception | None = None
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                with httpx.Client(timeout=_CHAT_TIMEOUT_SECONDS) as client:
+                    response = client.post(
+                        f"{self._config.base_url}/chat/completions",
+                        headers=self._headers(),
+                        json=payload,
+                    )
+                if response.status_code in _RETRY_STATUS:
+                    last_error = ProviderCallError(f"Provider returned HTTP {response.status_code}.")
+                    self._sleep_before_retry(attempt, last_error)
+                    continue
+                if response.status_code >= 400:
+                    raise ProviderCallError(f"Provider chat completion failed with HTTP {response.status_code}.")
+                return self._extract_answer(response.json())
+            except _RETRYABLE_EXC as exc:
+                last_error = exc
+                self._sleep_before_retry(attempt, exc)
+            except httpx.HTTPError as exc:
+                raise ProviderCallError(f"Provider chat completion failed: {exc.__class__.__name__}.") from exc
+        raise ProviderCallError(
+            f"Provider chat completion failed after {_MAX_ATTEMPTS} attempts: {last_error.__class__.__name__ if last_error else 'error'}."
+        )
+
+    @staticmethod
+    def _sleep_before_retry(attempt: int, error: Exception) -> None:
+        if attempt < _MAX_ATTEMPTS - 1:
+            delay = _backoff_seconds(attempt)
+            logger.warning("provider call transient failure (%s); retrying in %.1fs", error.__class__.__name__, delay)
+            time.sleep(delay)
+
+    @staticmethod
+    def _extract_answer(body: dict[str, Any]) -> str:
+        choices = body.get("choices") or []
+        if not choices:
+            raise ProviderCallError("Provider returned no choices.")
+        message = choices[0].get("message") or {}
+        content = message.get("content")
+        text = strip_reasoning(content) if isinstance(content, str) else ""
+        if not text:
+            # Some reasoning models put everything in the reasoning channel and leave content empty
+            # for certain prompts. Fall back to the reasoning so the run still produces an answer.
+            reasoning = message.get("reasoning")
+            text = strip_reasoning(reasoning) if isinstance(reasoning, str) else ""
+        if not text:
+            raise ProviderCallError("Provider returned an empty assistant message.")
+        return text
 
     def stream_chat_completion(self, messages: list[ChatMessage]):
         """Yield assistant *content* deltas as they arrive (OpenAI SSE format). Reasoning deltas

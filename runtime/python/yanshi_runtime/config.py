@@ -16,6 +16,19 @@ class RuntimeSettings(BaseSettings):
     model_provider: str | None = None
     model_api_key: str | None = None
     permission_mode: str = "default"
+    # Bound how many runs execute at once (others queue) so the runtime stays responsive.
+    max_concurrent_runs: int = 4
+    # Execute runs inline instead of on the worker pool (used by tests / deterministic flows).
+    synchronous_runs: bool = False
+    # Per-session API token; when set, all endpoints (except /health) require it. Generated and
+    # persisted to <data_dir>/runtime.token at startup if not provided.
+    api_token: str | None = None
+    # Comma-separated extra allowed CORS origins (e.g. a dev server); tauri origins are always on.
+    extra_cors_origins: str | None = None
+
+    @property
+    def token_path(self) -> Path:
+        return self.data_dir / "runtime.token"
 
     @property
     def database_path(self) -> Path:

@@ -77,6 +77,11 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
+        # Bounded run execution: each run gets its own thread (so it doesn't inherit LangGraph's
+        # executor context, which breaks when invoke() runs inside a pooled worker), and a semaphore
+        # caps how many execute at once — excess runs queue as "created" until a slot frees.
+        self._run_semaphore = threading.Semaphore(max(1, settings.max_concurrent_runs))
+        self._shutting_down = False
         # Recover from a previous crash: any run left mid-flight is marked failed (no zombies).
         interrupted = self.storage.reconcile_interrupted_runs()
         if interrupted:
@@ -113,11 +118,34 @@ class RuntimeService:
             raise HTTPException(status_code=404, detail="Project not found.") from exc
         reasoning = request.reasoning or self.storage.get_app_settings().reasoning
         self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
-        background_tasks.add_task(self.start_run, run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning)
+        self._dispatch_run(run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning)
         return run
 
+    def _dispatch_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool, reasoning: str = "medium") -> None:
+        if self.settings.synchronous_runs:
+            self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+            return
+
+        def runner() -> None:
+            with self._run_semaphore:  # caps concurrent runs; excess threads block here
+                if not self._shutting_down:
+                    self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+
+        threading.Thread(target=runner, name=f"yanshi-run-{run_id}", daemon=True).start()
+
     def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium") -> None:
-        self.graph.start(run_id, task, permission_mode, plan_first, reasoning)
+        started = time.monotonic()
+        logger.info("run %s started", run_id)
+        try:
+            self.graph.start(run_id, task, permission_mode, plan_first, reasoning)
+            logger.info("run %s finished in %.1fs", run_id, time.monotonic() - started)
+        except Exception:  # noqa: BLE001 — a crashing run must not silently kill the worker
+            logger.exception("run %s crashed", run_id)
+            try:
+                self.storage.update_run(run_id, status="failed", result_summary="Run failed unexpectedly.", completed=True)
+                self.storage.append_event("run.failed", run_id=run_id, payload={"summary": "Run failed unexpectedly."})
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to mark run %s failed after crash", run_id)
 
     def list_project_files(self, project_id: str) -> dict:
         try:
@@ -223,7 +251,7 @@ class RuntimeService:
             payload={"automationId": automation.id, "name": automation.name, "runId": run.id},
         )
         if background_tasks is not None:
-            background_tasks.add_task(self.start_run, run.id, automation.task, automation.permissionMode, automation.planFirst)
+            self._dispatch_run(run.id, automation.task, automation.permissionMode, automation.planFirst)
         else:
             self.start_run(run.id, automation.task, automation.permissionMode, automation.planFirst)
         return run.model_dump()
@@ -557,7 +585,9 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.on_event("shutdown")
     def shutdown_acp() -> None:
         # Kill any launched ACP agent processes with the runtime — no orphans.
-        get_service(app).acp.shutdown()
+        service = get_service(app)
+        service._shutting_down = True
+        service.acp.shutdown()
 
     @app.get("/health", response_model=RuntimeHealth)
     def health(service: RuntimeService = Depends(service_dep)):
@@ -888,7 +918,12 @@ def main() -> None:
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--data-dir", default=None)
+    parser.add_argument("--log-level", default="info")
     args = parser.parse_args()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     settings = settings_from_env(args.data_dir)
     if args.host:
         settings.host = args.host

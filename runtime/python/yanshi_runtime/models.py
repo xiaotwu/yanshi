@@ -58,7 +58,8 @@ ReasoningLevel = Literal["low", "medium", "high", "extra_high"]
 
 
 class CreateRunRequest(BaseModel):
-    task: str
+    # Bound the task length so a single request can't bloat the prompt/DB (basic DoS guard).
+    task: str = Field(..., max_length=16000)
     projectId: str | None = None
     permissionMode: PermissionMode = "default"
     planFirst: bool = False

@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,7 +22,8 @@ from yanshi_runtime.workshop import WorkshopPackValidator
 
 
 def make_client(tmp_path: Path) -> TestClient:
-    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    # Run inline so assertions can check terminal state right after POST (production uses the pool).
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", synchronous_runs=True)
     return TestClient(create_app(settings))
 
 
@@ -1579,6 +1581,70 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert "interrupted" in (recovered.resultSummary or "").lower()
     # Idempotent: a second reconcile finds nothing.
     assert reopened.reconcile_interrupted_runs() == 0
+
+
+def test_runs_execute_on_the_worker_pool(tmp_path: Path) -> None:
+    """With the default (non-synchronous) config, a run is dispatched to the pool and completes
+    asynchronously — the POST returns immediately and the run finishes shortly after."""
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")  # synchronous_runs=False
+    client = TestClient(create_app(settings))
+    with FakeOpenAIServer() as base_url:
+        client.put("/settings/provider", json={"baseUrl": base_url, "model": "yanshi-test-model"})
+        created = client.post("/runs", json={"task": "Write a concise hello"})
+        run_id = created.json()["id"]
+        deadline = time.monotonic() + 10
+        status = created.json()["status"]
+        while status not in {"completed", "failed"} and time.monotonic() < deadline:
+            time.sleep(0.05)
+            status = client.get(f"/runs/{run_id}").json()["status"]
+    assert status == "completed"
+
+
+def test_provider_retries_transient_failures() -> None:
+    """A transient 503 is retried with backoff and the next attempt succeeds."""
+    from yanshi_runtime.providers import OpenAICompatibleProvider, ProviderConfig
+
+    state = {"calls": 0}
+
+    class FlakyHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            state["calls"] += 1
+            if state["calls"] == 1:
+                self.send_response(503)
+                self.send_header("content-length", "0")
+                self.end_headers()
+                return
+            body = json.dumps({"choices": [{"message": {"role": "assistant", "content": "recovered"}}]}).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), FlakyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}/v1"
+        provider = OpenAICompatibleProvider(ProviderConfig.from_secret_settings({"baseUrl": base, "model": "m", "apiKey": ""}))
+        # Patch backoff to near-zero so the test is fast.
+        import yanshi_runtime.providers.openai_compatible as mod
+
+        original = mod._backoff_seconds
+        mod._backoff_seconds = lambda attempt: 0.01
+        try:
+            from yanshi_runtime.models import ChatMessage
+
+            assert provider.chat_completion([ChatMessage(role="user", content="hi")]) == "recovered"
+        finally:
+            mod._backoff_seconds = original
+        assert state["calls"] == 2
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
 
 
 def test_storage_is_thread_safe_under_concurrency(tmp_path: Path) -> None:

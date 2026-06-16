@@ -134,13 +134,21 @@ class RuntimeGraph:
         """Stream the manager's answer into the run's partial buffer and return the full text."""
         self._begin_partial(run_id)
         chunks: list[str] = []
-        for piece in self.provider.stream_chat_completion(messages):
-            if self._is_cancelled(run_id):
-                break
-            chunks.append(piece)
-            self._append_partial(run_id, piece)
+        generator = self.provider.stream_chat_completion(messages)
+        try:
+            for piece in generator:
+                if self._is_cancelled(run_id):
+                    break
+                chunks.append(piece)
+                self._append_partial(run_id, piece)
+        finally:
+            # Closing the generator exits the httpx stream context, aborting the in-flight request
+            # server-side — so Stop actually stops generation (and frees the connection) promptly.
+            generator.close()
         self._finish_partial(run_id)
         text = strip_reasoning("".join(chunks))
+        if self._is_cancelled(run_id):
+            return text  # cancelled: return whatever streamed; the finalizer discards it
         if not text:
             raise ProviderCallError("Provider returned an empty assistant message.")
         return text
