@@ -33,6 +33,15 @@ from .secrets import SecretStore, default_secret_store
 
 PROVIDER_API_KEY_SECRET = "provider_api_key"
 
+# Integration (ACP/MCP) env values are secrets: they're stored in the SecretStore (off-DB) as refs
+# and never returned raw by the API. A non-empty value reads back as this sentinel so the UI can
+# show "set" without seeing it; sending the sentinel back on save preserves the stored secret.
+_INTEGRATION_SECRET_SENTINEL = "__YANSHI_SECRET_SET__"
+
+
+def _is_secret_ref(value: str) -> bool:
+    return value.startswith(("file:", "keychain:"))
+
 # Default station floor positions (x, z), mirrored by the Live Office 3D scene.
 DEFAULT_STATION_POSITIONS: dict[str, tuple[float, float]] = {
     "manager": (-2.4, -0.6),
@@ -1620,17 +1629,82 @@ class Storage:
         return next_settings
 
     @locked_storage_method
-    def get_ai_integrations(self) -> AiIntegrationsConfig:
+    def _raw_ai_integrations(self) -> AiIntegrationsConfig:
+        """Stored config with env values as secret refs (internal use only)."""
         value = self.get_setting("integrations") or {}
         return _with_honest_integration_statuses(AiIntegrationsConfig(**value))
 
+    @staticmethod
+    def _mask_env(env: dict[str, str]) -> dict[str, str]:
+        # A stored ref (or any legacy non-empty value) reads back as the sentinel; never the secret.
+        return {key: (_INTEGRATION_SECRET_SENTINEL if value else "") for key, value in env.items()}
+
+    @locked_storage_method
+    def get_ai_integrations(self) -> AiIntegrationsConfig:
+        """Public read: env secrets are masked so the API never returns them."""
+        config = self._raw_ai_integrations()
+        for agent in config.externalAgents:
+            agent.env = self._mask_env(agent.env)
+        for server in config.mcpServers:
+            server.env = self._mask_env(server.env)
+        return config
+
+    @locked_storage_method
+    def get_ai_integrations_resolved(self) -> AiIntegrationsConfig:
+        """Internal read for launching an agent: env refs resolved back to real secret values."""
+        config = self._raw_ai_integrations()
+        for agent in config.externalAgents:
+            agent.env = self._resolve_env(agent.env)
+        for server in config.mcpServers:
+            server.env = self._resolve_env(server.env)
+        return config
+
+    def _resolve_env(self, env: dict[str, str]) -> dict[str, str]:
+        resolved: dict[str, str] = {}
+        for key, value in env.items():
+            resolved[key] = (self.secret_store.get_secret(value) or "") if _is_secret_ref(value) else value
+        return resolved
+
+    def _reconcile_env(self, kind: str, entity_id: str, env: dict[str, str], prior_env: dict[str, str]) -> dict[str, str]:
+        """Turn an incoming env dict into stored refs: preserve unchanged secrets (sentinel),
+        clear emptied ones, and move new plaintext values into the SecretStore."""
+        result: dict[str, str] = {}
+        for key, value in env.items():
+            prior = prior_env.get(key, "")
+            if value == _INTEGRATION_SECRET_SENTINEL:
+                if prior:
+                    result[key] = prior  # keep existing ref
+            elif value == "":
+                if _is_secret_ref(prior):
+                    self.secret_store.delete_secret(prior)
+                result[key] = ""
+            elif _is_secret_ref(value):
+                result[key] = value
+            else:
+                name = f"integration-{kind}-{entity_id}-{key}"
+                result[key] = self.secret_store.set_secret(name, value)
+        return result
+
     @locked_storage_method
     def update_ai_integrations(self, update: AiIntegrationsUpdate) -> AiIntegrationsConfig:
+        prior = self._raw_ai_integrations()
+        prior_agents = {agent.id: agent.env for agent in prior.externalAgents}
+        prior_servers = {server.id: server.env for server in prior.mcpServers}
         current = self.get_ai_integrations().model_dump()
         patch = update.model_dump(exclude_none=True)
         # model_copy(update=...) skips validation, so rebuild through the model instead.
         next_config = _with_honest_integration_statuses(AiIntegrationsConfig(**{**current, **patch}))
+        # Move env secrets off-DB into the SecretStore; persist only refs.
+        for agent in next_config.externalAgents:
+            agent.env = self._reconcile_env("agent", agent.id, agent.env, prior_agents.get(agent.id, {}))
+        for server in next_config.mcpServers:
+            server.env = self._reconcile_env("mcp", server.id, server.env, prior_servers.get(server.id, {}))
         self.set_setting("integrations", next_config.model_dump())
+        # Return the masked view (refs never leave the runtime).
+        for agent in next_config.externalAgents:
+            agent.env = self._mask_env(agent.env)
+        for server in next_config.mcpServers:
+            server.env = self._mask_env(server.env)
         return next_config
 
     @locked_storage_method

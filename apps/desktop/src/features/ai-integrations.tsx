@@ -22,6 +22,31 @@ import type { TKey } from "../i18n/en";
 import { notify } from "../lib/notices";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
+// env secret values are never returned by the runtime; a saved secret arrives as this sentinel.
+// We display it as a mask and translate it back on save so the stored secret is preserved.
+const SECRET_SENTINEL = "__YANSHI_SECRET_SET__";
+const SECRET_MASK = "••••••";
+
+/** Render an env dict as editable KEY=value lines, masking already-saved secrets. */
+function envToText(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([key, value]) => `${key}=${value === SECRET_SENTINEL ? SECRET_MASK : value}`)
+    .join("\n");
+}
+
+/** Parse KEY=value lines back to an env dict, mapping the mask back to the preserve sentinel. */
+function parseEnvText(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) {
+      const value = line.slice(eq + 1).trim();
+      result[line.slice(0, eq).trim()] = value === SECRET_MASK ? SECRET_SENTINEL : value;
+    }
+  }
+  return result;
+}
+
 const STATUS_KEY: Record<IntegrationStatus, TKey> = {
   not_configured: "integrations.status.notConfigured",
   configured: "integrations.status.configured",
@@ -198,20 +223,7 @@ function ExternalAgentDialog({
   const [command, setCommand] = useState(agent.command ?? "");
   const [args, setArgs] = useState(agent.args.join(" "));
   const [endpoint, setEndpoint] = useState(agent.endpoint ?? "");
-  const [env, setEnv] = useState(
-    Object.entries(agent.env)
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n"),
-  );
-
-  const parseEnv = (): Record<string, string> => {
-    const result: Record<string, string> = {};
-    for (const line of env.split("\n")) {
-      const eq = line.indexOf("=");
-      if (eq > 0) result[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
-    }
-    return result;
-  };
+  const [env, setEnv] = useState(envToText(agent.env));
 
   const collect = (): ExternalAgentConfig => ({
     ...agent,
@@ -220,7 +232,7 @@ function ExternalAgentDialog({
     command: command.trim() || null,
     args: args.trim() ? args.trim().split(/\s+/) : [],
     endpoint: endpoint.trim() || null,
-    env: parseEnv(),
+    env: parseEnvText(env),
   });
 
   const save = () => void onSave(collect());
@@ -381,20 +393,7 @@ function McpServerDialog({
   const [command, setCommand] = useState(server.command ?? "");
   const [args, setArgs] = useState(server.args.join(" "));
   const [url, setUrl] = useState(server.url ?? "");
-  const [env, setEnv] = useState(
-    Object.entries(server.env)
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n"),
-  );
-
-  const parseEnv = (): Record<string, string> => {
-    const result: Record<string, string> = {};
-    for (const line of env.split("\n")) {
-      const eq = line.indexOf("=");
-      if (eq > 0) result[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
-    }
-    return result;
-  };
+  const [env, setEnv] = useState(envToText(server.env));
 
   const save = () =>
     void onSave({
@@ -404,7 +403,7 @@ function McpServerDialog({
       command: command.trim() || null,
       args: args.trim() ? args.trim().split(/\s+/) : [],
       url: url.trim() || null,
-      env: parseEnv(),
+      env: parseEnvText(env),
     });
 
   return (

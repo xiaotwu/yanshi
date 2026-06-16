@@ -427,8 +427,9 @@ class RuntimeService:
         return config
 
     def connect_external_agent(self, agent_id: str) -> AiIntegrationsConfig:
-        config = self.storage.get_ai_integrations()
-        agent = next((item for item in config.externalAgents if item.id == agent_id), None)
+        # Resolve env secrets only for the launch; the response uses the masked config.
+        resolved = self.storage.get_ai_integrations_resolved()
+        agent = next((item for item in resolved.externalAgents if item.id == agent_id), None)
         if agent is None:
             raise HTTPException(status_code=404, detail="External agent not found.")
         try:
@@ -439,7 +440,7 @@ class RuntimeService:
             "runtime.status.changed",
             payload={"status": "acp.connection", "agentId": agent_id, "result": connection.status},
         )
-        return self._overlay_acp_state(config)
+        return self._overlay_acp_state(self.storage.get_ai_integrations())
 
     def disconnect_external_agent(self, agent_id: str) -> AiIntegrationsConfig:
         self.acp.disconnect(agent_id)

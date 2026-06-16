@@ -1585,6 +1585,31 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert reopened.reconcile_interrupted_runs() == 0
 
 
+def test_integration_env_secrets_stay_out_of_db_and_api(tmp_path: Path) -> None:
+    """ACP/MCP env values are stored in the SecretStore (off-DB) and never returned raw; the masked
+    round-trip preserves a saved secret, and connect resolves it back."""
+    from yanshi_runtime.models import AiIntegrationsUpdate, ExternalAgentConfig
+    from yanshi_runtime.storage import _INTEGRATION_SECRET_SENTINEL, Storage
+
+    storage = Storage(tmp_path / "yanshi.db", "test")
+    agent = ExternalAgentConfig(id="ea_1", name="Helper", command="run", env={"API_KEY": "super-secret"})
+    storage.update_ai_integrations(AiIntegrationsUpdate(externalAgents=[agent]))
+
+    # API read masks the secret.
+    public = storage.get_ai_integrations()
+    assert public.externalAgents[0].env["API_KEY"] == _INTEGRATION_SECRET_SENTINEL
+    # The raw secret is not in the SQLite settings row.
+    raw_settings = json.dumps(storage.get_setting("integrations"))
+    assert "super-secret" not in raw_settings
+    # Resolved read (used only for launching) returns the real value.
+    assert storage.get_ai_integrations_resolved().externalAgents[0].env["API_KEY"] == "super-secret"
+
+    # Saving the masked value back preserves the stored secret (no clobber to the sentinel).
+    masked = public.externalAgents[0]
+    storage.update_ai_integrations(AiIntegrationsUpdate(externalAgents=[masked]))
+    assert storage.get_ai_integrations_resolved().externalAgents[0].env["API_KEY"] == "super-secret"
+
+
 def test_execute_node_short_circuits_when_cancelled(tmp_path: Path) -> None:
     """Cooperative cancellation: once a run is cancelled, the executor stops launching tool steps
     and skips synthesis instead of producing a final answer."""
