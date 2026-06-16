@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import io
 import json
+import logging
 import re
 import shutil
 import threading
@@ -12,6 +13,8 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+
+logger = logging.getLogger("yanshi")
 import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -74,6 +77,14 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
+        # Recover from a previous crash: any run left mid-flight is marked failed (no zombies).
+        interrupted = self.storage.reconcile_interrupted_runs()
+        if interrupted:
+            logger.info("reconciled %d interrupted run(s) from a previous session", interrupted)
+        # Keep the event log bounded across long-lived sessions.
+        pruned = self.storage.prune_events()
+        if pruned:
+            logger.info("pruned %d old event(s)", pruned)
         self._seed_default_workspace()
         self.storage.append_event(
             "runtime.status.changed",

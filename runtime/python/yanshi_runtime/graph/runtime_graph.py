@@ -116,6 +116,11 @@ class RuntimeGraph:
             if entry is not None:
                 entry["done"] = True
 
+    def _clear_partial(self, run_id: str) -> None:
+        """Drop a run's streamed partial once it's terminal — prevents the buffer growing unbounded."""
+        with self._partials_lock:
+            self._partials.pop(run_id, None)
+
     def request_cancel(self, run_id: str) -> None:
         """Mark a run for cancellation: streaming stops early and the finalizer won't override
         the cancelled status. The in-flight HTTP call may still finish server-side, but its
@@ -466,6 +471,7 @@ class RuntimeGraph:
         # or emit a terminal event (the cancel endpoint already did).
         if self._is_cancelled(run_id):
             self._cancelled.discard(run_id)
+            self._clear_partial(run_id)
             return state
         summary = state.get("result_summary") or "Run stopped without a final result."
         # Failure is determined by explicit state flags set upstream — never by keyword-matching
@@ -486,6 +492,7 @@ class RuntimeGraph:
             run_id=run_id,
             payload={"summary": summary},
         )
+        self._clear_partial(run_id)
         return state
 
     def _route_after_manager(self, state: GraphState) -> Literal["permission_gate", "execute", "finalizer"]:

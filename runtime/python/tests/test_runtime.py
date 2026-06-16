@@ -1560,6 +1560,58 @@ def test_agent_instances_and_actors_persist_and_update(tmp_path: Path) -> None:
     assert file_actor2.animation in {"organizing_files", "celebrating", "failed"}
 
 
+def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
+    """A run left mid-flight when the process died must be marked failed on the next start."""
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.storage import Storage
+
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    storage = Storage(settings.database_path, "test")
+    run = storage.create_run("long task")
+    storage.update_run(run.id, status="running")
+    storage.conn.close()
+
+    reopened = Storage(settings.database_path, "test")
+    count = reopened.reconcile_interrupted_runs()
+    assert count == 1
+    recovered = reopened.get_run(run.id)
+    assert recovered.status == "failed"
+    assert "interrupted" in (recovered.resultSummary or "").lower()
+    # Idempotent: a second reconcile finds nothing.
+    assert reopened.reconcile_interrupted_runs() == 0
+
+
+def test_storage_is_thread_safe_under_concurrency(tmp_path: Path) -> None:
+    """Many threads hammering the shared connection (runs + events + reads) must not race or
+    raise — the storage serializes all access behind its lock."""
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.storage import Storage
+
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    storage = Storage(settings.database_path, "test")
+    errors: list[Exception] = []
+
+    def worker(n: int) -> None:
+        try:
+            for i in range(25):
+                run = storage.create_run(f"task {n}-{i}")
+                storage.append_event("run.started", run_id=run.id, payload={"task": run.task})
+                storage.create_observation(run.id, "MessageObservation", "ok", agent_id="agent_manager")
+                storage.list_events(run_id=run.id)
+                storage.list_runs()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(storage.list_runs()) == 8 * 25
+
+
 def test_agent_office_state_survives_restart(tmp_path: Path) -> None:
     from yanshi_runtime.config import RuntimeSettings
     from yanshi_runtime.storage import Storage

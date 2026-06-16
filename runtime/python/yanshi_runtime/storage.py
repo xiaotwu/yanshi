@@ -127,6 +127,7 @@ class Storage:
         self.migrate()
         self._migrate_provider_api_key()
 
+    @locked_storage_method
     def migrate(self) -> None:
         self.conn.executescript(
             """
@@ -341,12 +342,41 @@ class Storage:
               motion_state TEXT NOT NULL DEFAULT 'still',
               updated_at TEXT NOT NULL
             );
+
+            -- Hot-path lookups are filtered by run_id (events stream, transcripts, queues) — index
+            -- them so queries stay fast as the tables grow.
+            CREATE INDEX IF NOT EXISTS idx_events_run_seq ON events(run_id, seq);
+            CREATE INDEX IF NOT EXISTS idx_actions_run ON actions(run_id);
+            CREATE INDEX IF NOT EXISTS idx_observations_run ON observations(run_id);
+            CREATE INDEX IF NOT EXISTS idx_artifacts_run ON artifacts(run_id);
+            CREATE INDEX IF NOT EXISTS idx_agent_tasks_run ON agent_tasks(run_id);
+            CREATE INDEX IF NOT EXISTS idx_run_threads_thread ON run_threads(thread_id);
+            CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
             """
         )
         self.conn.commit()
         self._add_missing_columns()
         self._seed_agent_profiles()
 
+    @locked_storage_method
+    def prune_events(self, max_events: int = 20000) -> int:
+        """Keep the event log bounded: drop the oldest events beyond a cap. Safe because clients
+        read forward by monotonic seq and never need very old events. Returns rows deleted."""
+        row = self.conn.execute("SELECT COUNT(*) AS n FROM events").fetchone()
+        total = int(row["n"]) if row else 0
+        if total <= max_events:
+            return 0
+        cutoff = self.conn.execute(
+            "SELECT seq FROM events ORDER BY seq DESC LIMIT 1 OFFSET ?",
+            (max_events - 1,),
+        ).fetchone()
+        if cutoff is None:
+            return 0
+        cursor = self.conn.execute("DELETE FROM events WHERE seq < ?", (cutoff["seq"],))
+        self.conn.commit()
+        return cursor.rowcount
+
+    @locked_storage_method
     def _add_missing_columns(self) -> None:
         """Idempotent column additions for tables that existed before a field was introduced."""
         existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(live_office_state)").fetchall()}
@@ -354,6 +384,7 @@ class Storage:
             self.conn.execute("ALTER TABLE live_office_state ADD COLUMN furniture_json TEXT NOT NULL DEFAULT '[]'")
             self.conn.commit()
 
+    @locked_storage_method
     def create_project(self, name: str, *, description: str | None = None, workspace_root: Path) -> ProjectSummary:
         now = utc_now()
         project_id = new_id("proj")
@@ -382,16 +413,19 @@ class Storage:
         self.conn.commit()
         return self.get_project(project_id)
 
+    @locked_storage_method
     def list_projects(self) -> list[ProjectSummary]:
         rows = self.conn.execute("SELECT * FROM projects ORDER BY updated_at DESC").fetchall()
         return [self._project_from_row(row) for row in rows]
 
+    @locked_storage_method
     def get_project(self, project_id: str) -> ProjectSummary:
         row = self.conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         if row is None:
             raise KeyError(project_id)
         return self._project_from_row(row)
 
+    @locked_storage_method
     def update_project(
         self,
         project_id: str,
@@ -419,6 +453,7 @@ class Storage:
         self.conn.commit()
         return self.get_project(project_id)
 
+    @locked_storage_method
     def delete_project(self, project_id: str) -> None:
         self.get_project(project_id)
         self.conn.execute(
@@ -428,6 +463,7 @@ class Storage:
         self.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self.conn.commit()
 
+    @locked_storage_method
     def create_run(self, task: str, project_id: str | None = None, parent_run_id: str | None = None) -> RunSummary:
         if project_id:
             self.get_project(project_id)
@@ -451,6 +487,23 @@ class Storage:
         self.conn.commit()
         return self.get_run(run_id)
 
+    @locked_storage_method
+    def reconcile_interrupted_runs(self) -> int:
+        """Mark runs left in a non-terminal state (a previous process crashed/was killed mid-run)
+        as failed, so the UI never shows a permanently-stuck "running" run. Returns the count."""
+        now = utc_now()
+        cursor = self.conn.execute(
+            """
+            UPDATE runs SET status = 'failed', completed_at = ?, updated_at = ?,
+              result_summary = COALESCE(result_summary, 'Run interrupted by a runtime restart.')
+            WHERE status IN ('created', 'running', 'pending_approval', 'paused')
+            """,
+            (now, now),
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    @locked_storage_method
     def _thread_for(self, run_id: str) -> tuple[str, str | None]:
         """Return (thread_id, parent_run_id) for a run; a run with no thread row is its own thread."""
         row = self.conn.execute(
@@ -461,6 +514,7 @@ class Storage:
             return run_id, None
         return row["thread_id"], row["parent_run_id"]
 
+    @locked_storage_method
     def thread_history(self, run_id: str) -> list[RunSummary]:
         """Prior completed turns in this run's chat thread, oldest first (excludes this run)."""
         thread_id, _ = self._thread_for(run_id)
@@ -475,16 +529,19 @@ class Storage:
         ).fetchall()
         return [self._run_from_row(row) for row in rows]
 
+    @locked_storage_method
     def get_run(self, run_id: str) -> RunSummary:
         row = self.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
         if row is None:
             raise KeyError(run_id)
         return self._run_from_row(row)
 
+    @locked_storage_method
     def list_runs(self) -> list[RunSummary]:
         rows = self.conn.execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
         return [self._run_from_row(row) for row in rows]
 
+    @locked_storage_method
     def list_runs_for_project(self, project_id: str) -> list[RunSummary]:
         rows = self.conn.execute(
             "SELECT * FROM runs WHERE project_id = ? ORDER BY created_at DESC",
@@ -492,6 +549,7 @@ class Storage:
         ).fetchall()
         return [self._run_from_row(row) for row in rows]
 
+    @locked_storage_method
     def update_run(
         self,
         run_id: str,
@@ -523,6 +581,7 @@ class Storage:
         self.conn.commit()
         return self.get_run(run_id)
 
+    @locked_storage_method
     def append_event(
         self,
         event_type: str,
@@ -565,6 +624,7 @@ class Storage:
         self.conn.commit()
         return event
 
+    @locked_storage_method
     def list_events(self, *, after_seq: int = 0, run_id: str | None = None) -> list[tuple[int, RuntimeEvent]]:
         params: list[Any] = [after_seq]
         where = "seq > ?"
@@ -577,6 +637,7 @@ class Storage:
         ).fetchall()
         return [(row["seq"], self._event_from_row(row)) for row in rows]
 
+    @locked_storage_method
     def create_action(self, run_id: str, action_type: str, risk_level: str, input_data: dict[str, Any], agent_id: str | None = None) -> str:
         action_id = new_id("act")
         now = utc_now()
@@ -596,6 +657,7 @@ class Storage:
         )
         return action_id
 
+    @locked_storage_method
     def complete_action(self, action_id: str, run_id: str, *, status: str = "completed", agent_id: str | None = None) -> None:
         self.conn.execute(
             "UPDATE actions SET status = ?, completed_at = ? WHERE id = ?",
@@ -609,6 +671,7 @@ class Storage:
             payload={"actionId": action_id},
         )
 
+    @locked_storage_method
     def create_observation(
         self,
         run_id: str,
@@ -656,6 +719,7 @@ class Storage:
         )
         return observation_id
 
+    @locked_storage_method
     def enqueue_agent_task(
         self,
         run_id: str,
@@ -699,12 +763,14 @@ class Storage:
         )
         return agent_task
 
+    @locked_storage_method
     def get_agent_task(self, task_id: str) -> AgentTaskSummary:
         row = self.conn.execute("SELECT * FROM agent_tasks WHERE id = ?", (task_id,)).fetchone()
         if row is None:
             raise KeyError(task_id)
         return self._agent_task_from_row(row)
 
+    @locked_storage_method
     def start_agent_task(self, task_id: str) -> AgentTaskSummary:
         current = self.get_agent_task(task_id)
         now = utc_now()
@@ -723,6 +789,7 @@ class Storage:
         )
         return agent_task
 
+    @locked_storage_method
     def complete_agent_task(
         self,
         task_id: str,
@@ -749,6 +816,7 @@ class Storage:
         )
         return agent_task
 
+    @locked_storage_method
     def list_agent_tasks(
         self,
         *,
@@ -774,6 +842,7 @@ class Storage:
         ).fetchall()
         return [self._agent_task_from_row(row) for row in rows]
 
+    @locked_storage_method
     def create_approval(self, run_id: str, target_type: str, target_id: str, risk_level: str, request: str) -> ApprovalSummary:
         approval_id = new_id("appr")
         now = utc_now()
@@ -793,6 +862,7 @@ class Storage:
         )
         return approval
 
+    @locked_storage_method
     def get_approval(self, approval_id: str) -> ApprovalSummary:
         row = self.conn.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)).fetchone()
         if row is None:
@@ -808,12 +878,14 @@ class Storage:
             createdAt=row["created_at"],
         )
 
+    @locked_storage_method
     def list_pending_approvals(self) -> list[ApprovalSummary]:
         rows = self.conn.execute(
             "SELECT * FROM approvals WHERE status = 'pending' ORDER BY created_at ASC"
         ).fetchall()
         return [self.get_approval(row["id"]) for row in rows]
 
+    @locked_storage_method
     def decide_approval(self, approval_id: str, decision: str) -> ApprovalSummary:
         status = "approved" if decision == "approved" else "denied"
         self.conn.execute(
@@ -829,6 +901,7 @@ class Storage:
         )
         return approval
 
+    @locked_storage_method
     def create_artifact(
         self,
         run_id: str,
@@ -899,6 +972,7 @@ class Storage:
         rows = self.conn.execute(query, params).fetchall()
         return [self._artifact_from_row(row) for row in rows]
 
+    @locked_storage_method
     def _artifact_from_row(self, row: sqlite3.Row) -> ArtifactSummary:
         return ArtifactSummary(
             id=row["id"],
@@ -999,6 +1073,7 @@ class Storage:
         ).fetchall()
         return [self._run_from_row(row) for row in rows]
 
+    @locked_storage_method
     def _automation_from_row(self, row: sqlite3.Row) -> "AutomationSummary":
         return AutomationSummary(
             id=row["id"],
@@ -1017,6 +1092,7 @@ class Storage:
 
     # --- Agent profiles -------------------------------------------------
 
+    @locked_storage_method
     def _seed_agent_profiles(self) -> None:
         existing = self.conn.execute("SELECT COUNT(*) AS n FROM agent_profiles").fetchone()["n"]
         if existing:
@@ -1121,6 +1197,7 @@ class Storage:
         if cursor.rowcount == 0:
             raise KeyError(profile_id)
 
+    @locked_storage_method
     def _agent_profile_from_row(self, row: sqlite3.Row) -> AgentProfileSummary:
         return AgentProfileSummary(
             id=row["id"],
@@ -1180,6 +1257,7 @@ class Storage:
         self.append_event("liveOffice.state.updated", project_id=project_id, payload={"projectId": project_id})
         return self.get_live_office_state(project_id)
 
+    @locked_storage_method
     def _default_office_state(self, project_id: str | None) -> LiveOfficeStateSummary:
         return LiveOfficeStateSummary(
             id=f"office_default_{project_id or 'global'}",
@@ -1191,6 +1269,7 @@ class Storage:
             updatedAt=utc_now(),
         )
 
+    @locked_storage_method
     def _office_state_from_row(self, row: sqlite3.Row) -> LiveOfficeStateSummary:
         return LiveOfficeStateSummary(
             id=row["id"],
@@ -1238,6 +1317,7 @@ class Storage:
         self.conn.commit()
         return self._list_agent_instances_inner(project_id)
 
+    @locked_storage_method
     def _list_agent_instances_inner(self, project_id: str | None) -> list[AgentInstanceSummary]:
         rows = self.conn.execute(
             """
@@ -1290,6 +1370,7 @@ class Storage:
         )
         self.conn.commit()
 
+    @locked_storage_method
     def _instance_from_row(self, row: sqlite3.Row) -> AgentInstanceSummary:
         return AgentInstanceSummary(
             id=row["id"],
@@ -1308,6 +1389,7 @@ class Storage:
             updatedAt=row["updated_at"],
         )
 
+    @locked_storage_method
     def _actor_from_row(self, row: sqlite3.Row) -> AgentActor3DSummary:
         return AgentActor3DSummary(
             id=row["id"],
@@ -1323,6 +1405,7 @@ class Storage:
             updatedAt=row["updated_at"],
         )
 
+    @locked_storage_method
     def install_workshop_pack(
         self,
         *,
@@ -1362,16 +1445,19 @@ class Storage:
         self.conn.commit()
         return self.get_workshop_pack(pack_id)
 
+    @locked_storage_method
     def list_workshop_packs(self) -> list[WorkshopPackSummary]:
         rows = self.conn.execute("SELECT * FROM workshop_packs ORDER BY created_at DESC").fetchall()
         return [self._workshop_pack_from_row(row) for row in rows]
 
+    @locked_storage_method
     def get_workshop_pack(self, pack_id: str) -> WorkshopPackSummary:
         row = self.conn.execute("SELECT * FROM workshop_packs WHERE id = ?", (pack_id,)).fetchone()
         if row is None:
             raise KeyError(pack_id)
         return self._workshop_pack_from_row(row)
 
+    @locked_storage_method
     def set_workshop_pack_enabled(self, pack_id: str, enabled: bool) -> WorkshopPackSummary:
         self.get_workshop_pack(pack_id)
         self.conn.execute(
@@ -1381,6 +1467,7 @@ class Storage:
         self.conn.commit()
         return self.get_workshop_pack(pack_id)
 
+    @locked_storage_method
     def set_setting(self, key: str, value: dict[str, Any]) -> None:
         self.conn.execute(
             """
@@ -1392,12 +1479,14 @@ class Storage:
         )
         self.conn.commit()
 
+    @locked_storage_method
     def get_setting(self, key: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT value_json FROM settings WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
         return json.loads(row["value_json"] or "{}")
 
+    @locked_storage_method
     def set_provider_settings(self, *, base_url: str, model: str, api_key: str | None) -> ProviderSettingsPublic:
         existing = self.get_setting("provider") or {}
         api_key_ref = existing.get("apiKeyRef")
@@ -1413,6 +1502,7 @@ class Storage:
         self.set_setting("provider", next_value)
         return self.get_provider_settings_public()
 
+    @locked_storage_method
     def get_provider_settings_secret(self) -> dict[str, Any] | None:
         value = self.get_setting("provider")
         if not value or not value.get("baseUrl") or not value.get("model"):
@@ -1423,6 +1513,7 @@ class Storage:
         api_key = self.secret_store.get_secret(ref) if ref else ""
         return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key or ""}
 
+    @locked_storage_method
     def get_provider_settings_public(self) -> ProviderSettingsPublic:
         value = self.get_setting("provider") or {}
         return ProviderSettingsPublic(
@@ -1431,6 +1522,7 @@ class Storage:
             apiKeyConfigured=bool(value.get("apiKeyRef")),
         )
 
+    @locked_storage_method
     def _migrate_provider_api_key(self) -> None:
         """Move any legacy inline ``apiKey`` out of SQLite and into the secret store."""
         value = self.get_setting("provider")
@@ -1447,10 +1539,12 @@ class Storage:
         self.conn.commit()
         self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
+    @locked_storage_method
     def get_app_settings(self) -> AppSettings:
         value = self.get_setting("app") or {}
         return AppSettings(**value)
 
+    @locked_storage_method
     def update_app_settings(self, update: AppSettingsUpdate) -> AppSettings:
         current = self.get_app_settings().model_dump()
         patch = update.model_dump(exclude_none=True)
@@ -1458,10 +1552,12 @@ class Storage:
         self.set_setting("app", next_settings.model_dump())
         return next_settings
 
+    @locked_storage_method
     def get_ai_integrations(self) -> AiIntegrationsConfig:
         value = self.get_setting("integrations") or {}
         return _with_honest_integration_statuses(AiIntegrationsConfig(**value))
 
+    @locked_storage_method
     def update_ai_integrations(self, update: AiIntegrationsUpdate) -> AiIntegrationsConfig:
         current = self.get_ai_integrations().model_dump()
         patch = update.model_dump(exclude_none=True)
@@ -1470,6 +1566,7 @@ class Storage:
         self.set_setting("integrations", next_config.model_dump())
         return next_config
 
+    @locked_storage_method
     def _run_from_row(self, row: sqlite3.Row) -> RunSummary:
         thread_id, parent_run_id = self._thread_for(row["id"])
         return RunSummary(
@@ -1487,6 +1584,7 @@ class Storage:
             parentRunId=parent_run_id,
         )
 
+    @locked_storage_method
     def _project_from_row(self, row: sqlite3.Row) -> ProjectSummary:
         return ProjectSummary(
             id=row["id"],
@@ -1500,6 +1598,7 @@ class Storage:
             updatedAt=row["updated_at"],
         )
 
+    @locked_storage_method
     def _workshop_pack_from_row(self, row: sqlite3.Row) -> WorkshopPackSummary:
         return WorkshopPackSummary(
             id=row["id"],
@@ -1515,6 +1614,7 @@ class Storage:
             createdAt=row["created_at"],
         )
 
+    @locked_storage_method
     def _agent_task_from_row(self, row: sqlite3.Row) -> AgentTaskSummary:
         return AgentTaskSummary(
             id=row["id"],
@@ -1530,10 +1630,12 @@ class Storage:
             completedAt=row["completed_at"],
         )
 
+    @locked_storage_method
     def _project_id_for_run(self, run_id: str) -> str | None:
         row = self.conn.execute("SELECT project_id FROM runs WHERE id = ?", (run_id,)).fetchone()
         return row["project_id"] if row is not None else None
 
+    @locked_storage_method
     def _event_from_row(self, row: sqlite3.Row) -> RuntimeEvent:
         return RuntimeEvent(
             eventId=row["event_id"],
