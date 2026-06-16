@@ -12,6 +12,7 @@ export const zh: Record<TKey, string> = {
   "notify.runtimeError": "偃师运行时错误",
 
   // 错误提示（docs/ERROR_CATALOG.md）
+  "notice.providerSaved": "供应商已保存",
   "error.label": "错误",
   "error.dismiss": "关闭",
   "error.retry": "重试",
@@ -352,6 +353,7 @@ export const zh: Record<TKey, string> = {
   "atelier.popOut": "弹出窗口",
   "atelier.fullView": "全屏视图",
   "atelier.loading": "正在加载工坊",
+  "atelier.resetView": "重置视角",
   // 小工人状态（悬浮卡片 + 简化视图）。任务状态来自真实运行时；生活状态为装饰性空闲动画。
   "atelier.state.idle": "空闲",
   "atelier.state.working": "工作中",

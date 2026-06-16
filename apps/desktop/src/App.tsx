@@ -26,6 +26,7 @@ import { useContextMenu } from "./components/context-menu";
 import { CreateProjectModal } from "./components/create-project-modal";
 import { CloseRunsModal, Onboarding } from "./components/modals";
 import { ErrorToasts } from "./components/error-toasts";
+import { Notices } from "./components/notices";
 import { ApprovalsView } from "./features/approvals";
 import { DeveloperView } from "./features/developer";
 import { AtelierModal, AtelierWindow } from "./features/live-office";
@@ -366,6 +367,10 @@ export function App() {
           panel — so it stays a real navigation surface. The label-bearing scroll area (projects/
           recents) is display:none in rail mode, so only the rail's icons remain focusable. */}
       <aside className={sidebarOpen ? "sidebar" : "sidebar rail"}>
+          <div className="sidebar-brand" aria-hidden>
+            <span className="brand-mark"><Sparkles size={15} /></span>
+            <span className="brand-word">{t("brand")}</span>
+          </div>
           <nav>
             <button className={view === "new-task" ? "nav-item active" : "nav-item"} onClick={() => navigate("new-task")} title={t("nav.newTask")} aria-label={t("nav.newTask")}>
               <SquarePen size={18} />
@@ -488,6 +493,7 @@ export function App() {
       {showOnboarding && <Onboarding onTryDemo={tryDemo} onDismiss={dismissOnboarding} />}
       {closePrompt && <CloseRunsModal count={activeRunCount} onClose={() => setClosePrompt(false)} />}
       <ErrorToasts onOpenSettings={openSettings} />
+      <Notices />
       {contextMenu}
     </div>
   );

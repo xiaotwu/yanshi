@@ -74,7 +74,7 @@ interface RuntimeStore {
   cancelRun: (runId: string) => Promise<void>;
   restartRuntime: () => Promise<void>;
   refreshMacosPermissions: () => Promise<void>;
-  saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<void>;
+  saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<boolean>;
   checkProviderHealth: () => Promise<void>;
   saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
   loadAiIntegrations: () => Promise<void>;
@@ -504,9 +504,11 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       const providerSettings = await runtimeApi.updateProviderSettings(settings);
       const status = await runtimeApi.status();
       set({ providerSettings, status, loading: false });
+      return true;
     } catch (error) {
       reportError("YANSHI_PROVIDER_003", error);
       set({ error: error instanceof Error ? error.message : "Could not save provider settings.", loading: false });
+      return false;
     }
   },
 

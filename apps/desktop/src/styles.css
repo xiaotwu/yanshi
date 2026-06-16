@@ -1003,6 +1003,20 @@ pre {
   color: var(--text-secondary);
 }
 
+/* Always-on subtle worker nameplate (normal mode legibility). */
+.office-nameplate {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevated) 86%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 9.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -2904,16 +2918,27 @@ button:active:not(:disabled) { transform: scale(0.98); }
 .composer-block { display: flex; flex-direction: column; gap: 10px; }
 
 /* ── Responsive integrity ─────────────────────────────────────────────────────── */
-@media (max-width: 1000px) {
+@media (max-width: 1180px) {
   .app-shell { grid-template-columns: 200px minmax(0, 1fr); }
   .app-shell.office-visible { grid-template-columns: 200px minmax(0, 1fr) 300px; }
   .settings-modal .settings-layout { grid-template-columns: 168px minmax(0, 1fr); }
 }
-@media (max-width: 860px) {
-  /* The right Progress panel overlays instead of squeezing the workspace. */
+@media (max-width: 1080px) {
+  /* Narrow windows: the right Progress panel overlays the chat instead of squeezing it, so the
+     conversation keeps its width. (body min-width is 960, so this is the practical narrow range.) */
   .app-shell.office-visible { grid-template-columns: 200px minmax(0, 1fr); grid-template-areas: "titlebar titlebar" "sidebar main"; }
-  .office-pane { position: fixed; top: 40px; right: 0; bottom: 0; width: min(320px, 86vw); z-index: 40; box-shadow: var(--shadow); }
-  .composer-wrap h1 { margin-bottom: 26px; font-size: 27px; }
+  .app-shell.sidebar-collapsed.office-visible { grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: "titlebar titlebar" "sidebar main"; }
+  .office-pane {
+    position: fixed;
+    top: var(--titlebar-height);
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    z-index: 40;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .composer-wrap h1 { margin-bottom: 26px; font-size: 30px; }
   .library-meta .library-task { display: none; }
 }
 @media (max-height: 700px) {
@@ -4034,3 +4059,111 @@ textarea:focus-visible {
 }
 .search-hint-sep { width: 1px; height: 11px; margin: 0 5px; background: var(--border); }
 .search-count { font-size: 11.5px; color: var(--text-muted); }
+
+/* ── Transient success / info notices (bottom-center) ──────────────────────────── */
+.notices {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 80;
+  pointer-events: none;
+}
+.notice {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 550;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--text-primary) 14%, transparent);
+  animation: notice-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.notice-success { color: var(--accent); }
+.notice-success svg { color: var(--accent); }
+.notice-info svg { color: var(--text-secondary); }
+@keyframes notice-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .notice { animation: none; } }
+
+/* ── Sidebar brand wordmark ────────────────────────────────────────────────────── */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px 12px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.brand-word {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 580;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+/* Rail: brand collapses to just the centered mark. */
+.sidebar.rail .sidebar-brand { justify-content: center; padding: 4px 0 10px; }
+.sidebar.rail .brand-word { display: none; }
+
+/* ── List stagger-in (recents + library rows) ──────────────────────────────────── */
+.recent-item,
+.library-row { animation: list-in 0.32s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+@keyframes list-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+/* A short staggered cascade for the first several rows. */
+.recent-group .recent-item:nth-child(2) { animation-delay: 0.03s; }
+.recent-group .recent-item:nth-child(3) { animation-delay: 0.06s; }
+.recent-group .recent-item:nth-child(4) { animation-delay: 0.09s; }
+.recent-group .recent-item:nth-child(5) { animation-delay: 0.12s; }
+.library-row:nth-child(2) { animation-delay: 0.03s; }
+.library-row:nth-child(3) { animation-delay: 0.06s; }
+.library-row:nth-child(4) { animation-delay: 0.09s; }
+.library-row:nth-child(5) { animation-delay: 0.12s; }
+@media (prefers-reduced-motion: reduce) {
+  .recent-item, .library-row { animation: none; }
+}
+
+/* Settings: cross-fade between section panes (keyed remount on section change). */
+.settings-content { animation: view-in 0.22s cubic-bezier(0.22, 0.8, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) { .settings-content { animation: none; } }
+
+/* ── Atelier: stage wrapper + reset-view control ───────────────────────────────── */
+.atelier-stage { position: relative; height: 100%; }
+.atelier-reset {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+  color: var(--text-secondary);
+  backdrop-filter: blur(6px);
+}
+.atelier-reset:hover { color: var(--accent); border-color: var(--accent); }

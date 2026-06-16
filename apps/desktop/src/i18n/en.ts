@@ -10,6 +10,7 @@ export const en = {
   "notify.runtimeError": "Yanshi runtime error",
 
   // Error toasts + catalog (docs/ERROR_CATALOG.md)
+  "notice.providerSaved": "Provider saved",
   "error.label": "Error",
   "error.dismiss": "Dismiss",
   "error.retry": "Retry",
@@ -350,6 +351,7 @@ export const en = {
   "atelier.popOut": "Pop out",
   "atelier.fullView": "Full view",
   "atelier.loading": "Loading atelier",
+  "atelier.resetView": "Reset view",
   // Worker states (hover cards + simplified view). Task states mirror real runtime status;
   // life states are decorative idle animations.
   "atelier.state.idle": "Idle",

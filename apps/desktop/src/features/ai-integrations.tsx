@@ -19,6 +19,7 @@ import { Modal, ModalHeader } from "../components/modal";
 import { Switch } from "../components/switch";
 import { useT } from "../i18n";
 import type { TKey } from "../i18n/en";
+import { notify } from "../lib/notices";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 const STATUS_KEY: Record<IntegrationStatus, TKey> = {
@@ -631,9 +632,10 @@ function ProviderConfigDialog({ entry, isActive, onClose }: { entry: ProviderCat
   const configurable = entry.status !== "notImplemented";
   const preferredActions = appSettings?.preferredActions ?? {};
 
-  const save = () => {
-    void saveProviderSettings({ baseUrl: baseUrl.trim(), model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
+  const save = async () => {
+    const ok = await saveProviderSettings({ baseUrl: baseUrl.trim(), model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
     setApiKey("");
+    if (ok) notify(t("notice.providerSaved"));
   };
   const test = async () => {
     await checkProviderHealth();

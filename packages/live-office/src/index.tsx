@@ -298,12 +298,17 @@ function AgentActor({
       )}
 
       {/* Floating debug label — Developer Mode only; normal mode is tooltip-only (spec §2.8) */}
-      {debugLabels && (
+      {debugLabels ? (
         <Html position={[0, 1.0, 0]} center distanceFactor={6}>
           <div className="office-label">
             <strong>{agent.name}</strong>
             <span>{stateText}</span>
           </div>
+        </Html>
+      ) : (
+        /* Always-on subtle name chip so each worker is identifiable without hovering. */
+        <Html position={[0, 0.98, 0]} center distanceFactor={7} zIndexRange={[10, 0]}>
+          <div className="office-nameplate">{agent.name}</div>
         </Html>
       )}
 

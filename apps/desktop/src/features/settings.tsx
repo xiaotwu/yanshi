@@ -130,7 +130,7 @@ export function SettingsModal({ initialSection = "general", onClose }: { initial
             ))}
           </nav>
         </div>
-        <div className="settings-content">
+        <div className="settings-content" key={active}>
           <SettingsSectionView section={active} />
         </div>
       </section>

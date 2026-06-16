@@ -1,6 +1,6 @@
 // "Yanshi Atelier" — the animated mechanical-worker world. (Internally still the live-office module
 // for import stability; all user-facing copy says Yanshi Atelier / 偃师工坊.)
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, RotateCcw, X } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 
 import { puppetDataUrl, puppetExpression } from "@yanshi/live-office/worker-art";
@@ -73,6 +73,8 @@ function AtelierStage({ compact }: { compact: boolean }) {
   const { liveAgents, officeState, appSettings } = useRuntimeStore();
   const { t } = useT();
   const [simplified, setSimplified] = useState(false);
+  // Bumping this key remounts the canvas, restoring the default camera framing.
+  const [viewKey, setViewKey] = useState(0);
 
   // Localized worker state text for the in-scene hover cards (the scene package only ships
   // English defaults). Keys mirror runtime statuses and decorative life actions.
@@ -96,21 +98,27 @@ function AtelierStage({ compact }: { compact: boolean }) {
   if (!webglAvailable()) return <AtelierFallback onSimplified={() => setSimplified(true)} />;
 
   return (
-    <ErrorBoundary onError={(error) => reportError("YANSHI_ATELIER_001", error)} fallback={(retry) => <AtelierFallback onRetry={retry} onSimplified={() => setSimplified(true)} />}>
-      <Suspense fallback={<div className="scene-loading">{t("atelier.loading")}</div>}>
-        <LiveOfficeScene
-          agents={liveAgents}
-          compact={compact}
-          cameraMode={officeState?.cameraMode ?? "rear"}
-          stationLayout={officeState?.stationLayout ?? {}}
-          furniture={officeState?.furniture ?? []}
-          dark={document.documentElement.dataset.theme === "dark"}
-          lowPower={appSettings ? !appSettings.gpuAcceleration : false}
-          labels={workerLabels}
-          debugLabels={appSettings?.developerMode ?? false}
-        />
-      </Suspense>
-    </ErrorBoundary>
+    <div className="atelier-stage">
+      <button className="atelier-reset" onClick={() => setViewKey((key) => key + 1)} title={t("atelier.resetView")} aria-label={t("atelier.resetView")}>
+        <RotateCcw size={14} />
+      </button>
+      <ErrorBoundary onError={(error) => reportError("YANSHI_ATELIER_001", error)} fallback={(retry) => <AtelierFallback onRetry={retry} onSimplified={() => setSimplified(true)} />}>
+        <Suspense fallback={<div className="scene-loading">{t("atelier.loading")}</div>}>
+          <LiveOfficeScene
+            key={viewKey}
+            agents={liveAgents}
+            compact={compact}
+            cameraMode={officeState?.cameraMode ?? "rear"}
+            stationLayout={officeState?.stationLayout ?? {}}
+            furniture={officeState?.furniture ?? []}
+            dark={document.documentElement.dataset.theme === "dark"}
+            lowPower={appSettings ? !appSettings.gpuAcceleration : false}
+            labels={workerLabels}
+            debugLabels={appSettings?.developerMode ?? false}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
   );
 }
 
