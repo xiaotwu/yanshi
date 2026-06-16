@@ -6,16 +6,16 @@ import { useT } from "../i18n";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 /** Quit confirmation — shown on every red-close-button press (the app never silently hides).
- *  Quit pauses active chats, then fully terminates the app + bundled sidecar (no orphan,
+ *  Quit cancels active chats, then fully terminates the app + bundled sidecar (no orphan,
  *  no menu-bar-only leftover); "Hide to menu bar" is the explicit background option. */
 export function CloseRunsModal({ count, onClose }: { count: number; onClose: () => void }) {
   const { t } = useT();
-  const { pauseAllRuns } = useRuntimeStore();
+  const { cancelAllRuns } = useRuntimeStore();
   const [busy, setBusy] = useState(false);
 
   const quit = async () => {
     setBusy(true);
-    if (count > 0) await pauseAllRuns();
+    if (count > 0) await cancelAllRuns();
     await quitApp();
   };
 

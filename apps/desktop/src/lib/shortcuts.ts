@@ -31,7 +31,7 @@ export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
   { id: "focus-composer", category: "composer", defaultBinding: "Meta+E" },
   { id: "submit-task", category: "composer", defaultBinding: "Meta+Enter" },
   { id: "upload-file", category: "composer", defaultBinding: "Meta+U" },
-  { id: "pause-all", category: "tools", defaultBinding: "Meta+Shift+." },
+  { id: "cancel-all", category: "tools", defaultBinding: "Meta+Shift+." },
   { id: "open-developer", category: "developer", defaultBinding: "Meta+Shift+D" },
 ];
 

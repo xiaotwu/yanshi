@@ -205,11 +205,6 @@ export const runtimeApi = {
     if (!response.ok) throw new Error(await response.text());
     return (await response.json()) as { files: Array<{ name: string; path: string; size: number }> };
   },
-  pauseRun: (runId: string) =>
-    request<RunSummary>(`/runs/${runId}/pause`, {
-      method: "POST",
-      body: "{}",
-    }),
   cancelRun: (runId: string) =>
     request<RunSummary>(`/runs/${runId}/cancel`, {
       method: "POST",

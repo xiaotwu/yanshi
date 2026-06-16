@@ -145,6 +145,17 @@ export function statusLabel(status: RunSummary["status"], t: Translator): string
   return key ? t(key) : status.replace("_", " ");
 }
 
+/** Run lifecycle helpers — keep one definition of "done" so cancelled is never mistaken for busy.
+ *  Mirrors the backend's terminal set (completed/failed/cancelled). */
+export function isTerminalStatus(status: RunSummary["status"]): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+/** A run is busy if it's actively progressing or waiting on the user (not terminal, not idle). */
+export function isBusyStatus(status: RunSummary["status"]): boolean {
+  return status === "running" || status === "created" || status === "pending_approval";
+}
+
 const AGENT_STATE_KEYS: Record<string, TKey> = {
   idle: "agentState.idle",
   working: "agentState.working",

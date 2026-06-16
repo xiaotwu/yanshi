@@ -19,7 +19,7 @@ describe("shortcut defaults", () => {
 
   it("cover the required commands", () => {
     const ids = SHORTCUT_COMMANDS.map((command) => command.id);
-    for (const required of ["new-task", "open-search", "open-projects", "new-project", "open-library", "open-workshop", "open-settings", "open-atelier", "toggle-progress", "toggle-sidebar", "submit-task", "focus-composer", "upload-file", "open-task-details", "open-developer", "pause-all"]) {
+    for (const required of ["new-task", "open-search", "open-projects", "new-project", "open-library", "open-workshop", "open-settings", "open-atelier", "toggle-progress", "toggle-sidebar", "submit-task", "focus-composer", "upload-file", "open-task-details", "open-developer", "cancel-all"]) {
       expect(ids).toContain(required);
     }
   });

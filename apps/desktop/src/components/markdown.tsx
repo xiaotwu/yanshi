@@ -89,11 +89,13 @@ function parseBlocks(src: string): Block[] {
 
 /**
  * Allowlist link schemes. Markdown comes from model/tool output, so reject anything that could
- * execute (javascript:, data:, vbscript:, …) — only http(s)/mailto and relative/anchor links pass.
+ * execute (javascript:, data:, vbscript:, …) or navigate the app itself. Only absolute http(s),
+ * mailto, and in-page anchors pass — root-relative ("/…") links are dropped so model output can't
+ * point the webview at an app/runtime route.
  */
 export function safeUrl(raw: string): string | null {
   const url = raw.trim();
-  return /^(https?:\/\/|mailto:|\/|#)/i.test(url) ? url : null;
+  return /^(https?:\/\/|mailto:|#)/i.test(url) ? url : null;
 }
 
 /** Inline parser: bold, italic, inline code, and links. Returns React nodes. */

@@ -7,6 +7,7 @@ import { canRevealFiles, revealPath } from "../api/desktop";
 import { useContextMenu } from "../components/context-menu";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
+import { safeOpenExternal } from "../lib/external";
 import { notify } from "../lib/notices";
 import { type FileCategory, FileTypeIcon, fileCategory, outputFileName, projectIcon } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
@@ -147,6 +148,7 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
   // Multi-select for bulk actions, keyed by item.key. Selection mode is implicit: the action bar
   // and per-row checkboxes appear once anything is selected.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [loadFailed, setLoadFailed] = useState(false);
   const { openContextMenu, contextMenu } = useContextMenu();
 
   const toggleSelect = (key: string) =>
@@ -161,10 +163,15 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
     let cancelled = false;
     runtimeApi
       .artifacts()
-      .then((result) => !cancelled && setArtifacts(result))
+      .then((result) => {
+        if (cancelled) return;
+        setArtifacts(result);
+        setLoadFailed(false);
+      })
       .catch((err: unknown) => {
         if (cancelled) return;
-        // The toast carries the error; the Library shows its normal empty state.
+        // Distinguish "load failed" from "no files yet" so the empty state isn't misleading.
+        setLoadFailed(true);
         reportError("YANSHI_FILE_002", err);
       });
     return () => {
@@ -266,7 +273,7 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
               title={item.url}
               onClick={(event) => {
                 event.stopPropagation();
-                window.open(item.url ?? "", "_blank", "noreferrer");
+                safeOpenExternal(item.url ?? "");
               }}
             >
               <Globe size={11} /> {t("library.webSource")}
@@ -371,7 +378,12 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
         </div>
       )}
 
-      {!ready ? (
+      {loadFailed ? (
+        <div className="empty-rich">
+          <span className="empty-icon"><Package size={20} /></span>
+          <p>{t("common.loadFailed")}</p>
+        </div>
+      ) : !ready ? (
         <div className="library-groups" aria-hidden>
           {[0, 1].map((group) => (
             <div key={group} className="library-group">

@@ -5,7 +5,7 @@ import { runtimeApi } from "../api/client";
 import { canRevealFiles, revealPath } from "../api/desktop";
 import { Markdown } from "../components/markdown";
 import { useT } from "../i18n";
-import { EmptyView, PlanSteps, agentLabel, eventSummary, projectIcon, statusLabel } from "../lib/shared";
+import { EmptyView, PlanSteps, agentLabel, eventSummary, isTerminalStatus, projectIcon, statusLabel } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 export const TRANSCRIPT_EVENT_TYPES = new Set(["observation.created", "artifact.created"]);
@@ -231,7 +231,9 @@ function ChatTurn({
     (entry) => TRANSCRIPT_EVENT_TYPES.has(entry.event.type) && isConversational(entry.event),
   );
   const turnApprovals = approvals.filter((approval) => approval.runId === turn.id);
-  const finished = turn.status === "completed" || turn.status === "failed";
+  const finished = isTerminalStatus(turn.status);
+  // failed and cancelled both render as a "stopped" notice rather than a normal answer.
+  const stopped = turn.status === "failed" || turn.status === "cancelled";
 
   // Dedup: the final summary block usually repeats a tool result or blocker already shown in this
   // turn. Only show it when it adds something new — i.e. when no shown message carries the same
@@ -317,13 +319,13 @@ function ChatTurn({
       )}
 
       {finished && turn.resultSummary && !summaryIsDuplicate && (
-        <div className={`chat-msg yanshi ${turn.status === "failed" ? "failed" : "final"}`}>
-          {turn.status === "failed" ? (
+        <div className={`chat-msg yanshi ${stopped ? "failed" : "final"}`}>
+          {stopped ? (
             <span className="chat-author">{t("tasks.stopped")}</span>
           ) : (
             <YanshiAuthor label={t("brand")} />
           )}
-          {turn.status === "failed" ? <p>{turn.resultSummary}</p> : <Markdown text={turn.resultSummary} />}
+          {stopped ? <p>{turn.resultSummary}</p> : <Markdown text={turn.resultSummary} />}
           {turn.status === "completed" && <ChatActions text={turn.resultSummary} onRegenerate={onRegenerate} />}
         </div>
       )}

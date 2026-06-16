@@ -971,17 +971,16 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     ):
         return [{"seq": seq, "event": event.model_dump()} for seq, event in service.storage.list_events(after_seq=after, run_id=runId)]
 
+    # Pause/resume are intentionally not implemented: flipping runs.status never actually halted the
+    # graph or the tools, so it was a fake state machine. Return 501 instead of pretending. Use
+    # cancel to stop a run. (Real cooperative pause is future work.)
     @app.post("/runs/{run_id}/pause")
-    def pause_run(run_id: str, service: RuntimeService = Depends(service_dep)):
-        run = service.storage.update_run(run_id, status="paused")
-        service.storage.append_event("run.paused", run_id=run_id, payload={"runId": run_id})
-        return run
+    def pause_run(run_id: str):
+        raise HTTPException(status_code=501, detail="Pausing a run is not implemented. Cancel it instead.")
 
     @app.post("/runs/{run_id}/resume")
-    def resume_run(run_id: str, service: RuntimeService = Depends(service_dep)):
-        run = service.storage.update_run(run_id, status="running")
-        service.storage.append_event("run.resumed", run_id=run_id, payload={"runId": run_id})
-        return run
+    def resume_run(run_id: str):
+        raise HTTPException(status_code=501, detail="Resuming a run is not implemented.")
 
     @app.post("/runs/{run_id}/cancel")
     def cancel_run(run_id: str, service: RuntimeService = Depends(service_dep)):

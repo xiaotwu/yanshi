@@ -14,15 +14,27 @@ export function AutomationsPanel({ projectId }: { projectId: string }) {
   const [task, setTask] = useState("");
   const [interval, setIntervalValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  const refresh = () => runtimeApi.automations(projectId).then(setAutomations).catch(() => setAutomations([]));
+  const refresh = () =>
+    runtimeApi
+      .automations(projectId)
+      .then((items) => {
+        setAutomations(items);
+        setLoadFailed(false);
+      })
+      .catch(() => setLoadFailed(true));
 
   useEffect(() => {
     let cancelled = false;
     runtimeApi
       .automations(projectId)
-      .then((items) => !cancelled && setAutomations(items))
-      .catch(() => !cancelled && setAutomations([]));
+      .then((items) => {
+        if (cancelled) return;
+        setAutomations(items);
+        setLoadFailed(false);
+      })
+      .catch(() => !cancelled && setLoadFailed(true));
     return () => {
       cancelled = true;
     };
@@ -61,7 +73,12 @@ export function AutomationsPanel({ projectId }: { projectId: string }) {
           <Plus size={15} /> {t("automation.add")}
         </button>
       </div>
-      {!automations ? (
+      {loadFailed ? (
+        <p className="transcript-empty">
+          {t("common.loadFailed")}{" "}
+          <button className="link-button" onClick={() => void refresh()}>{t("error.retry")}</button>
+        </p>
+      ) : !automations ? (
         <p className="muted">{t("common.loading")}</p>
       ) : automations.length === 0 ? (
         <p className="transcript-empty">{t("automation.none")}</p>

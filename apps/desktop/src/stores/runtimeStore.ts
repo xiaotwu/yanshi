@@ -25,6 +25,7 @@ import { getDesktopRuntimeStatus, getMacosPermissionStatus, restartDesktopRuntim
 // Used only at call time inside notification helpers — safe despite i18n importing this store.
 import { resolveLocale, translate } from "../i18n";
 import { codeForMissingRequirement, reportError } from "../lib/errors";
+import { isBusyStatus } from "../lib/shared";
 import type { LanguagePref, Locale } from "../i18n";
 
 interface RuntimeStore {
@@ -73,7 +74,7 @@ interface RuntimeStore {
   importWorkshopPack: (file: File) => Promise<void>;
   setWorkshopPackEnabled: (packId: string, enabled: boolean) => Promise<void>;
   decideApproval: (approvalId: string, decision: "approved" | "denied") => Promise<void>;
-  pauseAllRuns: () => Promise<void>;
+  cancelAllRuns: () => Promise<void>;
   cancelRun: (runId: string) => Promise<void>;
   restartRuntime: () => Promise<void>;
   refreshMacosPermissions: () => Promise<void>;
@@ -163,12 +164,12 @@ function computeAgents(
     });
   }
 
-  // A run is "active" if it has started and has no terminal (completed/failed) event in the window.
+  // A run is "active" if it has started and has no terminal (completed/failed/cancelled) event.
   const terminalRunIds = new Set<string>();
   const startedRunIds = new Set<string>();
   for (const { event } of events) {
     if (!event.runId) continue;
-    if (event.type === "run.completed" || event.type === "run.failed") terminalRunIds.add(event.runId);
+    if (event.type === "run.completed" || event.type === "run.failed" || event.type === "run.cancelled") terminalRunIds.add(event.runId);
     else if (event.type === "run.started") startedRunIds.add(event.runId);
   }
   const activeRunIds = new Set([...startedRunIds].filter((runId) => !terminalRunIds.has(runId)));
@@ -468,6 +469,8 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     } catch (error) {
       reportError(error instanceof Error && /unsafe|rejected|validation/i.test(error.message) ? "YANSHI_WORKSHOP_002" : "YANSHI_WORKSHOP_001", error);
       set({ error: error instanceof Error ? error.message : "Could not import pack.", loading: false });
+      // Rethrow so the caller doesn't report a false "Imported" success after a rejected pack.
+      throw error;
     }
   },
 
@@ -507,17 +510,18 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
-  pauseAllRuns: async () => {
-    const pausableRuns = get().runs.filter((run) => run.status === "running" || run.status === "pending_approval");
-    if (pausableRuns.length === 0) return;
+  cancelAllRuns: async () => {
+    // Real "stop everything" (replaces the old fake pause): cancel every in-flight run.
+    const activeRuns = get().runs.filter((run) => isBusyStatus(run.status));
+    if (activeRuns.length === 0) return;
     set({ loading: true, error: null });
     try {
-      await Promise.all(pausableRuns.map((run) => runtimeApi.pauseRun(run.id)));
+      await Promise.all(activeRuns.map((run) => runtimeApi.cancelRun(run.id)));
       const runs = await runtimeApi.runs(get().activeProjectId);
       set({ runs, loading: false });
     } catch (error) {
       reportError("YANSHI_RUNTIME_001", error);
-      set({ error: error instanceof Error ? error.message : "Could not pause runs.", loading: false });
+      set({ error: error instanceof Error ? error.message : "Could not cancel runs.", loading: false });
     }
   },
 

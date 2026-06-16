@@ -1,12 +1,12 @@
-import { Archive, Download, Plus, Power, Trash2, X } from "lucide-react";
+import { Archive, Download, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { runtimeApi } from "../api/client";
 import { useContextMenu } from "../components/context-menu";
 import { Modal, ModalHeader } from "../components/modal";
-import { Switch } from "../components/switch";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
+import { safeOpenExternal } from "../lib/external";
 import type { TKey } from "../i18n/en";
 import { BEHAVIOR_OPTIONS, STATION_OPTIONS } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
@@ -48,21 +48,20 @@ export function WorkshopModal({ onClose }: { onClose: () => void }) {
 export function WorkshopInstalled() {
   const { t } = useT();
   const [result, setResult] = useState<string>("");
-  const { workshopPacks, importWorkshopPack, setWorkshopPackEnabled, loading } = useRuntimeStore();
+  const { workshopPacks, importWorkshopPack, loading } = useRuntimeStore();
   const { openContextMenu, contextMenu } = useContextMenu();
   const importPack = async (file: File | undefined) => {
     if (!file) return;
-    await importWorkshopPack(file);
-    setResult(`Imported ${file.name}.`);
+    try {
+      await importWorkshopPack(file);
+      setResult(`Imported ${file.name}.`);
+    } catch {
+      // The store already raised a coded error toast; just don't claim success.
+      setResult(`Could not import ${file.name}.`);
+    }
   };
-  const packMenu = (pack: (typeof workshopPacks)[number]) => [
-    {
-      id: "toggle",
-      label: pack.enabled ? t("workshop.disable") : t("workshop.enable"),
-      icon: Power,
-      onSelect: () => void setWorkshopPackEnabled(pack.id, !pack.enabled),
-    },
-    { id: "export", label: t("workshop.exportPack"), icon: Download, onSelect: () => window.open(runtimeApi.exportPackUrl(), "_blank") },
+  const packMenu = () => [
+    { id: "export", label: t("workshop.exportPack"), icon: Download, onSelect: () => safeOpenExternal(runtimeApi.exportPackUrl()) },
     "divider" as const,
     {
       id: "remove",
@@ -90,7 +89,7 @@ export function WorkshopInstalled() {
           </div>
         ) : (
           workshopPacks.map((pack) => (
-            <article key={pack.id} className="workshop-pack-row" onContextMenu={(event) => openContextMenu(event, packMenu(pack))}>
+            <article key={pack.id} className="workshop-pack-row" onContextMenu={(event) => openContextMenu(event, packMenu())}>
               <Archive size={18} />
               <div>
                 <strong>
@@ -98,12 +97,9 @@ export function WorkshopInstalled() {
                 </strong>
                 <span>{pack.securityStatus}</span>
               </div>
-              <Switch
-                checked={pack.enabled}
-                onChange={(enabled) => void setWorkshopPackEnabled(pack.id, enabled)}
-                disabled={loading}
-                ariaLabel={pack.enabled ? t("workshop.disable") : t("workshop.enable")}
-              />
+              {/* Installed-only: packs ship as agent/office presets applied at import. There's no
+                  runtime enable/disable yet, so we don't show a toggle that implies one. */}
+              <span className="pack-status muted">{t("workshop.installed")}</span>
             </article>
           ))
         )}

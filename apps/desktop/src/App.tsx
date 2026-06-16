@@ -209,7 +209,7 @@ export function App() {
       "toggle-sidebar": () => setSidebarOpen((open) => !open),
       "focus-composer": focusComposer,
       "upload-file": () => window.dispatchEvent(new Event("yanshi:upload-file")),
-      "pause-all": () => void useRuntimeStore.getState().pauseAllRuns(),
+      "cancel-all": () => void useRuntimeStore.getState().cancelAllRuns(),
       "open-developer": () => (developerEnabled ? navigate("developer") : setSettingsOpen("general")),
     };
     const onKey = (event: KeyboardEvent) => {
@@ -246,7 +246,7 @@ export function App() {
     const unlisten = Promise.all([
       listen("desktop:show-runs", () => navigate("runs")),
       listen("desktop:open-live-office", () => setAtelierOpen(true)),
-      listen("desktop:pause-all", () => void useRuntimeStore.getState().pauseAllRuns()),
+      listen("desktop:cancel-all", () => void useRuntimeStore.getState().cancelAllRuns()),
     ]);
     return () => void unlisten.then((callbacks) => callbacks.forEach((callback) => callback()));
   }, [navigate]);

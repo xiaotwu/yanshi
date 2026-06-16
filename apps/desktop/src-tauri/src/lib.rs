@@ -97,9 +97,9 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open_yanshi", "Open Yanshi", true, None::<&str>)?;
     let tasks = MenuItem::with_id(app, "current_tasks", "Current Tasks", true, None::<&str>)?;
     let office = MenuItem::with_id(app, "open_live_office", "Open Live Office", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause_all", "Pause All", true, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "cancel_all", "Stop All", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &tasks, &office, &pause, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &tasks, &office, &stop, &quit])?;
     TrayIconBuilder::new()
         .tooltip("Yanshi")
         .menu(&menu)
@@ -115,8 +115,8 @@ fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
             "open_live_office" => {
                 let _ = pop_out_live_office(app.clone());
             }
-            "pause_all" => {
-                let _ = app.emit("desktop:pause-all", ());
+            "cancel_all" => {
+                let _ = app.emit("desktop:cancel-all", ());
             }
             "quit" => app.exit(0),
             _ => {}
