@@ -1126,6 +1126,21 @@ class Storage:
         return [self._run_from_row(row) for row in rows]
 
     @locked_storage_method
+    def automation_has_active_run(self, automation_id: str) -> bool:
+        """True if this automation still has a run in a non-terminal state — used to prevent
+        overlapping launches when a run takes longer than the schedule interval."""
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM automation_runs ar
+            JOIN runs r ON r.id = ar.run_id
+            WHERE ar.automation_id = ? AND r.status NOT IN ('completed', 'failed', 'cancelled')
+            LIMIT 1
+            """,
+            (automation_id,),
+        ).fetchone()
+        return row is not None
+
+    @locked_storage_method
     def _automation_from_row(self, row: sqlite3.Row) -> "AutomationSummary":
         return AutomationSummary(
             id=row["id"],

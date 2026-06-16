@@ -10,7 +10,7 @@ use std::{
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_notification::NotificationExt;
@@ -164,16 +164,48 @@ enum RuntimePort {
     OccupiedUnhealthy,
 }
 
-fn probe_runtime_port() -> RuntimePort {
+fn probe_runtime_port(token: &str) -> RuntimePort {
     // If we can bind the port, nothing is listening on it.
     if TcpListener::bind("127.0.0.1:8765").is_ok() {
         return RuntimePort::Free;
     }
-    if runtime_health_ok() {
+    // Don't adopt anything that merely answers /health — a port-squatter could fake that and then
+    // receive our bearer token. Require proof it's *our* runtime: it must enforce auth (401 without
+    // a token) and accept our shared token (200). A process that doesn't know the token can satisfy
+    // at most one of those. (A same-user process that can read the 0600 token file is already past
+    // every boundary, so it's out of scope.)
+    if runtime_health_ok()
+        && http_get_status("/runtime/status", None) == Some(401)
+        && http_get_status("/runtime/status", Some(token)) == Some(200)
+    {
         RuntimePort::Healthy
     } else {
         RuntimePort::OccupiedUnhealthy
     }
+}
+
+/// Minimal blocking GET returning the HTTP status code, with an optional bearer token. Used to
+/// challenge an existing listener before adopting it.
+fn http_get_status(path: &str, token: Option<&str>) -> Option<u16> {
+    use std::io::{Read, Write};
+    let mut stream = TcpStream::connect("127.0.0.1:8765").ok()?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1500)));
+    let auth = match token {
+        Some(value) => format!("Authorization: Bearer {value}\r\n"),
+        None => String::new(),
+    };
+    let request = format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n{auth}\r\n");
+    stream.write_all(request.as_bytes()).ok()?;
+    let mut buf = String::new();
+    let _ = stream.read_to_string(&mut buf);
+    parse_status_code(&buf)
+}
+
+/// Parse the status code from an HTTP status line like `HTTP/1.1 200 OK`.
+fn parse_status_code(response: &str) -> Option<u16> {
+    let first_line = response.lines().next()?;
+    first_line.split_whitespace().nth(1)?.parse().ok()
 }
 
 /// Minimal blocking GET /health probe (no extra HTTP deps). A healthy Yanshi Runtime answers
@@ -225,7 +257,7 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
 
     // Lifecycle guard: never spawn a second sidecar onto an occupied port (which would leave new
     // runs stuck at `created` against a stale runtime). Adopt a healthy one, or fail loudly.
-    match probe_runtime_port() {
+    match probe_runtime_port(&api_token) {
         RuntimePort::Free => {}
         RuntimePort::Healthy => {
             append_runtime_log(&log_path, "Adopted an existing healthy Yanshi Runtime on 127.0.0.1:8765.");
@@ -582,7 +614,14 @@ fn start_computer_bridge() -> std::io::Result<ComputerBridgeHandle> {
     Ok(handle)
 }
 
+// Computer-bridge requests are tiny JSON bodies. Cap hard so an unauthenticated local client can't
+// make us allocate/read an arbitrary amount via a forged Content-Length.
+const MAX_BRIDGE_BODY_BYTES: usize = 64 * 1024;
+
 fn serve_bridge_connection(mut stream: TcpStream, token: &str) -> std::io::Result<()> {
+    // Read/write timeouts so a slow or stalled peer can't pin a connection open indefinitely.
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
     let mut reader = BufReader::new(stream.try_clone()?);
 
     let mut request_line = String::new();
@@ -611,11 +650,22 @@ fn serve_bridge_connection(mut stream: TcpStream, token: &str) -> std::io::Resul
         }
     }
 
-    let mut body_bytes = vec![0u8; content_length];
-    if content_length > 0 {
-        reader.read_exact(&mut body_bytes)?;
+    // Reject an oversized body before allocating anything.
+    if content_length > MAX_BRIDGE_BODY_BYTES {
+        return write_bridge_response(
+            &mut stream,
+            413,
+            &serde_json::json!({
+                "ok": false,
+                "summary": "Computer bridge rejected an oversized request body.",
+                "missingRequirement": "computer_use_control_bridge_body_too_large",
+                "structuredOutput": {},
+            }),
+        );
     }
 
+    // Authorize *before* reading the body, so an unauthenticated client never gets us to allocate
+    // or block reading attacker-controlled bytes.
     if !authorize_bridge_request(token, authorization.as_deref()) {
         return write_bridge_response(
             &mut stream,
@@ -627,6 +677,11 @@ fn serve_bridge_connection(mut stream: TcpStream, token: &str) -> std::io::Resul
                 "structuredOutput": {},
             }),
         );
+    }
+
+    let mut body_bytes = vec![0u8; content_length];
+    if content_length > 0 {
+        reader.read_exact(&mut body_bytes)?;
     }
 
     if method != "POST" {
@@ -1527,6 +1582,14 @@ mod tests {
             vec!["uv".to_string(), "runtime_sidecar".to_string()]
         );
         assert!(parse_missing_requirements("dev-repo-runtime").is_empty());
+    }
+
+    #[test]
+    fn parses_http_status_code() {
+        assert_eq!(parse_status_code("HTTP/1.1 200 OK\r\n\r\n{}"), Some(200));
+        assert_eq!(parse_status_code("HTTP/1.0 401 Unauthorized\r\n\r\n"), Some(401));
+        assert_eq!(parse_status_code("garbage"), None);
+        assert_eq!(parse_status_code(""), None);
     }
 
     #[test]

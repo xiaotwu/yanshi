@@ -348,9 +348,15 @@ class RuntimeService:
     def run_due_automations(self, now: datetime) -> int:
         launched = 0
         for automation in self.storage.list_automations():
-            if is_automation_due(automation, now):
-                self._launch_automation(automation, background_tasks=None)
-                launched += 1
+            if not is_automation_due(automation, now):
+                continue
+            # Don't stack runs: skip if the previous run is still in flight (e.g. it's taking longer
+            # than the interval). It'll fire on a later tick once the current run finishes.
+            if self.storage.automation_has_active_run(automation.id):
+                logger.info("automation %s still has an active run; skipping this tick", automation.id)
+                continue
+            self._launch_automation(automation, background_tasks=None)
+            launched += 1
         return launched
 
     def export_workshop_pack(self, project_id: str | None) -> bytes:
@@ -1079,7 +1085,7 @@ def start_automation_scheduler(app: FastAPI, interval_seconds: int = 30) -> thre
             try:
                 get_service(app).run_due_automations(datetime.now(UTC))
             except Exception:  # noqa: BLE001 - scheduler must never crash the runtime
-                continue
+                logger.exception("automation scheduler tick failed")
 
     thread = threading.Thread(target=loop, name="yanshi-automation-scheduler", daemon=True)
     thread.start()
