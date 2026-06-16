@@ -52,6 +52,9 @@ interface RuntimeStore {
   ready: boolean;
   error: string | null;
   hydrate: () => Promise<void>;
+  /** Background refresh of the dynamic slices (no loading toggle, no desktop IPC). Driven by the
+   *  event stream via a debounce; cheaper than a full hydrate and won't flicker loading-gated UI. */
+  refresh: () => Promise<void>;
   createRun: (
     task: string,
     permissionMode: "default" | "auto_review" | "full_access",
@@ -113,6 +116,10 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let wsAttempts = 0;
 let pollFailures = 0;
+// Coalesce event-driven refreshes: a busy run emits many events, but we only need one refresh per
+// burst. Trailing debounce so the last event in a burst still triggers a final refresh.
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+const REFRESH_DEBOUNCE_MS = 200;
 
 /** Exponential backoff for WebSocket reconnects, capped at 15s. */
 export function wsBackoffDelay(attempt: number): number {
@@ -313,6 +320,39 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
       set({ error: error instanceof Error ? error.message : "Runtime unavailable.", loading: false, ready: true });
       const [desktopStatus, macosPermissions] = await Promise.all([getDesktopRuntimeStatus(), getMacosPermissionStatus()]);
       set({ desktopStatus, macosPermissions });
+    }
+  },
+
+  refresh: async () => {
+    // Only the slices that runtime events can invalidate. Excludes provider/app settings and agent
+    // profiles (changed through explicit store actions, not events) and the desktop/permission IPC.
+    // Deliberately does not touch `loading` — background refreshes must not flicker gated UI.
+    try {
+      const currentProjectId = get().activeProjectId;
+      const [status, runs, approvals, projects, workshopPacks, officeState, agentInstances] = await Promise.all([
+        runtimeApi.status(),
+        runtimeApi.runs(),
+        runtimeApi.approvals(),
+        runtimeApi.projects(),
+        runtimeApi.workshopPacks(),
+        runtimeApi.liveOffice(currentProjectId),
+        runtimeApi.agentInstances(currentProjectId),
+      ]);
+      const activeProjectId = projects.some((project) => project.id === currentProjectId) ? currentProjectId : null;
+      set((state) => ({
+        status,
+        runs,
+        approvals,
+        projects,
+        workshopPacks,
+        officeState,
+        agentInstances,
+        activeProjectId,
+        liveAgents: computeAgents(state.agentProfiles, state.events, officeState.behaviorMode, agentInstances),
+      }));
+    } catch (error) {
+      // A failed background refresh is non-fatal — the next event (or the WS reconnect) retries.
+      reportError("YANSHI_RUNTIME_001", error);
     }
   },
 
@@ -656,7 +696,13 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
         payload.event.type.startsWith("project.") ||
         payload.event.type.startsWith("workshop.")
       ) {
-        void get().hydrate();
+        // Coalesce: a run can emit many events in quick succession, but one refresh per burst is
+        // enough. Trailing debounce keeps the UI current without a request storm.
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
+          refreshTimer = null;
+          void get().refresh();
+        }, REFRESH_DEBOUNCE_MS);
       }
     };
 
@@ -733,7 +779,9 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     };
 
     setStreamStatus("connecting");
-    connectWs();
+    // The WS carries the session token as a query param (it can't send an Authorization header), so
+    // resolve+cache it before the first connect; reconnects read the cached value synchronously.
+    void runtimeApi.ensureToken().then(connectWs);
   },
 }));
 

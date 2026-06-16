@@ -3,8 +3,8 @@ mod runtime;
 use runtime::{
     computer_click, computer_open_app, computer_shortcut, computer_type, desktop_notify,
     hide_main_window, macos_permission_status, open_live_office, open_runtime_logs, open_yanshi,
-    pop_out_live_office, quit_app, restart_runtime, reveal_path, runtime_status, show_main_window,
-    start_runtime, stop_runtime, update_active_runs, RuntimeState,
+    pop_out_live_office, quit_app, restart_runtime, reveal_path, runtime_status, runtime_token,
+    show_main_window, start_runtime, stop_runtime, update_active_runs, RuntimeState,
 };
 use tauri::{
     menu::{Menu, MenuItem},
@@ -35,6 +35,7 @@ pub fn run() {
         .manage(RuntimeState::default())
         .invoke_handler(tauri::generate_handler![
             runtime_status,
+            runtime_token,
             restart_runtime,
             open_runtime_logs,
             macos_permission_status,

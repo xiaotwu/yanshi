@@ -5,7 +5,7 @@ import sqlite3
 from functools import wraps
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Callable
 
 from .agents.profiles import DEFAULT_AGENT_PROFILES
 from .models import (
@@ -106,6 +106,13 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
         server.status = "not_implemented" if connectable else "not_configured"
         server.tools = []
     return config
+
+
+# Schema version tracked via SQLite's built-in `PRAGMA user_version`. Bump this and register a step
+# in `_run_migrations` whenever the schema changes in a way the declarative `CREATE TABLE IF NOT
+# EXISTS` block can't express (column drops/renames, backfills, data reshapes). The current
+# declarative schema is the v1 baseline.
+_SCHEMA_VERSION = 1
 
 
 class Storage:
@@ -356,6 +363,7 @@ class Storage:
         )
         self.conn.commit()
         self._add_missing_columns()
+        self._run_migrations()
         self._seed_agent_profiles()
 
     @locked_storage_method
@@ -382,6 +390,31 @@ class Storage:
         existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(live_office_state)").fetchall()}
         if "furniture_json" not in existing:
             self.conn.execute("ALTER TABLE live_office_state ADD COLUMN furniture_json TEXT NOT NULL DEFAULT '[]'")
+            self.conn.commit()
+
+    @locked_storage_method
+    def schema_version(self) -> int:
+        return int(self.conn.execute("PRAGMA user_version").fetchone()[0])
+
+    @locked_storage_method
+    def _run_migrations(self) -> None:
+        """Apply ordered schema migrations exactly once each, gated by `PRAGMA user_version`.
+
+        Each step is keyed by the version it upgrades *to* and runs only when the db is below that
+        version. A fresh or pre-versioning db (user_version 0) is brought to the v1 baseline without
+        running step bodies — the declarative CREATE TABLE IF NOT EXISTS schema already built it.
+        Register future steps here, e.g. ``2: self._migrate_to_v2``.
+        """
+        current = int(self.conn.execute("PRAGMA user_version").fetchone()[0])
+        if current >= _SCHEMA_VERSION:
+            return
+        migrations: dict[int, Callable[[], None]] = {}
+        for version in range(current + 1, _SCHEMA_VERSION + 1):
+            step = migrations.get(version)
+            if step is not None:
+                step()
+            # PRAGMA can't bind params; version is an int we control, so the f-string is safe.
+            self.conn.execute(f"PRAGMA user_version = {version}")
             self.conn.commit()
 
     @locked_storage_method

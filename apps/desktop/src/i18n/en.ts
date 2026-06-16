@@ -149,6 +149,12 @@ export const en = {
   "library.copySummary": "Copy summary",
   "library.showTask": "Show source chat",
   "library.desktopOnly": "Available in the desktop app",
+  "library.select": "Select",
+  "library.selected": "{count} selected",
+  "library.selectAll": "Select all",
+  "library.clearSelection": "Clear",
+  "library.copyPaths": "Copy paths",
+  "library.pathsCopied": "Copied {count} paths",
 
   // Workshop
   "workshop.tabInstalled": "Installed",

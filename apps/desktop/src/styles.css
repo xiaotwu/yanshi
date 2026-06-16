@@ -2790,7 +2790,62 @@ button:active:not(:disabled) { transform: scale(0.98); }
   color: var(--text-secondary);
 }
 .library-row:hover { background: var(--surface); color: var(--text-primary); }
+/* Inline image preview occupies the same slot as the 15px file-type icon, so rows stay aligned
+   whether or not a thumbnail loads. */
+.library-thumb {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
 .library-name { flex: 0 1 auto; min-width: 0; color: var(--text-primary); font-size: 13px; }
+
+/* Multi-select: a checkbox sits left of each row, revealed on hover or while a selection is active.
+   The row button keeps its own click/keyboard semantics, so the checkbox is a separate sibling
+   (buttons can't nest). */
+.library-row-wrap { display: flex; align-items: center; border-radius: 9px; }
+.library-row-wrap > .library-row { flex: 1 1 auto; min-width: 0; }
+.library-row-wrap.selected { background: var(--accent-soft); }
+.library-row-wrap.selected:hover { background: var(--accent-soft); }
+.library-checkbox {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  align-self: stretch;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.library-row-wrap:hover .library-checkbox,
+.library-row-wrap.selecting .library-checkbox,
+.library-checkbox:focus-visible { opacity: 1; }
+.library-checkbox:hover { color: var(--accent); }
+.library-row-wrap.selected .library-checkbox { color: var(--accent); opacity: 1; }
+
+.library-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.library-selection-bar .selection-count { color: var(--text-primary); font-weight: 600; }
+.library-selection-bar .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-size: 12px;
+}
+.library-selection-bar .link-button:hover { text-decoration: underline; }
 .library-meta { display: flex; align-items: center; gap: 10px; margin-left: auto; min-width: 0; color: var(--text-muted); }
 .library-meta small { font-size: 11px; white-space: nowrap; }
 .library-meta .library-task { max-width: 180px; }

@@ -23,8 +23,9 @@ from yanshi_runtime.workshop import WorkshopPackValidator
 
 def make_client(tmp_path: Path) -> TestClient:
     # Run inline so assertions can check terminal state right after POST (production uses the pool).
-    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", synchronous_runs=True)
-    return TestClient(create_app(settings))
+    # A fixed token + default Authorization header keeps every request authenticated.
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", synchronous_runs=True, api_token="test-token")
+    return TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"})
 
 
 class FakeOpenAIHandler(BaseHTTPRequestHandler):
@@ -1583,11 +1584,96 @@ def test_interrupted_runs_are_reconciled_on_restart(tmp_path: Path) -> None:
     assert reopened.reconcile_interrupted_runs() == 0
 
 
+def test_unexpected_errors_return_a_coded_envelope(tmp_path: Path) -> None:
+    """An unhandled exception is logged server-side and surfaced as a stable coded 500, not a leaked
+    traceback."""
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", api_token="test-token", synchronous_runs=True)
+    app = create_app(settings)
+
+    @app.get("/boom")
+    def boom():
+        raise RuntimeError("kaboom")
+
+    client = TestClient(app, headers={"Authorization": "Bearer test-token"}, raise_server_exceptions=False)
+    response = client.get("/boom")
+    assert response.status_code == 500
+    body = response.json()
+    assert body["code"] == "YANSHI_RUNTIME_500"
+    assert "kaboom" not in response.text  # internal detail not leaked
+
+
+def test_image_preview_serves_workspace_images_safely(tmp_path: Path) -> None:
+    """The preview endpoint serves a real workspace image, rejects path traversal, and rejects
+    non-image types."""
+    client = make_client(tmp_path)
+    project = client.post("/projects", json={"name": "Pics"}).json()
+    workspace = Path(project["workspacePath"])
+    # A minimal valid 1x1 PNG.
+    png_bytes = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000a49444154789c6360000002000154a24f5f0000000049454e44ae426082"
+    )
+    (workspace / "shot.png").write_bytes(png_bytes)
+    (workspace / "notes.txt").write_text("not an image", encoding="utf-8")
+
+    ok = client.get("/preview", params={"projectId": project["id"], "path": "shot.png"})
+    assert ok.status_code == 200
+    assert ok.headers["content-type"] == "image/png"
+    assert ok.content == png_bytes
+
+    # Non-image type is refused.
+    assert client.get("/preview", params={"projectId": project["id"], "path": "notes.txt"}).status_code == 415
+    # Path traversal is refused.
+    assert client.get("/preview", params={"projectId": project["id"], "path": "../../etc/hosts"}).status_code == 403
+    # Missing file is a 404.
+    assert client.get("/preview", params={"projectId": project["id"], "path": "missing.png"}).status_code == 404
+
+
+def test_schema_version_is_stamped_and_stable(tmp_path: Path) -> None:
+    """A fresh db is stamped at the current schema version, and reopening it is a no-op (the
+    migration runner doesn't re-run baseline steps)."""
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.storage import _SCHEMA_VERSION, Storage
+
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    storage = Storage(settings.database_path, "test")
+    assert storage.schema_version() == _SCHEMA_VERSION
+    storage.conn.close()
+
+    reopened = Storage(settings.database_path, "test")
+    assert reopened.schema_version() == _SCHEMA_VERSION
+
+
+def test_concurrent_writers_do_not_corrupt_or_lose_rows(tmp_path: Path) -> None:
+    """Many threads hammering create_run on the single shared connection must serialize cleanly:
+    no 'database is locked', no lost writes."""
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.storage import Storage
+
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")
+    storage = Storage(settings.database_path, "test")
+    created: list[str] = []
+    lock = threading.Lock()
+
+    def worker(n: int) -> None:
+        run = storage.create_run(f"task {n}")
+        with lock:
+            created.append(run.id)
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        list(pool.map(worker, range(120)))
+
+    assert len(created) == 120
+    assert len(set(created)) == 120  # unique ids, nothing clobbered
+    row = storage.conn.execute("SELECT COUNT(*) AS n FROM runs").fetchone()
+    assert int(row["n"]) == 120
+
+
 def test_runs_execute_on_the_worker_pool(tmp_path: Path) -> None:
     """With the default (non-synchronous) config, a run is dispatched to the pool and completes
     asynchronously — the POST returns immediately and the run finishes shortly after."""
-    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test")  # synchronous_runs=False
-    client = TestClient(create_app(settings))
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", api_token="test-token")  # synchronous_runs=False
+    client = TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"})
     with FakeOpenAIServer() as base_url:
         client.put("/settings/provider", json={"baseUrl": base_url, "model": "yanshi-test-model"})
         created = client.post("/runs", json={"task": "Write a concise hello"})
@@ -1598,6 +1684,23 @@ def test_runs_execute_on_the_worker_pool(tmp_path: Path) -> None:
             time.sleep(0.05)
             status = client.get(f"/runs/{run_id}").json()["status"]
     assert status == "completed"
+
+
+def test_requests_require_the_session_token(tmp_path: Path) -> None:
+    """Every endpoint except /health rejects requests without the bearer token; /health stays open
+    for liveness probes."""
+    settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", api_token="test-token", synchronous_runs=True)
+    app = create_app(settings)
+    # No default header -> unauthenticated.
+    anon = TestClient(app)
+    assert anon.get("/health").status_code == 200
+    assert anon.get("/runs").status_code == 401
+    assert anon.post("/runs", json={"task": "hi"}).status_code == 401
+    # Wrong token is also rejected.
+    assert anon.get("/runs", headers={"Authorization": "Bearer nope"}).status_code == 401
+    # Correct token (either header form) is accepted.
+    assert anon.get("/runs", headers={"Authorization": "Bearer test-token"}).status_code == 200
+    assert anon.get("/runs", headers={"X-Yanshi-Token": "test-token"}).status_code == 200
 
 
 def test_provider_retries_transient_failures() -> None:

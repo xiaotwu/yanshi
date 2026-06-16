@@ -151,6 +151,12 @@ export const zh: Record<TKey, string> = {
   "library.copySummary": "复制摘要",
   "library.showTask": "查看来源对话",
   "library.desktopOnly": "仅桌面端可用",
+  "library.select": "选择",
+  "library.selected": "已选 {count} 项",
+  "library.selectAll": "全选",
+  "library.clearSelection": "取消选择",
+  "library.copyPaths": "复制路径",
+  "library.pathsCopied": "已复制 {count} 条路径",
 
   // Workshop
   "workshop.tabInstalled": "已安装",

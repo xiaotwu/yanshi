@@ -23,13 +23,52 @@ import type {
 
 const runtimeUrl = import.meta.env.VITE_RUNTIME_URL || "http://127.0.0.1:8765";
 
+// Per-session token gate: the runtime rejects every request (except /health) without it. The token
+// comes from the Tauri shell (which minted it and shares it with the sidecar) or, in the browser
+// dev flow, from VITE_RUNTIME_TOKEN. Resolved once and cached; the WS reads the cached value too.
+let cachedToken: string | null = null;
+let tokenPromise: Promise<string | null> | null = null;
+
+async function resolveToken(): Promise<string | null> {
+  const envToken = import.meta.env.VITE_RUNTIME_TOKEN as string | undefined;
+  if (envToken) return envToken;
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return (await invoke<string | null>("runtime_token")) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function ensureToken(): Promise<string | null> {
+  if (!tokenPromise) {
+    tokenPromise = resolveToken().then((token) => {
+      cachedToken = token;
+      return token;
+    });
+  }
+  return tokenPromise;
+}
+// Kick off resolution eagerly so the token is cached before the event stream connects.
+void ensureToken();
+
+async function authHeaders(extra?: HeadersInit): Promise<HeadersInit> {
+  const token = await ensureToken();
+  const headers: Record<string, string> = { ...(extra as Record<string, string>) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${runtimeUrl}${path}`, {
     ...init,
-    headers: {
+    headers: await authHeaders({
       "Content-Type": "application/json",
       ...init?.headers,
-    },
+    }),
   });
   if (!response.ok) {
     const detail = await response.text();
@@ -146,12 +185,21 @@ export const runtimeApi = {
       method: "PUT",
       body: JSON.stringify(update),
     }),
-  exportPackUrl: (projectId?: string | null) => `${runtimeUrl}/workshop/export${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`,
+  exportPackUrl: (projectId?: string | null) => {
+    // Opened directly via window.open / used as a download href, so the token must ride in the
+    // query string (a GET download can't attach an Authorization header).
+    const params = new URLSearchParams();
+    if (projectId) params.set("projectId", projectId);
+    if (cachedToken) params.set("token", cachedToken);
+    const qs = params.toString();
+    return `${runtimeUrl}/workshop/export${qs ? `?${qs}` : ""}`;
+  },
   uploadFiles: async (projectId: string | null, files: File[]) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
     const response = await fetch(`${runtimeUrl}/uploads${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`, {
       method: "POST",
+      headers: await authHeaders(),
       body: form,
     });
     if (!response.ok) throw new Error(await response.text());
@@ -182,15 +230,33 @@ export const runtimeApi = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
-  eventsUrl: (after = 0) => `${runtimeUrl.replace(/^http/, "ws")}/events${after > 0 ? `?after=${after}` : ""}`,
+  /** Resolve+cache the session token; callers await this before opening the WS (which can't send
+   *  an Authorization header, so the token rides as a query param via {@link eventsUrl}). */
+  ensureToken,
+  eventsUrl: (after = 0) => {
+    const params = new URLSearchParams();
+    if (after > 0) params.set("after", String(after));
+    if (cachedToken) params.set("token", cachedToken);
+    const qs = params.toString();
+    return `${runtimeUrl.replace(/^http/, "ws")}/events${qs ? `?${qs}` : ""}`;
+  },
   /** REST view of the same event log as the WebSocket (`{seq, event}` rows after a cursor) —
    *  used as the polling fallback when ws:// is blocked (packaged WKWebView secure context). */
   events: (after = 0) => request<Array<{ seq: number; event: YanshiEvent }>>(`/events?after=${after}`),
+  /** URL for an inline image preview (used directly as an <img src>, which can't set headers — so
+   *  the token rides in the query string like {@link eventsUrl}). */
+  previewUrl: (path: string, projectId?: string | null) => {
+    const params = new URLSearchParams({ path });
+    if (projectId) params.set("projectId", projectId);
+    if (cachedToken) params.set("token", cachedToken);
+    return `${runtimeUrl}/preview?${params.toString()}`;
+  },
   validatePack: async (file: File) => {
     const form = new FormData();
     form.append("pack", file);
     const response = await fetch(`${runtimeUrl}/workshop/validate`, {
       method: "POST",
+      headers: await authHeaders(),
       body: form,
     });
     if (!response.ok) throw new Error(await response.text());
@@ -201,6 +267,7 @@ export const runtimeApi = {
     form.append("pack", file);
     const response = await fetch(`${runtimeUrl}/workshop/import`, {
       method: "POST",
+      headers: await authHeaders(),
       body: form,
     });
     if (!response.ok) throw new Error(await response.text());

@@ -23,6 +23,9 @@ pub struct RuntimeState {
     command_label: Mutex<Option<String>>,
     log_path: Mutex<Option<PathBuf>>,
     bridge: Mutex<Option<ComputerBridgeHandle>>,
+    // Per-session API token shared with the Python sidecar; the webview presents it on every
+    // request so a stray localhost web page can't drive the runtime.
+    api_token: Mutex<Option<String>>,
     pub active_runs: Mutex<u32>,
 }
 
@@ -215,6 +218,9 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
     }
     *state.log_path.lock().expect("runtime log mutex poisoned") = Some(log_path.clone());
 
+    let api_token = ensure_runtime_token(&data_dir);
+    *state.api_token.lock().expect("runtime token mutex poisoned") = Some(api_token.clone());
+
     let bridge = ensure_computer_bridge(state, &log_path);
 
     // Lifecycle guard: never spawn a second sidecar onto an occupied port (which would leave new
@@ -264,6 +270,7 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 // onefile forks a child that holds the port) when the app quits.
                 .process_group(0);
             inject_bridge_env(&mut command, bridge.as_ref());
+            command.env("YANSHI_API_TOKEN", &api_token);
             let command_label = format!(
                 "{} run --project {} yanshi-runtime --host 127.0.0.1 --port 8765 --data-dir {}",
                 uv_path.display(),
@@ -309,6 +316,7 @@ pub fn start_runtime(app: &AppHandle, state: &State<RuntimeState>) {
                 // onefile forks a child that holds the port) when the app quits.
                 .process_group(0);
             inject_bridge_env(&mut command, bridge.as_ref());
+            command.env("YANSHI_API_TOKEN", &api_token);
             let command_label = format!(
                 "{} --host 127.0.0.1 --port 8765 --data-dir {}",
                 binary_path.display(),
@@ -374,6 +382,11 @@ pub fn stop_runtime(state: &State<RuntimeState>) {
 #[tauri::command]
 pub fn runtime_status(state: State<RuntimeState>) -> DesktopRuntimeStatus {
     runtime_status_from_state(&state)
+}
+
+#[tauri::command]
+pub fn runtime_token(state: State<RuntimeState>) -> Option<String> {
+    state.api_token.lock().expect("runtime token mutex poisoned").clone()
 }
 
 #[tauri::command]
@@ -727,6 +740,36 @@ fn write_bridge_response(stream: &mut TcpStream, status: u16, body: &serde_json:
     stream.write_all(header.as_bytes())?;
     stream.write_all(&payload)?;
     stream.flush()
+}
+
+/// Resolve the per-session API token shared with the Python sidecar. Reads an existing
+/// `<data_dir>/runtime.token` (so an adopted runtime keeps the same secret), otherwise mints one and
+/// persists it with 0600 perms. The Python runtime reads the very same file (or the env we pass).
+fn ensure_runtime_token(data_dir: &Path) -> String {
+    let path = data_dir.join("runtime.token");
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        let trimmed = existing.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    let token = random_bridge_token();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // Create the file owner-only (0600) *atomically* — writing then chmod'ing would leave a brief
+    // window where the token is world-readable under the default umask.
+    use std::os::unix::fs::OpenOptionsExt;
+    if let Ok(mut handle) = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+    {
+        let _ = handle.write_all(token.as_bytes());
+    }
+    token
 }
 
 fn random_bridge_token() -> String {

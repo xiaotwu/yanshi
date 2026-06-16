@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, ClipboardCopy, FileText, FolderOpen, Globe, Package, Search } from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronRight, ClipboardCopy, FileText, FolderOpen, Globe, Package, Search, Square, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ArtifactSummary, ProjectSummary, RunSummary, WorkspaceFile } from "@yanshi/shared";
 
@@ -7,6 +7,7 @@ import { canRevealFiles, revealPath } from "../api/desktop";
 import { useContextMenu } from "../components/context-menu";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
+import { notify } from "../lib/notices";
 import { type FileCategory, FileTypeIcon, fileCategory, outputFileName, projectIcon } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
@@ -60,6 +61,27 @@ function fileItem(file: WorkspaceFile, projectId: string): LibraryItem {
     size: file.size,
     projectId,
   };
+}
+
+/** Leading visual for a library row: an inline image preview for image files, falling back to the
+ *  file-type icon for everything else (and if the preview fails to load — too large, decode error,
+ *  or unsupported type like HEIC in this webview). */
+function LibraryThumb({ item }: { item: LibraryItem }) {
+  const [failed, setFailed] = useState(false);
+  const isImage = fileCategory(item.name, item.type) === "image";
+  if (isImage && !failed) {
+    return (
+      <img
+        className="library-thumb"
+        src={runtimeApi.previewUrl(item.path, item.projectId)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <FileTypeIcon name={item.name} type={item.type} size={15} />;
 }
 
 function sortItems(items: LibraryItem[], sort: LibrarySort): LibraryItem[] {
@@ -122,7 +144,18 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
     });
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [filesByProject, setFilesByProject] = useState<Record<string, WorkspaceFile[]>>({});
+  // Multi-select for bulk actions, keyed by item.key. Selection mode is implicit: the action bar
+  // and per-row checkboxes appear once anything is selected.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const { openContextMenu, contextMenu } = useContextMenu();
+
+  const toggleSelect = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  const clearSelection = () => setSelected(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -190,15 +223,33 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
   const renderItem = (item: LibraryItem) => {
     const project = item.projectId ? projects.find((p) => p.id === item.projectId) : null;
     const run = item.runId ? runs.find((r) => r.id === item.runId) : null;
+    const isSelected = selected.has(item.key);
     return (
-      <button
-        key={item.key}
-        className="library-row"
-        onClick={() => (run ? onOpenTask(run.id) : canRevealFiles() && void revealPath(item.path))}
-        onContextMenu={(event) => openContextMenu(event, itemActions(item))}
-        title={item.path}
-      >
-        <FileTypeIcon name={item.name} type={item.type} size={15} />
+      <div key={item.key} className={`library-row-wrap${isSelected ? " selected" : ""}${selected.size > 0 ? " selecting" : ""}`}>
+        <button
+          className="library-checkbox"
+          onClick={() => toggleSelect(item.key)}
+          aria-label={t("library.select")}
+          aria-pressed={isSelected}
+        >
+          {isSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+        </button>
+        <button
+          className="library-row"
+          // In selection mode a row click toggles selection; otherwise it opens the source chat (or
+          // reveals the file in Finder), the original behavior.
+          onClick={() => {
+            if (selected.size > 0) {
+              toggleSelect(item.key);
+              return;
+            }
+            if (run) onOpenTask(run.id);
+            else if (canRevealFiles()) void revealPath(item.path);
+          }}
+          onContextMenu={(event) => openContextMenu(event, itemActions(item))}
+          title={item.path}
+        >
+          <LibraryThumb item={item} />
         <span className="library-name ellipsis">{item.name}</span>
         <span className="library-meta">
           {item.title && item.title !== item.name && <small className="ellipsis library-title">{item.title}</small>}
@@ -225,7 +276,8 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
           {typeof item.size === "number" && <small>{formatSize(item.size)}</small>}
           {item.createdAt && <small>{item.createdAt.slice(0, 16).replace("T", " ")}</small>}
         </span>
-      </button>
+        </button>
+      </div>
     );
   };
 
@@ -255,6 +307,16 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
   }, [allItems, projects, runs, sort]);
 
   const flatItems = useMemo(() => sortItems(allItems, sort), [allItems, sort]);
+
+  const selectedItems = useMemo(() => allItems.filter((item) => selected.has(item.key)), [allItems, selected]);
+  const allVisibleSelected = flatItems.length > 0 && flatItems.every((item) => selected.has(item.key));
+  const selectAllVisible = () => setSelected(new Set(flatItems.map((item) => item.key)));
+  const copySelectedPaths = () => {
+    if (selectedItems.length === 0) return;
+    void navigator.clipboard.writeText(selectedItems.map((item) => item.path).join("\n"));
+    notify(t("library.pathsCopied", { count: selectedItems.length }), "success");
+    clearSelection();
+  };
 
   return (
     <section className="library-view">
@@ -291,6 +353,23 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
           </button>
         ))}
       </div>
+
+      {selected.size > 0 && (
+        <div className="library-selection-bar">
+          <span className="selection-count">{t("library.selected", { count: selected.size })}</span>
+          <button className="link-button" onClick={copySelectedPaths}>
+            <ClipboardCopy size={14} /> {t("library.copyPaths")}
+          </button>
+          {!allVisibleSelected && (
+            <button className="link-button" onClick={selectAllVisible}>
+              <CheckSquare size={14} /> {t("library.selectAll")}
+            </button>
+          )}
+          <button className="link-button" onClick={clearSelection}>
+            <X size={14} /> {t("library.clearSelection")}
+          </button>
+        </div>
+      )}
 
       {!ready ? (
         <div className="library-groups" aria-hidden>

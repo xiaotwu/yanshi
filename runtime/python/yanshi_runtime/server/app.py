@@ -5,6 +5,7 @@ import asyncio
 import io
 import json
 import logging
+import queue
 import re
 import shutil
 import threading
@@ -61,10 +62,28 @@ from yanshi_runtime.workshop.packs import MAX_WORKSHOP_UPLOAD_BYTES, is_zip_syml
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024
 
+# Image preview: serve the real bytes (browser-scaled in a constrained <img>) rather than bundling a
+# resize library — honest preview, no extra native dependency. Bounded so a giant image can't be
+# pulled wholesale into the webview; over the cap the frontend falls back to the file-type icon.
+MAX_PREVIEW_BYTES = 12 * 1024 * 1024
+_PREVIEW_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".avif": "image/avif",
+    ".heic": "image/heic",
+    ".svg": "image/svg+xml",
+}
+
 
 class RuntimeService:
     def __init__(self, settings: RuntimeSettings) -> None:
         self.settings = settings
+        self.api_token = resolve_api_token(settings)
         self.storage = Storage(settings.database_path, settings.runtime_version)
         self._seed_provider_from_env()
         self.provider = OpenAICompatibleProvider(ProviderConfig.from_secret_settings(self.storage.get_provider_settings_secret()))
@@ -77,11 +96,18 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
-        # Bounded run execution: each run gets its own thread (so it doesn't inherit LangGraph's
-        # executor context, which breaks when invoke() runs inside a pooled worker), and a semaphore
-        # caps how many execute at once — excess runs queue as "created" until a slot frees.
-        self._run_semaphore = threading.Semaphore(max(1, settings.max_concurrent_runs))
+        # Bounded run execution: a fixed pool of plain worker threads drains a queue. Plain threads
+        # (not a ThreadPoolExecutor) are required — LangGraph's invoke() breaks when run inside a
+        # pooled executor's worker context. The pool size caps concurrency; excess runs wait in the
+        # queue as "created" until a worker frees up. Tests use synchronous_runs and skip the pool.
         self._shutting_down = False
+        self._run_queue: "queue.Queue[tuple[str, str, str, bool, str] | None]" = queue.Queue()
+        self._run_workers: list[threading.Thread] = []
+        if not settings.synchronous_runs:
+            for i in range(max(1, settings.max_concurrent_runs)):
+                worker = threading.Thread(target=self._run_worker, name=f"yanshi-run-worker-{i}", daemon=True)
+                worker.start()
+                self._run_workers.append(worker)
         # Recover from a previous crash: any run left mid-flight is marked failed (no zombies).
         interrupted = self.storage.reconcile_interrupted_runs()
         if interrupted:
@@ -125,13 +151,30 @@ class RuntimeService:
         if self.settings.synchronous_runs:
             self.start_run(run_id, task, permission_mode, plan_first, reasoning)
             return
+        self._run_queue.put((run_id, task, permission_mode, plan_first, reasoning))
 
-        def runner() -> None:
-            with self._run_semaphore:  # caps concurrent runs; excess threads block here
-                if not self._shutting_down:
-                    self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+    def _run_worker(self) -> None:
+        """Worker loop: pull queued runs and execute them one at a time. A ``None`` item is the
+        shutdown sentinel. Runs queued but not yet started at shutdown stay ``created`` and are
+        reconciled to ``failed`` on the next launch."""
+        while True:
+            item = self._run_queue.get()
+            try:
+                if item is None:
+                    return
+                if self._shutting_down:
+                    continue
+                run_id, task, permission_mode, plan_first, reasoning = item
+                self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+            finally:
+                self._run_queue.task_done()
 
-        threading.Thread(target=runner, name=f"yanshi-run-{run_id}", daemon=True).start()
+    def shutdown(self) -> None:
+        """Stop accepting work and unblock the worker pool so threads exit cleanly."""
+        self._shutting_down = True
+        for _ in self._run_workers:
+            self._run_queue.put(None)
+        self.acp.shutdown()
 
     def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium") -> None:
         started = time.monotonic()
@@ -159,6 +202,31 @@ class RuntimeService:
 
     def list_artifacts(self, project_id: str | None, run_id: str | None) -> list[ArtifactSummary]:
         return self.storage.list_artifacts(project_id=project_id, run_id=run_id)
+
+    def image_preview(self, project_id: str | None, path: str) -> "FileResponse":
+        """Serve a workspace/artifact image for an inline preview. Guards against path traversal
+        (the resolved file must live under the project workspace, the workspace root, or the
+        artifacts root), restricts to known image types, and caps the size."""
+        from fastapi.responses import FileResponse
+
+        workspace = self._workspace_for_project(project_id)
+        # Workspace listings hand back paths relative to the workspace; artifacts use absolute paths.
+        candidate = (Path(path) if Path(path).is_absolute() else workspace / path).resolve()
+        allowed_roots = [
+            workspace.resolve(),
+            self.settings.workspace_root.resolve(),
+            self.settings.artifacts_root.resolve(),
+        ]
+        if not any(candidate == root or root in candidate.parents for root in allowed_roots):
+            raise HTTPException(status_code=403, detail="Preview path is outside the allowed roots.")
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail="File not found.")
+        media_type = _PREVIEW_MEDIA_TYPES.get(candidate.suffix.lower())
+        if media_type is None:
+            raise HTTPException(status_code=415, detail="Not a previewable image type.")
+        if candidate.stat().st_size > MAX_PREVIEW_BYTES:
+            raise HTTPException(status_code=413, detail="Image is too large to preview.")
+        return FileResponse(candidate, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
 
     def _workspace_for_project(self, project_id: str | None) -> Path:
         if project_id is None:
@@ -536,6 +604,33 @@ class RuntimeService:
                         destination.write(chunk)
 
 
+def resolve_api_token(settings: RuntimeSettings) -> str:
+    """Return the per-session API token: an explicit one from settings/env, otherwise a generated
+    token persisted to <data_dir>/runtime.token (0600) so the trusted local shell can read it."""
+    if settings.api_token:
+        return settings.api_token
+    path = settings.token_path
+    try:
+        if path.exists():
+            existing = path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except OSError:
+        pass
+    import os
+    import secrets as _secrets
+
+    token = _secrets.token_urlsafe(32)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token)
+        os.chmod(path, 0o600)
+    except OSError:
+        logger.warning("could not persist runtime token to %s", path)
+    return token
+
+
 def get_service(app: FastAPI) -> RuntimeService:
     return app.state.runtime_service
 
@@ -569,9 +664,14 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     runtime_settings = settings or settings_from_env()
     runtime_settings.ensure_dirs()
     app = FastAPI(title="Yanshi Runtime", version=runtime_settings.runtime_version)
+    cors_origins = ["tauri://localhost", "http://tauri.localhost"]
+    if runtime_settings.extra_cors_origins:
+        cors_origins += [o.strip() for o in runtime_settings.extra_cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["tauri://localhost", "http://tauri.localhost"],
+        allow_origins=cors_origins,
+        # The Vite dev server runs on a localhost port; allow them. Cross-origin requests still need
+        # the per-session token (enforced below), so an allowed origin alone grants nothing.
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$",
         allow_credentials=True,
         allow_methods=["*"],
@@ -579,15 +679,46 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     )
     app.state.runtime_service = RuntimeService(runtime_settings)
 
+    # Require the per-session token on every request (except health + CORS preflight). This closes
+    # the local-CSRF hole: a malicious web page can fire requests at localhost but doesn't know the
+    # token, so they're rejected. The trusted shell reads the token from <data_dir>/runtime.token.
+    _PUBLIC_PATHS = {"/health"}
+
+    @app.middleware("http")
+    async def require_token(request, call_next):
+        if request.method == "OPTIONS" or request.url.path in _PUBLIC_PATHS:
+            return await call_next(request)
+        token = get_service(app).api_token
+        provided = request.headers.get("authorization", "")
+        # Header is the norm; the query param is the escape hatch for browser-initiated GET
+        # downloads (window.open) and the WS, which can't attach an Authorization header.
+        if (
+            provided != f"Bearer {token}"
+            and request.headers.get("x-yanshi-token") != token
+            and request.query_params.get("token") != token
+        ):
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
+    @app.exception_handler(Exception)
+    async def unhandled_error(request, exc):
+        # Last-resort envelope for *unexpected* errors (HTTPException and validation errors keep
+        # their own handlers). Logs the traceback server-side and returns a stable coded shape the
+        # frontend's error system understands, instead of leaking internals.
+        from fastapi.responses import JSONResponse
+
+        logger.exception("unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal runtime error.", "code": "YANSHI_RUNTIME_500"})
+
     def service_dep() -> RuntimeService:
         return get_service(app)
 
     @app.on_event("shutdown")
     def shutdown_acp() -> None:
-        # Kill any launched ACP agent processes with the runtime — no orphans.
-        service = get_service(app)
-        service._shutting_down = True
-        service.acp.shutdown()
+        # Stop the run worker pool and kill any launched ACP agent processes with the runtime.
+        get_service(app).shutdown()
 
     @app.get("/health", response_model=RuntimeHealth)
     def health(service: RuntimeService = Depends(service_dep)):
@@ -681,6 +812,10 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         service: RuntimeService = Depends(service_dep),
     ):
         return service.list_artifacts(projectId, runId)
+
+    @app.get("/preview")
+    def image_preview(path: str, projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.image_preview(projectId, path)
 
     @app.get("/automations", response_model=list[AutomationSummary])
     def list_automations(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
@@ -878,8 +1013,15 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
 
     @app.websocket("/events")
     async def events_socket(websocket: WebSocket):
-        await websocket.accept()
         service = get_service(app)
+        # The WS can't carry an Authorization header from a browser, so the token rides as a query
+        # param (or header for non-browser clients). Reject before accepting if it doesn't match.
+        token = service.api_token
+        provided = websocket.query_params.get("token") or websocket.headers.get("x-yanshi-token")
+        if provided != token:
+            await websocket.close(code=4401)
+            return
+        await websocket.accept()
         run_id = websocket.query_params.get("runId")
         after_seq = int(websocket.query_params.get("after", "0"))
         try:
