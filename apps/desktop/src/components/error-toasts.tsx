@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { openDesktopRuntimeLogs } from "../api/desktop";
 import type { SettingsSection } from "../features/settings";
 import { useT } from "../i18n";
-import { resolveError, useErrorToasts } from "../lib/errors";
+import { TOAST_DURATION_MS, resolveError, useErrorToasts } from "../lib/errors";
 
 /**
  * App-wide error toasts (bottom-right): error code + short localized reason, ~8s auto-dismiss,
@@ -65,6 +65,7 @@ export function ErrorToasts({ onOpenSettings }: { onOpenSettings: (section: Sett
             <button className="error-toast-dismiss" onClick={() => dismiss(toast.id)} aria-label={t("error.dismiss")} title={t("error.dismiss")}>
               <X size={14} />
             </button>
+            <span className="error-toast-progress" style={{ animationDuration: `${TOAST_DURATION_MS}ms` }} aria-hidden />
           </div>
         );
       })}

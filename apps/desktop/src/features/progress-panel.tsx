@@ -113,7 +113,7 @@ export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
                     <div className="agent-rows">
                       {active.map((agent) => (
                         <div key={agent.id} className="agent-row">
-                          <span className="agent-dot" style={{ background: agent.accent }} />
+                          <span className={agent.status === "working" ? "agent-dot working" : "agent-dot"} style={{ background: agent.accent }} />
                           <span className="agent-name">{agentDisplayName(agent.id, agent.name, t)}</span>
                           <span className="agent-state muted">{agent.currentTask ?? agentStateLabel(agent.status, t)}</span>
                           {agent.queueCount > 0 && <b>{agent.queueCount}</b>}
@@ -196,7 +196,7 @@ export function ProgressPanel({ inChat = false }: { inChat?: boolean }) {
           <div className="agent-rows">
             {liveAgents.map((agent) => (
               <div key={agent.id} className="agent-row">
-                <span className="agent-dot" style={{ background: agent.accent }} />
+                <span className={agent.status === "working" ? "agent-dot working" : "agent-dot"} style={{ background: agent.accent }} />
                 <span className="agent-name">{agentDisplayName(agent.id, agent.name, t)}</span>
                 <span className="agent-state muted">{agent.currentTask ?? agentStateLabel(agent.status, t)}</span>
                 {agent.queueCount > 0 && <b>{agent.queueCount}</b>}

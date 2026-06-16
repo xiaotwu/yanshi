@@ -3731,6 +3731,8 @@ textarea:focus-visible {
   max-width: 360px;
 }
 .error-toast {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -3742,6 +3744,19 @@ textarea:focus-visible {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   animation: toast-in 0.18s ease;
 }
+/* Auto-dismiss countdown bar (duration set inline to match TOAST_DURATION_MS). */
+.error-toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  transform-origin: left;
+  background: color-mix(in srgb, var(--danger) 55%, transparent);
+  animation: toast-progress linear forwards;
+}
+@keyframes toast-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .error-toast-progress { display: none; } }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
@@ -4167,3 +4182,72 @@ textarea:focus-visible {
   backdrop-filter: blur(6px);
 }
 .atelier-reset:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Agent activity indicator: a soft ripple while an agent is working ─────────── */
+.agent-dot.working { animation: agent-pulse 1.4s ease-out infinite; }
+@keyframes agent-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 5px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .agent-dot.working { animation: none; } }
+
+/* ── Project home: subtle accent cover wash ────────────────────────────────────── */
+.project-home { position: relative; }
+.project-cover {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200vw;
+  height: 128px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--proj-color, var(--accent)) 16%, transparent), transparent 92%);
+  pointer-events: none;
+  z-index: 0;
+}
+.project-home-head { position: relative; z-index: 1; }
+
+/* ── Subtle per-turn timestamp (reveals on hover of the user message) ──────────── */
+.chat-msg.user { position: relative; }
+.chat-time {
+  position: absolute;
+  right: 4px;
+  bottom: -16px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+  pointer-events: none;
+}
+.chat-msg.user:hover .chat-time { opacity: 1; }
+
+/* ── Accent customization (data-accent overrides the accent tokens) ────────────── */
+:root[data-accent="blue"] {
+  --accent: #2f7fe0; --accent-strong: #2569c4; --accent-soft: #e7f0fc; --accent-glow: rgba(47, 127, 224, 0.35);
+}
+:root[data-accent="violet"] {
+  --accent: #7c5cf0; --accent-strong: #6a49df; --accent-soft: #efebfd; --accent-glow: rgba(124, 92, 240, 0.35);
+}
+:root[data-accent="amber"] {
+  --accent: #cd7f1f; --accent-strong: #b06d18; --accent-soft: #f9efe0; --accent-glow: rgba(205, 127, 31, 0.35);
+}
+:root[data-theme="dark"][data-accent="blue"] {
+  --accent: #5b9bf0; --accent-strong: #4a86db; --accent-soft: #16263c; --accent-glow: rgba(91, 155, 240, 0.45);
+}
+:root[data-theme="dark"][data-accent="violet"] {
+  --accent: #9d83f5; --accent-strong: #8a6ef0; --accent-soft: #221a3a; --accent-glow: rgba(157, 131, 245, 0.45);
+}
+:root[data-theme="dark"][data-accent="amber"] {
+  --accent: #e6a44e; --accent-strong: #d28f3a; --accent-soft: #2e2414; --accent-glow: rgba(230, 164, 78, 0.45);
+}
+/* Swatch picker */
+.accent-swatches { display: flex; gap: 8px; }
+.accent-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--border);
+  transition: transform 0.14s cubic-bezier(0.3, 0.9, 0.4, 1.2), box-shadow 0.15s ease;
+}
+.accent-swatch:hover { transform: scale(1.1); }
+.accent-swatch.active { box-shadow: 0 0 0 2px var(--surface-elevated), 0 0 0 4px var(--accent); border-color: var(--surface-elevated); }

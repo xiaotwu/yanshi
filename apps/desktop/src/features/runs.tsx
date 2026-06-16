@@ -241,10 +241,12 @@ function ChatTurn({
     .map((entry) => eventSummary(entry.event.payload));
   const summaryIsDuplicate = !!turn.resultSummary && messageTexts.includes(turn.resultSummary);
 
+  const time = new Date(turn.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
     <div className="chat-turn">
       <div className="chat-msg user">
         <p>{turn.task}</p>
+        <time className="chat-time" dateTime={turn.createdAt}>{time}</time>
       </div>
 
       {showPlan && turn.plan.length > 0 && (

@@ -11,6 +11,11 @@ export const en = {
 
   // Error toasts + catalog (docs/ERROR_CATALOG.md)
   "notice.providerSaved": "Provider saved",
+  "settings.appearance.accent": "Accent",
+  "accent.mint": "Mint",
+  "accent.blue": "Blue",
+  "accent.violet": "Violet",
+  "accent.amber": "Amber",
   "error.label": "Error",
   "error.dismiss": "Dismiss",
   "error.retry": "Retry",

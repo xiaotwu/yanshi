@@ -1,5 +1,5 @@
 import { Check, FileSearch, FolderOpen, FolderPlus, MoreHorizontal, Search } from "lucide-react";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Suspense, useEffect, useRef, useState } from "react";
 import type { ProjectSummary, RunSummary } from "@yanshi/shared";
 
 import { runtimeApi } from "../api/client";
@@ -136,6 +136,7 @@ export function ProjectHomeView({ onOpenTask }: { onOpenTask: (runId: string) =>
 
   return (
     <section className="project-home">
+      <div className="project-cover" style={{ ["--proj-color"]: projectColor(project) } as CSSProperties} aria-hidden />
       <header className="project-home-head">
         <span className="proj-emoji lg" style={{ background: projectColor(project) }}>{projectIcon(project)}</span>
         <div className="project-home-title">

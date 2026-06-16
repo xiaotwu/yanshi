@@ -41,6 +41,7 @@ import { SettingsModal } from "./features/settings";
 import { WorkshopModal } from "./features/workshop";
 import { useT } from "./i18n";
 import type { TKey } from "./i18n/en";
+import { applyAccent } from "./lib/accent";
 import { ProjectGlyph, projectIcon } from "./lib/shared";
 import type { View } from "./lib/shared";
 import { eventToBinding, firesInEditable, isShortcutCaptureActive, resolveBindings } from "./lib/shortcuts";
@@ -118,6 +119,7 @@ export function App() {
   }, [activeRunCount]);
 
   useEffect(() => {
+    applyAccent();
     void hydrate();
     connectEvents();
   }, [connectEvents, hydrate]);

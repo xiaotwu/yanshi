@@ -8,11 +8,36 @@ import { Modal } from "../components/modal";
 import { Switch } from "../components/switch";
 import { useT } from "../i18n";
 import type { TKey } from "../i18n/en";
+import { ACCENTS, getAccent, setAccent } from "../lib/accent";
 import { permissionLabel } from "../lib/shared";
 import type { PermissionMode } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 import { ExternalAgentsSection, McpServersSection, ProvidersSection, SkillsSection } from "./ai-integrations";
 import { GpuSettingRow, ShortcutsSettings } from "./shortcuts-settings";
+
+/** Accent color swatch picker (client-side preference applied via a root data-accent attribute). */
+function AccentRow() {
+  const { t } = useT();
+  const [accent, setAccentState] = useState(getAccent());
+  return (
+    <div className="setting-row">
+      <span>{t("settings.appearance.accent")}</span>
+      <div className="accent-swatches">
+        {ACCENTS.map((preset) => (
+          <button
+            key={preset.id}
+            className={accent === preset.id ? "accent-swatch active" : "accent-swatch"}
+            style={{ background: preset.color }}
+            onClick={() => { setAccent(preset.id); setAccentState(preset.id); }}
+            aria-label={t(preset.labelKey)}
+            aria-pressed={accent === preset.id}
+            title={t(preset.labelKey)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export type SettingsSection =
   | "profile"
@@ -318,10 +343,12 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
               <option value="zh-CN">简体中文</option>
             </select>
           </label>
+          <AccentRow />
         </div>
       );
     case "shortcuts":
       return <ShortcutsSettings />;
+    // (AccentRow defined below)
     case "profile":
       return <ProfileSettings />;
     case "atelier":
