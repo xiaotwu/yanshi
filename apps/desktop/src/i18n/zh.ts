@@ -13,7 +13,13 @@ export const zh: Record<TKey, string> = {
 
   // 错误提示（docs/ERROR_CATALOG.md）
   "notice.providerSaved": "供应商已保存",
+  "library.type.all": "全部",
+  "library.type.image": "图片",
+  "library.type.code": "代码",
+  "library.type.data": "数据",
+  "library.type.doc": "文档",
   "settings.appearance.accent": "强调色",
+  "settings.search": "搜索设置……",
   "accent.mint": "薄荷绿",
   "accent.blue": "蓝色",
   "accent.violet": "紫罗兰",

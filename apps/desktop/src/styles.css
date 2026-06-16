@@ -54,9 +54,9 @@
   --surface: #1a1a18;
   --surface-elevated: #212220;
   --border: #2f302d;
-  --text-primary: #f0f1ee;
-  --text-secondary: #b0b4ac;
-  --text-muted: #7f857c;
+  --text-primary: #f2f3f0;
+  --text-secondary: #bdc1b9;
+  --text-muted: #939989;
   --accent: #34d18a;
   --accent-strong: #29b475;
   --accent-soft: #16302a;
@@ -1748,7 +1748,7 @@ button.list-row {
   overflow: hidden;
 }
 .app-shell.office-visible {
-  grid-template-columns: 232px minmax(0, 1fr) 340px;
+  grid-template-columns: 232px minmax(0, 1fr) var(--office-width, 340px);
   grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 .app-shell.sidebar-collapsed {
@@ -1756,7 +1756,7 @@ button.list-row {
   grid-template-areas: "titlebar titlebar" "sidebar main";
 }
 .app-shell.sidebar-collapsed.office-visible {
-  grid-template-columns: 64px minmax(0, 1fr) 340px;
+  grid-template-columns: 64px minmax(0, 1fr) var(--office-width, 340px);
   grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 
@@ -2991,7 +2991,7 @@ textarea:focus-visible {
   grid-template-areas: "titlebar titlebar" "sidebar main";
 }
 .app-shell.sidebar-collapsed.office-visible {
-  grid-template-columns: 64px minmax(0, 1fr) 340px;
+  grid-template-columns: 64px minmax(0, 1fr) var(--office-width, 340px);
   grid-template-areas: "titlebar titlebar titlebar" "sidebar main office";
 }
 .sidebar {
@@ -4251,3 +4251,57 @@ textarea:focus-visible {
 }
 .accent-swatch:hover { transform: scale(1.1); }
 .accent-swatch.active { box-shadow: 0 0 0 2px var(--surface-elevated), 0 0 0 4px var(--accent); border-color: var(--surface-elevated); }
+
+/* ── Library type facets ───────────────────────────────────────────────────────── */
+.library-facets { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
+.library-facets .facet {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.library-facets .facet:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.library-facets .facet.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+/* ── In-settings nav search ────────────────────────────────────────────────────── */
+.settings-nav-search {
+  margin: 0 0 10px;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.settings-nav-search::placeholder { color: var(--text-muted); }
+.settings-nav-empty { padding: 8px 4px; font-size: 12.5px; }
+
+/* ── Right panel resize handle (left edge) ─────────────────────────────────────── */
+.office-pane { position: relative; }
+.office-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 6;
+  touch-action: none;
+}
+.office-resize::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.office-resize:hover::after { background: var(--accent); }
+/* On narrow windows the panel overlays (fixed) and isn't a resizable column. */
+@media (max-width: 1080px) { .office-resize { display: none; } }

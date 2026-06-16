@@ -19,6 +19,19 @@ export function FileTypeIcon({ name, type, size = 15 }: { name: string; type?: s
   return <File size={size} />;
 }
 
+export type FileCategory = "all" | "image" | "code" | "data" | "doc" | "other";
+
+/** Coarse category for Library type facets. */
+export function fileCategory(name: string, type?: string): Exclude<FileCategory, "all"> {
+  if (type === "folder" || type === "directory") return "other";
+  const ext = (name.split(".").pop() ?? "").toLowerCase();
+  if (IMAGE_RE.test(ext)) return "image";
+  if (["json", "csv", "yml", "yaml", "toml"].includes(ext)) return "data";
+  if (CODE_EXTS.has(ext)) return "code";
+  if (["md", "txt", "pdf", "doc", "docx", "rtf"].includes(ext)) return "doc";
+  return "other";
+}
+
 import { useT } from "../i18n";
 import type { TKey } from "../i18n/en";
 

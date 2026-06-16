@@ -18,7 +18,7 @@ import {
   SquarePen,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { updateActiveRuns } from "./api/desktop";
 import { AccountMenu } from "./components/account-menu";
@@ -77,6 +77,25 @@ export function App() {
   const activeRunId = useRuntimeStore((state) => state.activeRunId);
   const needsProvider = runtimeStatus?.missingRequirements?.includes("model_provider") ?? false;
   const configureProvider = useCallback(() => setSettingsOpen("providers"), []);
+  // Drag the right Progress panel's left edge to resize it; width persists across sessions.
+  const startOfficeResize = useCallback((event: ReactPointerEvent) => {
+    event.preventDefault();
+    const onMove = (move: PointerEvent) => {
+      const width = Math.min(560, Math.max(260, window.innerWidth - move.clientX));
+      document.documentElement.style.setProperty("--office-width", `${width}px`);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      try {
+        window.localStorage.setItem("yanshi.officeWidth", getComputedStyle(document.documentElement).getPropertyValue("--office-width").trim());
+      } catch {
+        /* persistence best-effort */
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
   // Live coupling cue: the Atelier button pulses while any worker is actually working.
   const agentsWorking = useRuntimeStore((state) => state.liveAgents.some((agent) => agent.status === "working"));
   const ready = useRuntimeStore((state) => state.ready);
@@ -120,6 +139,12 @@ export function App() {
 
   useEffect(() => {
     applyAccent();
+    try {
+      const storedWidth = window.localStorage.getItem("yanshi.officeWidth");
+      if (storedWidth) document.documentElement.style.setProperty("--office-width", storedWidth);
+    } catch {
+      /* ignore */
+    }
     void hydrate();
     connectEvents();
   }, [connectEvents, hydrate]);
@@ -484,6 +509,13 @@ export function App() {
 
       {progressOpen && (
         <aside className="office-pane">
+          <div
+            className="office-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t("chrome.toggleProgress")}
+            onPointerDown={startOfficeResize}
+          />
           <ProgressPanel inChat={view === "runs"} />
         </aside>
       )}

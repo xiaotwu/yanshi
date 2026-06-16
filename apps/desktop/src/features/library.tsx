@@ -7,7 +7,7 @@ import { canRevealFiles, revealPath } from "../api/desktop";
 import { useContextMenu } from "../components/context-menu";
 import { useT } from "../i18n";
 import { reportError } from "../lib/errors";
-import { FileTypeIcon, outputFileName, projectIcon } from "../lib/shared";
+import { type FileCategory, FileTypeIcon, fileCategory, outputFileName, projectIcon } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
 
 type LibraryMode = "grouped" | "files";
@@ -107,6 +107,7 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
   const [mode, setMode] = useState<LibraryMode>("grouped");
   const [sort, setSort] = useState<LibrarySort>("newest");
   const [filter, setFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<FileCategory>("all");
   // Collapsed groups persist across sessions (local UI state, not runtime data).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
   const toggleCollapsed = (key: string) =>
@@ -160,8 +161,12 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
       ...Object.entries(filesByProject).flatMap(([projectId, files]) => files.map((file) => fileItem(file, projectId))),
     ];
     const query = filter.trim().toLowerCase();
-    return query ? items.filter((item) => item.name.toLowerCase().includes(query)) : items;
-  }, [artifacts, filesByProject, filter]);
+    return items.filter(
+      (item) =>
+        (!query || item.name.toLowerCase().includes(query)) &&
+        (typeFilter === "all" || fileCategory(item.name, item.type) === typeFilter),
+    );
+  }, [artifacts, filesByProject, filter, typeFilter]);
 
   const itemActions = (item: LibraryItem) => {
     const run = item.runId ? runs.find((r) => r.id === item.runId) : null;
@@ -278,6 +283,14 @@ export function LibraryView({ onOpenTask }: { onOpenTask: (runId: string) => voi
           </select>
         </div>
       </header>
+
+      <div className="library-facets">
+        {(["all", "image", "code", "data", "doc"] as const).map((cat) => (
+          <button key={cat} className={typeFilter === cat ? "facet active" : "facet"} onClick={() => setTypeFilter(cat)}>
+            {t(`library.type.${cat}`)}
+          </button>
+        ))}
+      </div>
 
       {!ready ? (
         <div className="library-groups" aria-hidden>

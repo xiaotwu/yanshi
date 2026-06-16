@@ -133,6 +133,15 @@ export function SettingsModal({ initialSection = "general", onClose }: { initial
   const allIds = groups.flatMap((g) => g.items.map((i) => i.id));
   const active = allIds.includes(section) ? section : "general";
 
+  // In-settings search: filter the nav list by section label.
+  const [navQuery, setNavQuery] = useState("");
+  const query = navQuery.trim().toLowerCase();
+  const filteredGroups = query
+    ? groups
+        .map((group) => ({ ...group, items: group.items.filter((item) => t(item.key).toLowerCase().includes(query)) }))
+        .filter((group) => group.items.length > 0)
+    : groups;
+
   return (
     <Modal onClose={onClose} size="xl" className="settings-modal" labelledBy="settings-title">
       <button className="icon-button ghost settings-close" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
@@ -142,8 +151,15 @@ export function SettingsModal({ initialSection = "general", onClose }: { initial
         <div className="settings-nav-col">
           {/* The title stays fixed; only the nav list below it scrolls. */}
           <h2 id="settings-title" className="settings-title">{t("account.settings")}</h2>
+          <input
+            className="settings-nav-search"
+            value={navQuery}
+            onChange={(event) => setNavQuery(event.target.value)}
+            placeholder={t("settings.search")}
+            aria-label={t("settings.search")}
+          />
           <nav className="settings-nav" aria-label={t("account.settings")}>
-            {groups.map((group) => (
+            {filteredGroups.map((group) => (
               <div key={group.labelKey}>
                 <div className="settings-nav-label">{t(group.labelKey)}</div>
                 {group.items.map((item) => (
@@ -153,6 +169,7 @@ export function SettingsModal({ initialSection = "general", onClose }: { initial
                 ))}
               </div>
             ))}
+            {filteredGroups.length === 0 && <p className="settings-nav-empty muted">{t("search.noResults")}</p>}
           </nav>
         </div>
         <div className="settings-content" key={active}>

@@ -11,7 +11,13 @@ export const en = {
 
   // Error toasts + catalog (docs/ERROR_CATALOG.md)
   "notice.providerSaved": "Provider saved",
+  "library.type.all": "All",
+  "library.type.image": "Images",
+  "library.type.code": "Code",
+  "library.type.data": "Data",
+  "library.type.doc": "Docs",
   "settings.appearance.accent": "Accent",
+  "settings.search": "Search settings…",
   "accent.mint": "Mint",
   "accent.blue": "Blue",
   "accent.violet": "Violet",
