@@ -66,6 +66,10 @@ MAX_UPLOAD_FILE_BYTES = 50 * 1024 * 1024
 # resize library — honest preview, no extra native dependency. Bounded so a giant image can't be
 # pulled wholesale into the webview; over the cap the frontend falls back to the file-type icon.
 MAX_PREVIEW_BYTES = 12 * 1024 * 1024
+# Raster types only. SVG is deliberately excluded: it's an active document that can carry script,
+# and since the preview URL is directly openable (token in the query string), a malicious workspace
+# SVG opened as a top-level document could run script in the runtime origin and read the token.
+# The frontend falls back to the file-type icon when a preview isn't served.
 _PREVIEW_MEDIA_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -76,7 +80,13 @@ _PREVIEW_MEDIA_TYPES = {
     ".ico": "image/x-icon",
     ".avif": "image/avif",
     ".heic": "image/heic",
-    ".svg": "image/svg+xml",
+}
+# Defense in depth: prevent MIME sniffing and neutralize any script/active content if the response
+# is ever loaded as a document rather than via <img>.
+_PREVIEW_HEADERS = {
+    "Cache-Control": "private, max-age=300",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
 }
 
 
@@ -226,7 +236,7 @@ class RuntimeService:
             raise HTTPException(status_code=415, detail="Not a previewable image type.")
         if candidate.stat().st_size > MAX_PREVIEW_BYTES:
             raise HTTPException(status_code=413, detail="Image is too large to preview.")
-        return FileResponse(candidate, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
+        return FileResponse(candidate, media_type=media_type, headers=_PREVIEW_HEADERS)
 
     def _workspace_for_project(self, project_id: str | None) -> Path:
         if project_id is None:

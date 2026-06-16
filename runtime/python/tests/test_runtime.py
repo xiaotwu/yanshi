@@ -1616,13 +1616,20 @@ def test_image_preview_serves_workspace_images_safely(tmp_path: Path) -> None:
     (workspace / "shot.png").write_bytes(png_bytes)
     (workspace / "notes.txt").write_text("not an image", encoding="utf-8")
 
+    (workspace / "vector.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>", encoding="utf-8")
+
     ok = client.get("/preview", params={"projectId": project["id"], "path": "shot.png"})
     assert ok.status_code == 200
     assert ok.headers["content-type"] == "image/png"
     assert ok.content == png_bytes
+    # Defense-in-depth headers stop MIME sniffing and neutralize active content.
+    assert ok.headers["x-content-type-options"] == "nosniff"
+    assert "default-src 'none'" in ok.headers["content-security-policy"]
 
     # Non-image type is refused.
     assert client.get("/preview", params={"projectId": project["id"], "path": "notes.txt"}).status_code == 415
+    # SVG is refused — it's an active document that could carry script.
+    assert client.get("/preview", params={"projectId": project["id"], "path": "vector.svg"}).status_code == 415
     # Path traversal is refused.
     assert client.get("/preview", params={"projectId": project["id"], "path": "../../etc/hosts"}).status_code == 403
     # Missing file is a 404.
