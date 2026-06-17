@@ -1214,7 +1214,6 @@ class Storage:
         self.conn.commit()
 
     @locked_storage_method
-    @locked_storage_method
     def list_agent_profiles(self, project_id: str | None = None) -> list[AgentProfileSummary]:
         self._ensure_project_profiles(project_id)
         if project_id is None:
@@ -1238,6 +1237,8 @@ class Storage:
         ).fetchone()
         if has_any is not None:
             return
+        # Assumes the global default team is already seeded (storage seeds it on init); if it were
+        # empty, this would clone zero profiles into the project.
         globals_ = self.conn.execute("SELECT * FROM agent_profiles WHERE project_id IS NULL").fetchall()
         now = utc_now()
         for row in globals_:
