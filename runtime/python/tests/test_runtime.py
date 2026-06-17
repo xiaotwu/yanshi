@@ -860,6 +860,54 @@ def test_terminal_tool_blocks_unsafe_commands_and_paths(tmp_path: Path) -> None:
     assert shell_pipeline.missingRequirement == "terminal_shell_unsupported"
 
 
+def test_terminal_cancellable_run_kills_process_immediately(tmp_path: Path) -> None:
+    from yanshi_runtime.tools.terminal_tool import CommandCancelled
+
+    tool = TerminalTool()
+    proc_holder: dict[str, subprocess.Popen[str]] = {}
+    real_popen = subprocess.Popen
+
+    def capturing_popen(*args, **kwargs):  # type: ignore[no-untyped-def]
+        proc = real_popen(*args, **kwargs)
+        proc_holder["proc"] = proc
+        return proc
+
+    started = time.monotonic()
+    # A 30s sleep would block to the timeout if cancellation did nothing; cancel kills it now.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(subprocess, "Popen", capturing_popen)
+        with pytest.raises(CommandCancelled):
+            tool._run_cancellable(
+                ["sleep", "30"],
+                cwd=tmp_path,
+                env=None,
+                timeout=30,
+                is_cancelled=lambda: True,
+                container_name=None,
+            )
+
+    elapsed = time.monotonic() - started
+    assert elapsed < 5, f"cancel should return promptly, took {elapsed:.1f}s"
+    proc = proc_holder["proc"]
+    assert proc.poll() is not None, "child process must be dead after cancel"
+
+
+def test_terminal_cancellable_run_still_times_out(tmp_path: Path) -> None:
+    tool = TerminalTool()
+    started = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        tool._run_cancellable(
+            ["sleep", "30"],
+            cwd=tmp_path,
+            env=None,
+            timeout=1,
+            is_cancelled=lambda: False,
+            container_name=None,
+        )
+    elapsed = time.monotonic() - started
+    assert elapsed < 6, f"timeout should fire near 1s, took {elapsed:.1f}s"
+
+
 def test_terminal_run_records_action_observation_and_stdout(tmp_path: Path) -> None:
     workspace = tmp_path / "workspaces" / "default"
     workspace.mkdir(parents=True)
@@ -907,7 +955,10 @@ def test_docker_tool_runs_command_with_workspace_mount(tmp_path: Path) -> None:
         assert check is False
         if args == ["docker", "info"]:
             return subprocess.CompletedProcess(args, 0, "ready", "")
-        assert args[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert args[:3] == ["docker", "run", "--rm"]
+        assert "--network" in args and args[args.index("--network") + 1] == "none"
+        name_index = args.index("--name")
+        assert args[name_index + 1].startswith("yanshi-run-")
         assert "--memory" in args
         assert "--cpus" in args
         assert "--pids-limit" in args

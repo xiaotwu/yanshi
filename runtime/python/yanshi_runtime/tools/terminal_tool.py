@@ -4,16 +4,30 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
+import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Protocol
+from typing import Callable, Protocol
 
 from yanshi_runtime.models import ToolResult
 
 
 COMMAND_RE = re.compile(r"`([^`]+)`")
+
+# Polling cadence for the cancellable execution path: small enough that Stop feels
+# immediate, large enough not to busy-spin while a command runs to completion.
+_CANCEL_POLL_SECONDS = 0.1
+# Grace period after SIGTERM (and after `docker rm -f`) before we escalate to SIGKILL.
+_TERM_GRACE_SECONDS = 3.0
+
+
+class CommandCancelled(Exception):
+    """Raised by the cancellable runner when the run was cancelled mid-command and the
+    process group (and any Docker container) was killed."""
 READ_ONLY_COMMANDS = {"pwd", "ls", "find", "cat", "head", "tail", "wc", "stat", "du", "grep", "rg"}
 SHELL_TOKENS = ("|", "&", ";", ">", "<", "$", "\n")
 DOCKER_LOCK = Lock()
@@ -106,6 +120,7 @@ class TerminalTool:
         workspace_root: Path,
         timeout_seconds: int = 30,
         config: DockerConfig | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> ToolResult:
         command = self.extract_command(task)
         if command is None:
@@ -115,7 +130,13 @@ class TerminalTool:
                 missingRequirement="terminal_command",
                 structuredOutput={"example": "Run command `python --version` in Docker"},
             )
-        return self.run_in_docker(command, workspace_root=workspace_root, timeout_seconds=timeout_seconds, config=config)
+        return self.run_in_docker(
+            command,
+            workspace_root=workspace_root,
+            timeout_seconds=timeout_seconds,
+            config=config,
+            is_cancelled=is_cancelled,
+        )
 
     def run_in_docker(
         self,
@@ -124,6 +145,7 @@ class TerminalTool:
         workspace_root: Path,
         timeout_seconds: int = 30,
         config: DockerConfig | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> ToolResult:
         config = config or self.docker_config
         invalid = validate_docker_config(config.image, config.memory, config.cpus, config.pids_limit)
@@ -135,10 +157,15 @@ class TerminalTool:
             return status
 
         workspace_root.mkdir(parents=True, exist_ok=True)
+        # Name the container so a cancel can stop it with `docker rm -f`: killing the
+        # `docker run` client alone leaves the container running on the daemon.
+        container_name = f"yanshi-run-{uuid.uuid4().hex[:12]}"
         args = [
             "docker",
             "run",
             "--rm",
+            "--name",
+            container_name,
             "--network",
             "none",
             "--memory",
@@ -158,13 +185,19 @@ class TerminalTool:
         ]
         try:
             with DOCKER_LOCK:
-                completed = self.runner(
+                completed = self._invoke(
                     args,
-                    capture_output=True,
-                    text=True,
                     timeout=timeout_seconds,
-                    check=False,
+                    is_cancelled=is_cancelled,
+                    container_name=container_name,
                 )
+        except CommandCancelled:
+            return ToolResult(
+                ok=False,
+                summary="Docker sandbox command cancelled.",
+                missingRequirement="docker_command_cancelled",
+                structuredOutput={"command": command, "image": config.image},
+            )
         except FileNotFoundError:
             return ToolResult(
                 ok=False,
@@ -212,7 +245,14 @@ class TerminalTool:
             },
         )
 
-    def run_from_task(self, task: str, *, workspace_root: Path, timeout_seconds: int = 8) -> ToolResult:
+    def run_from_task(
+        self,
+        task: str,
+        *,
+        workspace_root: Path,
+        timeout_seconds: int = 8,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> ToolResult:
         command = self.extract_command(task)
         if command is None:
             return ToolResult(
@@ -221,9 +261,21 @@ class TerminalTool:
                 missingRequirement="terminal_command",
                 structuredOutput={"example": "Run command `ls` in terminal"},
             )
-        return self.run_command(command, workspace_root=workspace_root, timeout_seconds=timeout_seconds)
+        return self.run_command(
+            command,
+            workspace_root=workspace_root,
+            timeout_seconds=timeout_seconds,
+            is_cancelled=is_cancelled,
+        )
 
-    def run_command(self, command: str, *, workspace_root: Path, timeout_seconds: int = 8) -> ToolResult:
+    def run_command(
+        self,
+        command: str,
+        *,
+        workspace_root: Path,
+        timeout_seconds: int = 8,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> ToolResult:
         validation_error = self._validate_command_text(command)
         if validation_error:
             return validation_error
@@ -249,14 +301,19 @@ class TerminalTool:
             "YANSHI_TERMINAL_SANDBOX": "workspace",
         }
         try:
-            completed = self.runner(
+            completed = self._invoke(
                 args,
                 cwd=workspace_root,
                 env=env,
-                capture_output=True,
-                text=True,
                 timeout=timeout_seconds,
-                check=False,
+                is_cancelled=is_cancelled,
+            )
+        except CommandCancelled:
+            return ToolResult(
+                ok=False,
+                summary="Terminal command cancelled.",
+                missingRequirement="terminal_command_cancelled",
+                structuredOutput={"command": args},
             )
         except FileNotFoundError:
             return ToolResult(
@@ -351,6 +408,123 @@ class TerminalTool:
                     structuredOutput={"argument": arg},
                 )
         return None
+
+    def _invoke(
+        self,
+        args: list[str],
+        *,
+        timeout: int,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+        container_name: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run ``args`` and return a CompletedProcess.
+
+        When an injected runner is in use (tests) or no cancellation callback is given, this
+        delegates to the configured runner unchanged — behaviour is identical to the old
+        ``subprocess.run`` call. When a real subprocess is used with a cancellation callback,
+        it takes a Popen-based path that can kill the process group (and any Docker container)
+        the moment the run is cancelled, instead of blocking until the command's own timeout.
+        """
+        if self._runner_provided or is_cancelled is None:
+            return self.runner(
+                args,
+                cwd=cwd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        return self._run_cancellable(
+            args,
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+            is_cancelled=is_cancelled,
+            container_name=container_name,
+        )
+
+    def _run_cancellable(
+        self,
+        args: list[str],
+        *,
+        timeout: int,
+        cwd: Path | None,
+        env: dict[str, str] | None,
+        is_cancelled: Callable[[], bool],
+        container_name: str | None,
+    ) -> subprocess.CompletedProcess[str]:
+        proc = subprocess.Popen(  # noqa: S603 - args are validated/explicit, no shell
+            args,
+            cwd=str(cwd) if cwd is not None else None,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,  # own process group so we can signal the whole tree
+        )
+        deadline = time.monotonic() + timeout
+        # Repeated communicate(timeout=...) calls are loss-less per the stdlib docs: buffered
+        # output is retained across TimeoutExpired, so polling does not drop stdout/stderr.
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=_CANCEL_POLL_SECONDS)
+                return subprocess.CompletedProcess(args, proc.returncode, stdout, stderr)
+            except subprocess.TimeoutExpired:
+                pass
+            if is_cancelled():
+                self._terminate(proc, container_name)
+                raise CommandCancelled()
+            if time.monotonic() >= deadline:
+                self._terminate(proc, container_name)
+                stdout, stderr = self._drain(proc)
+                raise subprocess.TimeoutExpired(args, timeout, output=stdout, stderr=stderr)
+
+    def _terminate(self, proc: subprocess.Popen[str], container_name: str | None) -> None:
+        """Stop a running command: remove its Docker container (if any), then SIGTERM and,
+        after a grace period, SIGKILL the process group."""
+        if container_name is not None:
+            try:
+                subprocess.run(
+                    ["docker", "rm", "-f", container_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+        self._signal_group(proc, signal.SIGTERM)
+        try:
+            proc.wait(timeout=_TERM_GRACE_SECONDS)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        self._signal_group(proc, signal.SIGKILL)
+        try:
+            proc.wait(timeout=_TERM_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+
+    @staticmethod
+    def _signal_group(proc: subprocess.Popen[str], sig: int) -> None:
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+        except (ProcessLookupError, PermissionError, OSError):
+            # Process already gone, or no process group (should not happen with
+            # start_new_session): fall back to signalling the process directly.
+            try:
+                proc.send_signal(sig)
+            except (ProcessLookupError, OSError):
+                pass
+
+    def _drain(self, proc: subprocess.Popen[str]) -> tuple[str, str]:
+        try:
+            return proc.communicate(timeout=_TERM_GRACE_SECONDS)
+        except (subprocess.TimeoutExpired, ValueError):
+            return "", ""
 
     def _truncate(self, value: str | bytes | None, limit: int = 8000) -> str:
         if value is None:

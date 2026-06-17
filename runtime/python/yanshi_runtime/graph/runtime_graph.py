@@ -889,14 +889,20 @@ class RuntimeGraph:
             "agent_terminal",
         )
 
+        is_cancelled = lambda: self._is_cancelled(run_id)  # noqa: E731 - tiny per-run closure
         if self._looks_like_docker_command(task_text):
             result = self.terminal_tool.run_in_docker_from_task(
                 task_text,
                 workspace_root=self._workspace_for_run(run_id),
                 config=self._docker_config_from_settings(),
+                is_cancelled=is_cancelled,
             )
         elif self._looks_like_terminal_command(task_text):
-            result = self.terminal_tool.run_from_task(task_text, workspace_root=self._workspace_for_run(run_id))
+            result = self.terminal_tool.run_from_task(
+                task_text,
+                workspace_root=self._workspace_for_run(run_id),
+                is_cancelled=is_cancelled,
+            )
         else:
             result = self.terminal_tool.docker_status()
 
