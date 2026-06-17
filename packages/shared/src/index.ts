@@ -333,6 +333,7 @@ export interface LiveAgentState {
 
 export interface AgentProfileSummary {
   id: string;
+  projectId?: string | null;
   name: string;
   role: string;
   prompt: string;

@@ -288,7 +288,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
           runtimeApi.appSettings(),
           runtimeApi.projects(),
           runtimeApi.workshopPacks(),
-          runtimeApi.agentProfiles(),
+          runtimeApi.agentProfiles(currentProjectId),
           runtimeApi.liveOffice(currentProjectId),
           runtimeApi.agentInstances(currentProjectId),
         ]);
@@ -629,7 +629,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   },
 
   loadAgentProfiles: async () => {
-    const agentProfiles = await runtimeApi.agentProfiles();
+    const agentProfiles = await runtimeApi.agentProfiles(get().activeProjectId);
     set((state) => ({ agentProfiles, liveAgents: computeAgents(agentProfiles, state.events, state.officeState?.behaviorMode ?? "balanced", state.agentInstances) }));
   },
 
@@ -639,7 +639,7 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   },
 
   createAgentProfile: async (body) => {
-    await runtimeApi.createAgentProfile(body);
+    await runtimeApi.createAgentProfile(body, get().activeProjectId);
     await get().loadAgentProfiles();
   },
 

@@ -192,9 +192,10 @@ export const runtimeApi = {
   deleteAutomation: (automationId: string) => request<void>(`/automations/${automationId}`, { method: "DELETE" }),
   runAutomation: (automationId: string) => request<RunSummary>(`/automations/${automationId}/run`, { method: "POST", body: "{}" }),
   automationRuns: (automationId: string) => request<RunSummary[]>(`/automations/${automationId}/runs`),
-  agentProfiles: () => request<AgentProfileSummary[]>("/agent-profiles"),
-  createAgentProfile: (body: { name: string; role?: string; station?: string; behaviorMode?: BehaviorMode; accent?: string; taskPriority?: number }) =>
-    request<AgentProfileSummary>("/agent-profiles", { method: "POST", body: JSON.stringify(body) }),
+  agentProfiles: (projectId?: string | null) =>
+    request<AgentProfileSummary[]>(projectId ? `/agent-profiles?projectId=${encodeURIComponent(projectId)}` : "/agent-profiles"),
+  createAgentProfile: (body: { name: string; role?: string; station?: string; behaviorMode?: BehaviorMode; accent?: string; taskPriority?: number }, projectId?: string | null) =>
+    request<AgentProfileSummary>(projectId ? `/agent-profiles?projectId=${encodeURIComponent(projectId)}` : "/agent-profiles", { method: "POST", body: JSON.stringify(body) }),
   updateAgentProfile: (id: string, update: Partial<Pick<AgentProfileSummary, "name" | "prompt" | "personality" | "accent" | "behaviorMode" | "station" | "taskPriority">>) =>
     request<AgentProfileSummary>(`/agent-profiles/${id}`, { method: "PUT", body: JSON.stringify(update) }),
   deleteAgentProfile: (id: string) => request<void>(`/agent-profiles/${id}`, { method: "DELETE" }),
