@@ -120,7 +120,8 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
 # Schema version tracked via SQLite's built-in `PRAGMA user_version`. Bump this and register a step
 # in `_run_migrations` whenever the schema changes in a way the declarative `CREATE TABLE IF NOT
 # EXISTS` block can't express (column drops/renames, backfills, data reshapes). The current
-# declarative schema is the v1 baseline.
+# declarative schema is the v2 baseline; v1→v2 column addition (project_id) is handled idempotently
+# by `_migrate_add_agent_profile_project_id`.
 _SCHEMA_VERSION = 2
 
 # Once a run reaches one of these it is finished; its status must not change again.
@@ -405,6 +406,7 @@ class Storage:
             self.conn.execute("ALTER TABLE live_office_state ADD COLUMN furniture_json TEXT NOT NULL DEFAULT '[]'")
             self.conn.commit()
 
+    @locked_storage_method
     def _migrate_add_agent_profile_project_id(self) -> None:
         """v2: agent profiles become project-scoped. Idempotent — a fresh db already has the
         column from the declarative schema, so guard before ALTER."""
