@@ -40,3 +40,6 @@ qa/**/*.zip
 qa/**/*.log
 qa/**/LOGS/*.json
 qa/**/*.pid
+
+# Brainstorming visual companion (local mockups)
+.superpowers/
