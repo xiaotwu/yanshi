@@ -2681,3 +2681,25 @@ def test_ensure_agent_team_uses_project_scoped_profiles(tmp_path: Path) -> None:
     instances = storage.ensure_agent_team("proj_gamma")
     project_profile_ids = {p.id for p in storage.list_agent_profiles("proj_gamma")}
     assert instances and all(inst.profileId in project_profile_ids for inst in instances)
+
+
+def test_agent_profiles_api_is_project_scoped(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    global_team = client.get("/agent-profiles").json()
+    assert global_team and all(p["projectId"] is None for p in global_team)
+
+    proj_team = client.get("/agent-profiles", params={"projectId": "proj_delta"}).json()
+    assert len(proj_team) == len(global_team)
+    assert all(p["projectId"] == "proj_delta" for p in proj_team)
+
+    created = client.post(
+        "/agent-profiles",
+        params={"projectId": "proj_delta"},
+        json={"name": "审校偃师", "role": "reviewer", "station": "reviewer",
+              "prompt": "", "personality": "", "accent": "#888888",
+              "behaviorMode": "balanced", "taskPriority": 5},
+    ).json()
+    assert created["projectId"] == "proj_delta"
+    ids = {p["id"] for p in client.get("/agent-profiles", params={"projectId": "proj_delta"}).json()}
+    assert created["id"] in ids
+    assert created["id"] not in {p["id"] for p in client.get("/agent-profiles").json()}

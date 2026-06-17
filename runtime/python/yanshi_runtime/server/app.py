@@ -930,11 +930,11 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         return service.storage.list_automation_runs(automation_id)
 
     @app.get("/agent-profiles", response_model=list[AgentProfileSummary])
-    def list_agent_profiles(service: RuntimeService = Depends(service_dep)):
-        return service.storage.list_agent_profiles()
+    def list_agent_profiles(projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
+        return service.storage.list_agent_profiles(projectId)
 
     @app.post("/agent-profiles", response_model=AgentProfileSummary)
-    def create_agent_profile(request: CreateAgentProfileRequest, service: RuntimeService = Depends(service_dep)):
+    def create_agent_profile(request: CreateAgentProfileRequest, projectId: str | None = None, service: RuntimeService = Depends(service_dep)):
         if not request.name.strip():
             raise HTTPException(status_code=400, detail="Agent name is required.")
         profile = service.storage.create_agent_profile(
@@ -946,6 +946,7 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             accent=request.accent,
             behavior_mode=request.behaviorMode,
             task_priority=request.taskPriority,
+            project_id=projectId,
         )
         service.storage.append_event("agent.created", agent_id=profile.id, payload=profile.model_dump())
         return profile
