@@ -161,6 +161,7 @@ class AgentProfileSummary(BaseModel):
     sound: str | None = None
     motionPack: str = "default"
     taskPriority: int = 5
+    projectId: str | None = None
     createdAt: str
     updatedAt: str
 

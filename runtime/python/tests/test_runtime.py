@@ -2636,3 +2636,24 @@ def test_agent_profiles_table_has_project_id_column(tmp_path: Path) -> None:
     # Seeded global profiles have NULL project_id.
     rows = storage.conn.execute("SELECT project_id FROM agent_profiles").fetchall()
     assert rows and all(row["project_id"] is None for row in rows)
+
+
+def test_list_agent_profiles_clones_global_team_per_project(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    global_team = storage.list_agent_profiles()
+    assert global_team and all(p.projectId is None for p in global_team)
+
+    proj_team = storage.list_agent_profiles("proj_alpha")
+    # Same size, freshly cloned with distinct ids, all tagged to the project.
+    assert len(proj_team) == len(global_team)
+    assert all(p.projectId == "proj_alpha" for p in proj_team)
+    assert {p.id for p in proj_team}.isdisjoint({p.id for p in global_team})
+    assert {p.station for p in proj_team} == {p.station for p in global_team}
+
+    # Idempotent: a second read does not re-clone (ids stable).
+    again = storage.list_agent_profiles("proj_alpha")
+    assert {p.id for p in again} == {p.id for p in proj_team}
+    # The global team is untouched by project access.
+    assert {p.id for p in storage.list_agent_profiles()} == {p.id for p in global_team}

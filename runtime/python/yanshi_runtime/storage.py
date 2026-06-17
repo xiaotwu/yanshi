@@ -1214,9 +1214,49 @@ class Storage:
         self.conn.commit()
 
     @locked_storage_method
-    def list_agent_profiles(self) -> list[AgentProfileSummary]:
-        rows = self.conn.execute("SELECT * FROM agent_profiles ORDER BY task_priority DESC, name").fetchall()
+    @locked_storage_method
+    def list_agent_profiles(self, project_id: str | None = None) -> list[AgentProfileSummary]:
+        self._ensure_project_profiles(project_id)
+        if project_id is None:
+            rows = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id IS NULL ORDER BY task_priority DESC, name"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id = ? ORDER BY task_priority DESC, name",
+                (project_id,),
+            ).fetchall()
         return [self._agent_profile_from_row(row) for row in rows]
+
+    def _ensure_project_profiles(self, project_id: str | None) -> None:
+        """Clone the global default team (project_id IS NULL) into a project the first time it is
+        accessed. No-op for the global team or a project that already has profiles."""
+        if project_id is None:
+            return
+        has_any = self.conn.execute(
+            "SELECT 1 FROM agent_profiles WHERE project_id = ? LIMIT 1", (project_id,)
+        ).fetchone()
+        if has_any is not None:
+            return
+        globals_ = self.conn.execute("SELECT * FROM agent_profiles WHERE project_id IS NULL").fetchall()
+        now = utc_now()
+        for row in globals_:
+            self.conn.execute(
+                """
+                INSERT INTO agent_profiles (
+                  id, name, role, prompt, personality, default_tools_json, default_permissions_json,
+                  accent, behavior_mode, station, sound, motion_pack, task_priority, project_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    new_id("agent"), row["name"], row["role"], row["prompt"], row["personality"],
+                    row["default_tools_json"], row["default_permissions_json"], row["accent"],
+                    row["behavior_mode"], row["station"], row["sound"], row["motion_pack"],
+                    row["task_priority"], project_id, now, now,
+                ),
+            )
+        self.conn.commit()
 
     @locked_storage_method
     def get_agent_profile(self, profile_id: str) -> AgentProfileSummary:
@@ -1301,6 +1341,7 @@ class Storage:
             sound=row["sound"],
             motionPack=row["motion_pack"],
             taskPriority=row["task_priority"],
+            projectId=row["project_id"],
             createdAt=row["created_at"],
             updatedAt=row["updated_at"],
         )
