@@ -1278,6 +1278,7 @@ class Storage:
         accent: str,
         behavior_mode: str,
         task_priority: int,
+        project_id: str | None = None,
     ) -> AgentProfileSummary:
         profile_id = new_id("agent")
         now = utc_now()
@@ -1285,11 +1286,11 @@ class Storage:
             """
             INSERT INTO agent_profiles (
               id, name, role, prompt, personality, default_tools_json, default_permissions_json,
-              accent, behavior_mode, station, sound, motion_pack, task_priority, created_at, updated_at
+              accent, behavior_mode, station, sound, motion_pack, task_priority, project_id, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, ?, ?)
             """,
-            (profile_id, name, role, prompt, personality, accent, behavior_mode, station, task_priority, now, now),
+            (profile_id, name, role, prompt, personality, accent, behavior_mode, station, task_priority, project_id, now, now),
         )
         self.conn.commit()
         return self.get_agent_profile(profile_id)
@@ -1417,7 +1418,16 @@ class Storage:
     @locked_storage_method
     def ensure_agent_team(self, project_id: str | None) -> list[AgentInstanceSummary]:
         """Create a persistent AgentInstance + AgentActor3D per profile for this project/standalone."""
-        profiles = self.conn.execute("SELECT * FROM agent_profiles ORDER BY task_priority DESC, name").fetchall()
+        self._ensure_project_profiles(project_id)
+        if project_id is None:
+            profiles = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id IS NULL ORDER BY task_priority DESC, name"
+            ).fetchall()
+        else:
+            profiles = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id = ? ORDER BY task_priority DESC, name",
+                (project_id,),
+            ).fetchall()
         layout = self.get_live_office_state(project_id).stationLayout
         now = utc_now()
         for profile in profiles:

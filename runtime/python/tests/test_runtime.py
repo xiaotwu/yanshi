@@ -2657,3 +2657,27 @@ def test_list_agent_profiles_clones_global_team_per_project(tmp_path: Path) -> N
     assert {p.id for p in again} == {p.id for p in proj_team}
     # The global team is untouched by project access.
     assert {p.id for p in storage.list_agent_profiles()} == {p.id for p in global_team}
+
+
+def test_create_agent_profile_is_project_scoped(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    created = storage.create_agent_profile(
+        name="勘探偃师", role="browser", station="browser", prompt="", personality="",
+        accent="#777777", behavior_mode="balanced", task_priority=5, project_id="proj_beta",
+    )
+    assert created.projectId == "proj_beta"
+    beta_ids = {p.id for p in storage.list_agent_profiles("proj_beta")}
+    assert created.id in beta_ids
+    # The new偃师 must not appear in the global team.
+    assert created.id not in {p.id for p in storage.list_agent_profiles()}
+
+
+def test_ensure_agent_team_uses_project_scoped_profiles(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    instances = storage.ensure_agent_team("proj_gamma")
+    project_profile_ids = {p.id for p in storage.list_agent_profiles("proj_gamma")}
+    assert instances and all(inst.profileId in project_profile_ids for inst in instances)
