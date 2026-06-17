@@ -2623,4 +2623,15 @@ def test_follow_up_run_threads_and_carries_conversation_history(tmp_path: Path) 
     assert payload is not None
     user_message = next(msg for msg in payload["messages"] if msg["role"] == "user")
     assert "conversationHistory" in user_message["content"]
-    assert "Introduce Hangzhou" in user_message["content"]
+
+
+def test_agent_profiles_table_has_project_id_column(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    cols = {row["name"] for row in storage.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
+    assert "project_id" in cols
+    assert storage.schema_version() == 2
+    # Seeded global profiles have NULL project_id.
+    rows = storage.conn.execute("SELECT project_id FROM agent_profiles").fetchall()
+    assert rows and all(row["project_id"] is None for row in rows)

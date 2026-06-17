@@ -121,7 +121,7 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
 # in `_run_migrations` whenever the schema changes in a way the declarative `CREATE TABLE IF NOT
 # EXISTS` block can't express (column drops/renames, backfills, data reshapes). The current
 # declarative schema is the v1 baseline.
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 # Once a run reaches one of these it is finished; its status must not change again.
 _TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -317,6 +317,7 @@ class Storage:
               sound TEXT,
               motion_pack TEXT NOT NULL DEFAULT 'default',
               task_priority INTEGER NOT NULL DEFAULT 5,
+              project_id TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
@@ -404,6 +405,13 @@ class Storage:
             self.conn.execute("ALTER TABLE live_office_state ADD COLUMN furniture_json TEXT NOT NULL DEFAULT '[]'")
             self.conn.commit()
 
+    def _migrate_add_agent_profile_project_id(self) -> None:
+        """v2: agent profiles become project-scoped. Idempotent — a fresh db already has the
+        column from the declarative schema, so guard before ALTER."""
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
+        if "project_id" not in existing:
+            self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN project_id TEXT")
+
     @locked_storage_method
     def schema_version(self) -> int:
         return int(self.conn.execute("PRAGMA user_version").fetchone()[0])
@@ -420,7 +428,9 @@ class Storage:
         current = int(self.conn.execute("PRAGMA user_version").fetchone()[0])
         if current >= _SCHEMA_VERSION:
             return
-        migrations: dict[int, Callable[[], None]] = {}
+        migrations: dict[int, Callable[[], None]] = {
+            2: self._migrate_add_agent_profile_project_id,
+        }
         for version in range(current + 1, _SCHEMA_VERSION + 1):
             step = migrations.get(version)
             # Each step + its version bump is one transaction: on failure it rolls back together, so
