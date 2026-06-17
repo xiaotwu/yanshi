@@ -35,6 +35,18 @@
   --overlay: rgba(20, 26, 24, 0.34);
   --shadow: 0 18px 50px rgba(20, 30, 26, 0.1);
 
+  /* 偃师工坊 (造物台) — artificer-workshop surfaces derived from theme tokens so the workshop
+     follows light/dark and the chosen accent. No hardcoded palette. */
+  --ws-wood: color-mix(in srgb, var(--surface) 85%, #6b4f2e);
+  --ws-panel: color-mix(in srgb, var(--surface-elevated) 88%, #5a4326);
+  --ws-edge: color-mix(in srgb, var(--border) 70%, #6b4f2e);
+  --ws-brass: var(--accent);
+  --ws-lamp: var(--accent-glow);
+  --ws-parchment: color-mix(in srgb, var(--surface-elevated) 78%, #d8c79e);
+  --ws-parchment-ink: color-mix(in srgb, var(--text-primary) 86%, #5a4a30);
+  --ws-text: var(--text-primary);
+  --ws-text-dim: var(--text-secondary);
+
   /* Type system: a clean sans for the UI, an elegant serif (with CJK serif fallbacks) reserved
      for the hero/wordmark — a touch of Claude-Desktop refinement without a webfont dependency. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
@@ -61,6 +73,13 @@
   --accent-strong: #29b475;
   --accent-soft: #16302a;
   --accent-glow: rgba(52, 209, 138, 0.45);
+  /* 造物台 dark: structural mixes shift with --surface/--background automatically; only override
+     parchment so the 咒文 surface stays legibly warm-dark. */
+  --ws-wood: color-mix(in srgb, var(--surface) 80%, #3a2c1c);
+  --ws-panel: color-mix(in srgb, var(--surface-elevated) 82%, #2e2418);
+  --ws-edge: color-mix(in srgb, var(--border) 60%, #3a2e22);
+  --ws-parchment: color-mix(in srgb, var(--surface-elevated) 70%, #6b5a3a);
+  --ws-parchment-ink: color-mix(in srgb, var(--text-primary) 90%, #e8dcc0);
   --on-accent: #07120d;
   --danger: #e3716e;
   --danger-soft: #34201f;
