@@ -2717,3 +2717,26 @@ def test_agent_profiles_table_has_model_and_reasoning_columns(tmp_path: Path) ->
     rows = storage.conn.execute("SELECT model, reasoning FROM agent_profiles").fetchall()
     assert rows and all(row["model"] is None for row in rows)
     assert rows and all(row["reasoning"] is None for row in rows)
+
+
+def test_get_project_agent_profile_resolves_by_role(tmp_path: Path) -> None:
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+
+    # Global manager: project_id None, role "manager".
+    global_manager = storage.get_project_agent_profile(None, "manager")
+    assert global_manager is not None
+    assert global_manager.projectId is None
+    assert global_manager.role == "manager"
+
+    # Project-scoped manager: materialized clone with same role, distinct id.
+    proj_manager = storage.get_project_agent_profile("proj_x", "manager")
+    assert proj_manager is not None
+    assert proj_manager.projectId == "proj_x"
+    assert proj_manager.role == "manager"
+    assert proj_manager.id != global_manager.id
+
+    # Unknown role returns None.
+    assert storage.get_project_agent_profile(None, "nope") is None
+    assert storage.get_project_agent_profile("proj_x", "nope") is None

@@ -1275,6 +1275,21 @@ class Storage:
         self.conn.commit()
 
     @locked_storage_method
+    def get_project_agent_profile(self, project_id: str | None, role: str) -> AgentProfileSummary | None:
+        """Resolve a role to its profile within a project's team (materializing clones first), or the
+        global profile when project_id is None, or None if no profile has that role."""
+        self._ensure_project_profiles(project_id)
+        if project_id is None:
+            row = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id IS NULL AND role = ? LIMIT 1", (role,)
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT * FROM agent_profiles WHERE project_id = ? AND role = ? LIMIT 1", (project_id, role)
+            ).fetchone()
+        return self._agent_profile_from_row(row) if row is not None else None
+
+    @locked_storage_method
     def get_agent_profile(self, profile_id: str) -> AgentProfileSummary:
         row = self.conn.execute("SELECT * FROM agent_profiles WHERE id = ?", (profile_id,)).fetchone()
         if row is None:
