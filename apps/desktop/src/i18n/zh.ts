@@ -188,7 +188,8 @@ export const zh: Record<TKey, string> = {
   "workshop.agentPriority": "任务优先级（{value}）",
   "workshop.agentPersonality": "性格",
   "workshop.agentPrompt": "提示词",
-  "workshop.exportDesc": "将你的智能体团队和工坊主题导出为扩展包，可在“已安装”中重新导入。",
+  "workshop.exportDesc": "将你的智能体团队和工坊主题导出为扩展包，可在”已安装”中重新导入。",
+  "workshop.forgeWorker": "铸造偃师",
 
   // Account menu
   "account.profile": "个人资料",

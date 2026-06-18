@@ -3544,6 +3544,38 @@ textarea:focus-visible {
 .zaowutai-rail, .zaowutai-inspector { background: var(--ws-panel); border: 1px solid var(--ws-edge); border-radius: 10px; overflow: auto; }
 .zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; }
 
+/* ── WorkerRail: icon-avatar team list + forge entry ────────────────────────────── */
+.worker-rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; }
+.worker-avatar {
+  position: relative;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--ws-panel);
+  color: var(--ws-text-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, color 0.15s;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--avatar-accent, var(--ws-brass));
+}
+.worker-avatar:hover { color: var(--ws-text); box-shadow: 0 0 0 2px var(--avatar-accent, var(--ws-brass)), 0 0 8px var(--ws-lamp); }
+.worker-avatar.active { color: var(--ws-text); box-shadow: 0 0 0 2px var(--avatar-accent, var(--ws-brass)), 0 0 12px var(--ws-lamp); background: color-mix(in srgb, var(--ws-panel) 80%, var(--avatar-accent, var(--ws-brass))); }
+.worker-status-dot { position: absolute; bottom: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--ws-panel); }
+.worker-forge {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--ws-edge);
+  background: transparent;
+  color: var(--ws-text-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: border-color 0.15s, color 0.15s;
+  outline: none;
+}
+.worker-forge:hover { border-color: var(--ws-brass); color: var(--ws-text); }
+
 /* ── Right panel: compact dropdown, no chrome duplication ──────────────────────── */
 /* Right-panel segmented tabs (replaces the section <select>). */
 .panel-tabs {

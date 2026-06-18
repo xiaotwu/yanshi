@@ -187,6 +187,7 @@ export const en = {
   "workshop.agentPersonality": "Personality",
   "workshop.agentPrompt": "Prompt",
   "workshop.exportDesc": "Export your agent team and office theme as a pack. The file re-imports under Installed.",
+  "workshop.forgeWorker": "Forge worker",
 
   // Account menu
   "account.profile": "Profile",
