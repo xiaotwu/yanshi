@@ -1,4 +1,4 @@
-import { Share2 } from "lucide-react";
+import { Share2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useT } from "../../i18n";
@@ -16,6 +16,10 @@ export function WorkshopWorkspace() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [forgeOpen, setForgeOpen] = useState(false);
+  // Slide-over inspector state for <760px viewports. On wider layouts the
+  // inspector is always visible as a grid column, so this only has a visual
+  // effect at the narrow breakpoint (CSS keeps it hidden via transform).
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   useEffect(() => {
     if (agentProfiles.length === 0) void loadAgentProfiles();
@@ -42,6 +46,12 @@ export function WorkshopWorkspace() {
     setForgeOpen(false);
   };
 
+  const handleSelect = (id: string | null) => {
+    setSelectedId(id);
+    // On narrow screens, selecting a worker opens the slide-over inspector.
+    setInspectorOpen(id !== null);
+  };
+
   // Resolve selectedId to the station of the selected agent profile.
   const selectedProfile = agentProfiles.find((p) => p.id === selectedId);
   const selectedStation = selectedProfile?.station ?? null;
@@ -65,7 +75,7 @@ export function WorkshopWorkspace() {
           profiles={agentProfiles}
           liveAgents={liveAgents}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={handleSelect}
           onForge={handleForge}
         />
       </div>
@@ -82,7 +92,20 @@ export function WorkshopWorkspace() {
           selectedId={selectedStation}
         />
       </div>
-      <aside className="zaowutai-inspector" data-testid="workshop-inspector">
+      <aside
+        className={`zaowutai-inspector${inspectorOpen ? " open" : ""}`}
+        data-testid="workshop-inspector"
+      >
+        {/* Close control — only visible at the narrow breakpoint where the
+            inspector is a slide-over; hidden via CSS on wider layouts. */}
+        <button
+          className="zaowutai-inspector-close"
+          aria-label="Close inspector"
+          title="Close inspector"
+          onClick={() => setInspectorOpen(false)}
+        >
+          <X size={14} />
+        </button>
         {selectedProfile ? (
           <WorkerInspector profile={selectedProfile} />
         ) : (

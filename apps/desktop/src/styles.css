@@ -3539,10 +3539,130 @@ textarea:focus-visible {
 .workshop-body .agent-fields { gap: 12px; }
 
 /* ── 造物台 full-screen workspace ────────────────────────────────────────────────── */
-.zaowutai { display: grid; grid-template-columns: 64px 1fr 200px; gap: 8px; height: 100%; padding: 8px;
-  background: var(--ws-wood); color: var(--ws-text); font-family: var(--font-display); position: relative; }
+/* Base (≥1100px): three-pane grid — rail | preview | inspector.
+   The topbar spans all columns and sits above the pane row. */
+.zaowutai {
+  display: grid;
+  grid-template-columns: 64px 1fr 200px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "topbar topbar topbar" "rail preview inspector";
+  gap: 8px;
+  height: 100%;
+  min-width: 480px;
+  padding: 8px;
+  background: var(--ws-wood);
+  color: var(--ws-text);
+  font-family: var(--font-display);
+  position: relative;
+}
+.zaowutai-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  position: relative;
+}
+.zaowutai-rail { grid-area: rail; }
+.zaowutai-preview { grid-area: preview; }
+.zaowutai-inspector { grid-area: inspector; }
 .zaowutai-rail, .zaowutai-inspector { background: var(--ws-panel); border: 1px solid var(--ws-edge); border-radius: 10px; overflow: auto; }
-.zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; }
+.zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; min-height: 240px; }
+
+/* ── Share button + panel ───────────────────────────────────────────────────────── */
+.ws-share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--ws-edge);
+  background: var(--ws-panel);
+  color: var(--ws-text-dim);
+  cursor: pointer;
+  transition: background 0.13s ease, color 0.13s ease, border-color 0.13s ease;
+}
+.ws-share-btn:hover { color: var(--ws-text); border-color: var(--ws-brass); background: color-mix(in srgb, var(--ws-panel) 70%, var(--ws-brass)); }
+.ws-share-btn[aria-expanded="true"] { color: var(--ws-brass); border-color: var(--ws-brass); }
+.ws-share-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--ws-edge);
+  border-radius: 12px;
+  background: var(--ws-panel);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── 760–1100px: narrower inspector + tighter rail ─────────────────────────────── */
+@media (max-width: 1100px) {
+  .zaowutai { grid-template-columns: 56px 1fr 180px; }
+}
+
+/* The slide-over close button is only visible at the narrow breakpoint.
+   On wider layouts the inspector is a normal grid column — hide the close control. */
+.zaowutai-inspector-close { display: none; }
+
+/* ── <760px: preview-primary with inspector as right slide-over overlay ─────────── */
+@media (max-width: 759px) {
+  .zaowutai {
+    grid-template-columns: 48px 1fr;
+    grid-template-areas: "topbar topbar" "rail preview";
+  }
+  /* Inspector becomes an absolutely-positioned slide-over from the right edge. */
+  .zaowutai-inspector {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(260px, 80vw);
+    z-index: 50;
+    border-radius: 10px 0 0 10px;
+    box-shadow: var(--shadow);
+    transform: translateX(100%);
+    transition: transform 0.26s cubic-bezier(0.3, 0.8, 0.4, 1);
+    /* Keep it out of the tab order when hidden. */
+    visibility: hidden;
+  }
+  .zaowutai-inspector.open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+  /* Close button inside the slide-over. */
+  .zaowutai-inspector-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1px solid var(--ws-edge);
+    background: transparent;
+    color: var(--ws-text-dim);
+    cursor: pointer;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+  }
+  .zaowutai-inspector-close:hover { color: var(--ws-text); border-color: var(--ws-brass); }
+  /* Share panel: full-width on small screens. */
+  .ws-share-panel { right: 0; left: 0; min-width: 0; max-width: none; }
+}
+/* Respect reduced-motion: no slide animation when the user prefers it. */
+@media (prefers-reduced-motion: reduce) {
+  .zaowutai-inspector { transition: none; }
+}
 
 /* ── AtelierPreview: live scene + editable SVG overlay + floating toolbar ─── */
 .atelier-preview { position: relative; width: 100%; height: 100%; }
