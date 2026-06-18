@@ -2740,3 +2740,110 @@ def test_get_project_agent_profile_resolves_by_role(tmp_path: Path) -> None:
     # Unknown role returns None.
     assert storage.get_project_agent_profile(None, "nope") is None
     assert storage.get_project_agent_profile("proj_x", "nope") is None
+
+
+def test_agent_persona_uses_project_profile(tmp_path: Path) -> None:
+    """Unit test: _agent_persona resolves to the project's persona when project_id is given."""
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.providers import OpenAICompatibleProvider
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "checkpoints.db",
+        workspace_root=tmp_path / "workspaces",
+        provider=OpenAICompatibleProvider(None),
+    )
+
+    # Edit the project-scoped manager profile (materializes it first).
+    proj_profile = storage.get_project_agent_profile("proj_unit", "manager")
+    assert proj_profile is not None
+    storage.update_agent_profile(proj_profile.id, {"personality": "ProjectPersona-unit-signature"})
+
+    # _agent_persona with project_id returns the project's persona.
+    persona_with_project = graph._agent_persona("agent_manager", "proj_unit")
+    assert "ProjectPersona-unit-signature" in persona_with_project
+    assert "advisory" in persona_with_project
+
+    # _agent_persona with project_id=None returns the GLOBAL persona (no project signature).
+    persona_global = graph._agent_persona("agent_manager", None)
+    assert "ProjectPersona-unit-signature" not in persona_global
+
+    # Ensure the global manager profile itself was NOT modified.
+    global_profile = storage.get_project_agent_profile(None, "manager")
+    assert global_profile is not None
+    assert "ProjectPersona-unit-signature" not in (global_profile.personality or "")
+
+
+def test_agent_persona_global_fallback_for_none_project(tmp_path: Path) -> None:
+    """Unit test: _agent_persona with project_id=None yields the global persona (unchanged behaviour)."""
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.providers import OpenAICompatibleProvider
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "checkpoints.db",
+        workspace_root=tmp_path / "workspaces",
+        provider=OpenAICompatibleProvider(None),
+    )
+
+    # Set a distinctive personality on the global manager.
+    global_profile = storage.get_project_agent_profile(None, "manager")
+    assert global_profile is not None
+    storage.update_agent_profile(global_profile.id, {"personality": "GlobalManager-fallback-signature"})
+
+    # No project_id → global profile.
+    persona = graph._agent_persona("agent_manager")
+    assert "GlobalManager-fallback-signature" in persona
+    assert "advisory" in persona
+
+    # Explicit None → same.
+    persona_explicit_none = graph._agent_persona("agent_manager", None)
+    assert "GlobalManager-fallback-signature" in persona_explicit_none
+
+
+def test_project_run_uses_project_team_persona_in_file_action(tmp_path: Path) -> None:
+    """Integration test: a run in a project uses the PROJECT's file-agent persona in the action input."""
+    workspace = tmp_path / "workspaces" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "readme.txt").write_text("hello", encoding="utf-8")
+
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    # Create project and its file-agent workspace.
+    project = client.post("/projects", json={"name": "PersonaTestProject"}).json()
+    project_id = project["id"]
+    proj_workspace = Path(project["workspacePath"])
+    (proj_workspace / "notes.txt").write_text("project note", encoding="utf-8")
+
+    # Edit the project-scoped file agent persona.
+    proj_file_profile = service.storage.get_project_agent_profile(project_id, "file")
+    assert proj_file_profile is not None
+    service.storage.update_agent_profile(proj_file_profile.id, {"personality": "ProjectFile-persona-signature"})
+
+    # Run in the project — should pick up the project's file-agent persona.
+    project_run = client.post("/runs", json={"task": "List workspace files", "projectId": project_id})
+    assert project_run.status_code == 200
+    run_id = project_run.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "completed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    actions = [e["event"]["payload"] for e in events if e["event"]["type"] == "action.created"]
+    file_action = next((a for a in actions if a["type"] == "FileAction"), None)
+    assert file_action is not None, "Expected a FileAction in the project run"
+    assert "ProjectFile-persona-signature" in file_action["input"]["persona"]
+
+    # Standalone run should NOT use the project's persona.
+    standalone_run = client.post("/runs", json={"task": "List workspace files"})
+    assert standalone_run.status_code == 200
+    standalone_id = standalone_run.json()["id"]
+    standalone_events = client.get("/events", params={"runId": standalone_id}).json()
+    standalone_actions = [e["event"]["payload"] for e in standalone_events if e["event"]["type"] == "action.created"]
+    standalone_file_action = next((a for a in standalone_actions if a["type"] == "FileAction"), None)
+    assert standalone_file_action is not None, "Expected a FileAction in the standalone run"
+    assert "ProjectFile-persona-signature" not in standalone_file_action["input"]["persona"]

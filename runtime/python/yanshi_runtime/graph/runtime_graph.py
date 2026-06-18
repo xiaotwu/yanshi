@@ -194,16 +194,24 @@ class RuntimeGraph:
         }
         return self.graph.invoke(state, config=config)
 
-    def _agent_persona(self, agent_id: str) -> str:
+    def _agent_persona(self, agent_id: str, project_id: str | None = None) -> str:
         """Return the agent's configured persona as a delimited, lower-trust advisory section.
+
+        When project_id is provided, the run's project team persona is used (falling back to the
+        global profile when the project has no override for this role).  project_id=None always
+        resolves to the global profile — standalone-run behaviour is unchanged.
 
         The persona tunes tone/role but is explicitly marked as advisory so a user-edited profile
         cannot override Yanshi's instructions or safety rules (prompt-injection separation).
         """
-        try:
-            profile = self.storage.get_agent_profile(agent_id)
-        except KeyError:
-            return ""
+        role = agent_id.removeprefix("agent_")
+        profile = self.storage.get_project_agent_profile(project_id, role)
+        if profile is None:
+            # Fall back to global lookup by fixed id (legacy path / unknown role guard).
+            try:
+                profile = self.storage.get_agent_profile(agent_id)
+            except KeyError:
+                return ""
         parts = [part.strip() for part in (profile.personality, profile.prompt) if part and part.strip()]
         if not parts:
             return ""
@@ -243,7 +251,7 @@ class RuntimeGraph:
         self.storage.start_agent_task(manager_task.id)
 
         try:
-            plan, assignments = self._build_agent_plan(task, decision.risk_level, state.get("reasoning", "medium"))
+            plan, assignments = self._build_agent_plan(task, decision.risk_level, state.get("reasoning", "medium"), project_id=self._project_id_for(run_id))
         except (ProviderCallError, ValueError, json.JSONDecodeError) as exc:
             summary = f"Manager could not create a structured plan: {exc}"
             action_id = self.storage.create_action(
@@ -614,7 +622,7 @@ class RuntimeGraph:
             run_id,
             "FileAction",
             state.get("risk_level", "low"),
-            {"operation": "list", "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_file")},
+            {"operation": "list", "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_file", self._project_id_for(run_id))},
             "agent_file",
         )
         if not self._looks_like_file_list(task_text):
@@ -757,7 +765,7 @@ class RuntimeGraph:
                     ChatMessage(
                         role="system",
                         content=(
-                            "You are Yanshi Browser Agent." + self._agent_persona("agent_browser") + " "
+                            "You are Yanshi Browser Agent." + self._agent_persona("agent_browser", self._project_id_for(run_id)) + " "
                             "Summarize the captured page text concisely. "
                             "Do not claim navigation beyond the provided browser observation."
                         ),
@@ -828,7 +836,7 @@ class RuntimeGraph:
             run_id,
             "ComputerAction",
             state.get("risk_level", "medium"),
-            {"operation": operation, "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_computer")},
+            {"operation": operation, "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_computer", self._project_id_for(run_id))},
             "agent_computer",
         )
         if operation == "capture_screen":
@@ -885,7 +893,7 @@ class RuntimeGraph:
             run_id,
             "TerminalAction",
             state.get("risk_level", "high"),
-            {"operation": operation, "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_terminal")},
+            {"operation": operation, "task": str(assignment.get("task") or ""), "persona": self._agent_persona("agent_terminal", self._project_id_for(run_id))},
             "agent_terminal",
         )
 
@@ -981,7 +989,7 @@ class RuntimeGraph:
                     ChatMessage(
                         role="system",
                         content=(
-                            "You are Yanshi Manager Agent." + self._agent_persona("agent_manager") + " "
+                            "You are Yanshi Manager Agent." + self._agent_persona("agent_manager", self._project_id_for(run_id)) + " "
                             "Produce the final response from actual agent observations. "
                             "Reply directly with the final answer for the user — do not include your planning or analysis. "
                             "When conversationHistory is present, this is a follow-up turn: stay consistent with the "
@@ -1075,7 +1083,7 @@ class RuntimeGraph:
                 "task": str(assignment.get("task") or ""),
                 "sourceAgentTasks": self._agent_result_references(results),
                 "finalSummary": final_summary,
-                "persona": self._agent_persona("agent_reviewer"),
+                "persona": self._agent_persona("agent_reviewer", self._project_id_for(run_id)),
             },
             agent_id="agent_reviewer",
         )
@@ -1223,13 +1231,15 @@ class RuntimeGraph:
         self._complete_agent_task(queue_task_id, missing_requirement is None, {"summary": summary})
         return {**state, "tool_failed": missing_requirement is not None, "result_summary": summary}
 
-    def _build_agent_plan(self, task: str, risk_level: str, reasoning: str = "medium") -> tuple[list[str], list[dict[str, Any]]]:
+    def _build_agent_plan(
+        self, task: str, risk_level: str, reasoning: str = "medium", project_id: str | None = None
+    ) -> tuple[list[str], list[dict[str, Any]]]:
         direct_assignments = self._direct_assignments_for_task(task)
         if direct_assignments:
             return self._plan_for_task(task, risk_level), direct_assignments
         if self.provider.configured:
             try:
-                return self._provider_agent_plan(task, risk_level, reasoning)
+                return self._provider_agent_plan(task, risk_level, reasoning, project_id=project_id)
             except (ValueError, json.JSONDecodeError):
                 # The model returned a malformed or non-conforming plan (common with smaller
                 # local models). Rather than failing the whole run, fall back to a
@@ -1261,13 +1271,15 @@ class RuntimeGraph:
                 return f"agent_{role}"
         return None
 
-    def _provider_agent_plan(self, task: str, risk_level: str, reasoning: str = "medium") -> tuple[list[str], list[dict[str, Any]]]:
+    def _provider_agent_plan(
+        self, task: str, risk_level: str, reasoning: str = "medium", project_id: str | None = None
+    ) -> tuple[list[str], list[dict[str, Any]]]:
         response = self.provider.chat_completion(
             [
                 ChatMessage(
                     role="system",
                     content=(
-                        "You are Yanshi Manager Agent." + self._agent_persona("agent_manager") + " "
+                        "You are Yanshi Manager Agent." + self._agent_persona("agent_manager", project_id) + " "
                         "Create a structured multi-agent plan as JSON only. "
                         "Schema: {\"steps\":[string],\"tasks\":[{\"agentId\":string,\"task\":string}]}. "
                         "For general answer-writing tasks, assign agent_manager only. "
