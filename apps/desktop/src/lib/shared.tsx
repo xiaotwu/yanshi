@@ -40,7 +40,7 @@ export type Translator = (key: TKey, vars?: Record<string, string | number>) => 
 
 // "runs" is the internal task-detail surface (reached from Recents / project task lists);
 // the user-facing top-level nav shows Library instead of a technical Runs page.
-export type View = "new-task" | "search" | "projects" | "project" | "runs" | "library" | "approvals" | "developer";
+export type View = "new-task" | "search" | "projects" | "project" | "runs" | "library" | "approvals" | "developer" | "workshop";
 export type PermissionMode = "default" | "auto_review" | "full_access";
 export type RunGrouping = "time" | "project" | "status";
 export const STATION_OPTIONS = ["manager", "browser", "computer", "file", "reviewer", "terminal"];

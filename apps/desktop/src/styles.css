@@ -3538,6 +3538,12 @@ textarea:focus-visible {
 .workshop-body .agent-editor { gap: 18px; }
 .workshop-body .agent-fields { gap: 12px; }
 
+/* ── 造物台 full-screen workspace ────────────────────────────────────────────────── */
+.zaowutai { display: grid; grid-template-columns: 64px 1fr 200px; gap: 8px; height: 100%; padding: 8px;
+  background: var(--ws-wood); color: var(--ws-text); font-family: var(--font-display); }
+.zaowutai-rail, .zaowutai-inspector { background: var(--ws-panel); border: 1px solid var(--ws-edge); border-radius: 10px; overflow: auto; }
+.zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; }
+
 /* ── Right panel: compact dropdown, no chrome duplication ──────────────────────── */
 /* Right-panel segmented tabs (replaces the section <select>). */
 .panel-tabs {

@@ -38,7 +38,7 @@ import { ChatView } from "./features/runs";
 import { SearchModal } from "./features/search";
 import type { SettingsSection } from "./features/settings";
 import { SettingsModal } from "./features/settings";
-import { WorkshopModal } from "./features/workshop";
+import { WorkshopWorkspace } from "./features/workshop/WorkshopWorkspace";
 import { useT } from "./i18n";
 import type { TKey } from "./i18n/en";
 import { applyAccent } from "./lib/accent";
@@ -69,7 +69,6 @@ export function App() {
   const [onboardDone, setOnboardDone] = useState(false);
   const [closePrompt, setClosePrompt] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [workshopOpen, setWorkshopOpen] = useState(false);
   const progressTouchedRef = useRef(false);
   const { hydrate, connectEvents, approvals, events, appSettings, runs, projects, setActiveProject, setActiveRun, saveAppSettings, createRun, deleteProject } =
     useRuntimeStore();
@@ -202,7 +201,7 @@ export function App() {
       "open-projects": () => navigate("projects"),
       "new-project": () => setNewProjectOpen(true),
       "open-library": () => navigate("library"),
-      "open-workshop": () => setWorkshopOpen(true),
+      "open-workshop": () => navigate("workshop"),
       "open-task-details": () => navigate("runs"),
       "open-atelier": () => setAtelierOpen(true),
       "toggle-progress": toggleProgress,
@@ -413,7 +412,7 @@ export function App() {
                 <span>{t(item.key)}</span>
               </button>
             ))}
-            <button className={workshopOpen ? "nav-item active" : "nav-item"} onClick={() => setWorkshopOpen(true)} title={t("nav.workshop")} aria-label={t("nav.workshop")}>
+            <button className={view === "workshop" ? "nav-item active" : "nav-item"} onClick={() => navigate("workshop")} title={t("nav.workshop")} aria-label={t("nav.workshop")}>
               <LayoutGrid size={18} />
               <span>{t("nav.workshop")}</span>
             </button>
@@ -505,6 +504,7 @@ export function App() {
         {view === "library" && <LibraryView onOpenTask={openTask} />}
         {view === "approvals" && <ApprovalsView />}
         {view === "developer" && <DeveloperView />}
+        {view === "workshop" && <WorkshopWorkspace />}
       </main>
 
       {progressOpen && (
@@ -520,8 +520,7 @@ export function App() {
         </aside>
       )}
       {atelierOpen && <AtelierModal onClose={() => setAtelierOpen(false)} />}
-      {workshopOpen && <WorkshopModal onClose={() => setWorkshopOpen(false)} />}
-      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onNavigate={navigate} onNewTask={() => navigate("new-task")} onOpenWorkshop={() => { setSearchOpen(false); setWorkshopOpen(true); }} />}
+      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} onNavigate={navigate} onNewTask={() => navigate("new-task")} onOpenWorkshop={() => { setSearchOpen(false); navigate("workshop"); }} />}
       {settingsOpen && <SettingsModal initialSection={settingsOpen} onClose={() => setSettingsOpen(null)} />}
       {newProjectOpen && <CreateProjectModal onClose={() => setNewProjectOpen(false)} onCreated={(id) => { setNewProjectOpen(false); openProject(id); }} />}
       {showOnboarding && <Onboarding onTryDemo={tryDemo} onDismiss={dismissOnboarding} />}
