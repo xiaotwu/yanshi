@@ -120,9 +120,9 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
 # Schema version tracked via SQLite's built-in `PRAGMA user_version`. Bump this and register a step
 # in `_run_migrations` whenever the schema changes in a way the declarative `CREATE TABLE IF NOT
 # EXISTS` block can't express (column drops/renames, backfills, data reshapes). The current
-# declarative schema is the v2 baseline; v1→v2 column addition (project_id) is handled idempotently
-# by `_migrate_add_agent_profile_project_id`.
-_SCHEMA_VERSION = 2
+# declarative schema is the v3 baseline; v1→v2 column addition (project_id) and v2→v3 column
+# additions (model, reasoning) are handled idempotently by their respective migration methods.
+_SCHEMA_VERSION = 3
 
 # Once a run reaches one of these it is finished; its status must not change again.
 _TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -319,6 +319,8 @@ class Storage:
               motion_pack TEXT NOT NULL DEFAULT 'default',
               task_priority INTEGER NOT NULL DEFAULT 5,
               project_id TEXT,
+              model TEXT,
+              reasoning TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
@@ -415,6 +417,16 @@ class Storage:
             self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN project_id TEXT")
 
     @locked_storage_method
+    def _migrate_add_agent_profile_model_reasoning(self) -> None:
+        """v3: each 偃师 gains nullable model and reasoning overrides. Idempotent — a fresh db
+        already has both columns from the declarative schema, so guard before each ALTER."""
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
+        if "model" not in existing:
+            self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN model TEXT")
+        if "reasoning" not in existing:
+            self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN reasoning TEXT")
+
+    @locked_storage_method
     def schema_version(self) -> int:
         return int(self.conn.execute("PRAGMA user_version").fetchone()[0])
 
@@ -432,6 +444,7 @@ class Storage:
             return
         migrations: dict[int, Callable[[], None]] = {
             2: self._migrate_add_agent_profile_project_id,
+            3: self._migrate_add_agent_profile_model_reasoning,
         }
         for version in range(current + 1, _SCHEMA_VERSION + 1):
             step = migrations.get(version)
@@ -1191,9 +1204,10 @@ class Storage:
                 """
                 INSERT INTO agent_profiles (
                   id, name, role, prompt, personality, default_tools_json, default_permissions_json,
-                  accent, behavior_mode, station, sound, motion_pack, task_priority, created_at, updated_at
+                  accent, behavior_mode, station, sound, motion_pack, task_priority,
+                  model, reasoning, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'default', ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'default', ?, NULL, NULL, ?, ?)
                 """,
                 (
                     profile["id"],
@@ -1246,15 +1260,16 @@ class Storage:
                 """
                 INSERT INTO agent_profiles (
                   id, name, role, prompt, personality, default_tools_json, default_permissions_json,
-                  accent, behavior_mode, station, sound, motion_pack, task_priority, project_id, created_at, updated_at
+                  accent, behavior_mode, station, sound, motion_pack, task_priority, project_id,
+                  model, reasoning, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_id("agent"), row["name"], row["role"], row["prompt"], row["personality"],
                     row["default_tools_json"], row["default_permissions_json"], row["accent"],
                     row["behavior_mode"], row["station"], row["sound"], row["motion_pack"],
-                    row["task_priority"], project_id, now, now,
+                    row["task_priority"], project_id, row["model"], row["reasoning"], now, now,
                 ),
             )
         self.conn.commit()
@@ -1286,9 +1301,10 @@ class Storage:
             """
             INSERT INTO agent_profiles (
               id, name, role, prompt, personality, default_tools_json, default_permissions_json,
-              accent, behavior_mode, station, sound, motion_pack, task_priority, project_id, created_at, updated_at
+              accent, behavior_mode, station, sound, motion_pack, task_priority, project_id,
+              model, reasoning, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, NULL, NULL, ?, ?)
             """,
             (profile_id, name, role, prompt, personality, accent, behavior_mode, station, task_priority, project_id, now, now),
         )
@@ -1344,6 +1360,8 @@ class Storage:
             motionPack=row["motion_pack"],
             taskPriority=row["task_priority"],
             projectId=row["project_id"],
+            model=row["model"],
+            reasoning=row["reasoning"],
             createdAt=row["created_at"],
             updatedAt=row["updated_at"],
         )

@@ -162,6 +162,8 @@ class AgentProfileSummary(BaseModel):
     motionPack: str = "default"
     taskPriority: int = 5
     projectId: str | None = None
+    model: str | None = None
+    reasoning: str | None = None
     createdAt: str
     updatedAt: str
 
@@ -174,6 +176,8 @@ class UpdateAgentProfileRequest(BaseModel):
     behaviorMode: BehaviorMode | None = None
     station: str | None = None
     taskPriority: int | None = None
+    model: str | None = None
+    reasoning: str | None = None
 
 
 class CreateAgentProfileRequest(BaseModel):
