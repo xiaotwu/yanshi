@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 
 // Stub the child components so the pane shells render without a live backend.
 vi.mock("../workshop", () => ({
-  OfficeEditor: () => <div data-testid="stub-office-editor" />,
   WorkshopInstalled: () => <div data-testid="stub-workshop-installed" />,
 }));
 

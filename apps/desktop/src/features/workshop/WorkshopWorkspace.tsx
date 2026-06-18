@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
-import { WorkshopInstalled } from "../workshop"; // kept for Task 7
+import { WorkshopInstalled } from "../workshop";
 import { AtelierPreview } from "./AtelierPreview";
 import { ForgeWorkerFlow } from "./ForgeWorkerFlow";
 import { SharePanel } from "./SharePanel";
