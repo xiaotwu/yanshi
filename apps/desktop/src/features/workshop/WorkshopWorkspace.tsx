@@ -5,6 +5,7 @@ import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
 import { WorkshopInstalled } from "../workshop"; // kept for Task 7
 import { AtelierPreview } from "./AtelierPreview";
+import { ForgeWorkerFlow } from "./ForgeWorkerFlow";
 import { SharePanel } from "./SharePanel";
 import { WorkerInspector } from "./WorkerInspector";
 import { WorkerRail } from "./WorkerRail";
@@ -14,6 +15,7 @@ export function WorkshopWorkspace() {
   const { agentProfiles, liveAgents, activeProjectId, officeState, loadAgentProfiles, loadOfficeState, createAgentProfile } = useRuntimeStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [forgeOpen, setForgeOpen] = useState(false);
 
   useEffect(() => {
     if (agentProfiles.length === 0) void loadAgentProfiles();
@@ -32,8 +34,12 @@ export function WorkshopWorkspace() {
   }, [activeProjectId, loadOfficeState]);
 
   const handleForge = () => {
-    // Stub for Task 8 guided flow: insert a default-configured new agent profile.
-    void createAgentProfile({ name: "New Agent", station: "manager", behaviorMode: "balanced", accent: "#7a6f86" });
+    setForgeOpen(true);
+  };
+
+  const handleForgeCreate = ({ name, station }: { name: string; station: string }) => {
+    void createAgentProfile({ name, station, behaviorMode: "balanced", accent: "#7a6f86" });
+    setForgeOpen(false);
   };
 
   // Resolve selectedId to the station of the selected agent profile.
@@ -63,6 +69,12 @@ export function WorkshopWorkspace() {
           onForge={handleForge}
         />
       </div>
+      {forgeOpen && (
+        <ForgeWorkerFlow
+          onCreate={handleForgeCreate}
+          onClose={() => setForgeOpen(false)}
+        />
+      )}
       <div className="zaowutai-preview" data-testid="workshop-preview">
         <AtelierPreview
           officeState={officeState}

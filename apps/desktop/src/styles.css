@@ -3540,7 +3540,7 @@ textarea:focus-visible {
 
 /* ── 造物台 full-screen workspace ────────────────────────────────────────────────── */
 .zaowutai { display: grid; grid-template-columns: 64px 1fr 200px; gap: 8px; height: 100%; padding: 8px;
-  background: var(--ws-wood); color: var(--ws-text); font-family: var(--font-display); }
+  background: var(--ws-wood); color: var(--ws-text); font-family: var(--font-display); position: relative; }
 .zaowutai-rail, .zaowutai-inspector { background: var(--ws-panel); border: 1px solid var(--ws-edge); border-radius: 10px; overflow: auto; }
 .zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; }
 
@@ -3637,6 +3637,61 @@ textarea:focus-visible {
   outline: none;
 }
 .worker-forge:hover { border-color: var(--ws-brass); color: var(--ws-text); }
+
+/* ── ForgeWorkerFlow: guided new-worker popover ────────────────────────────────── */
+.forge-flow {
+  position: absolute;
+  left: 72px;
+  top: 8px;
+  z-index: 50;
+  background: var(--ws-panel);
+  border: 1px solid var(--ws-edge);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  min-width: 220px;
+}
+.forge-flow-inner { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.forge-flow-label { font-size: 11px; font-weight: 600; color: var(--ws-text-dim); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+.forge-station-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.forge-station-btn {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--ws-edge);
+  background: transparent;
+  color: var(--ws-text-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.forge-station-btn:hover { border-color: var(--ws-brass); color: var(--ws-text); }
+.forge-station-btn.active { border-color: var(--ws-brass); color: var(--ws-text); background: color-mix(in srgb, var(--ws-panel) 70%, var(--ws-brass)); }
+.forge-name-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--ws-edge);
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  color: var(--ws-text);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+.forge-name-input:focus { border-color: var(--ws-brass); }
+.forge-flow-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.forge-btn-cancel, .forge-btn-create {
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--ws-edge);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.forge-btn-cancel { background: transparent; color: var(--ws-text-dim); }
+.forge-btn-cancel:hover { background: var(--surface); color: var(--ws-text); }
+.forge-btn-create { background: var(--ws-brass); border-color: var(--ws-brass); color: var(--on-accent); }
+.forge-btn-create:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+.forge-btn-create:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ── Right panel: compact dropdown, no chrome duplication ──────────────────────── */
 /* Right-panel segmented tabs (replaces the section <select>). */
