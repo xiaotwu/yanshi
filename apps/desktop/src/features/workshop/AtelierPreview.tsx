@@ -20,6 +20,10 @@ import { AtelierStage } from "../live-office";
 const FURNITURE_TYPES = ["desk", "plant", "shelf", "couch", "table", "lamp"] as const;
 const CAMERA_MODES = ["rear", "iso"] as const;
 
+// Stable empty fallbacks so useEffect deps don't change on every render when officeState is null.
+const EMPTY_FURNITURE: FurnitureItem[] = [];
+const EMPTY_LAYOUT: Record<string, number[]> = {};
+
 interface AtelierPreviewProps {
   officeState: LiveOfficeStateSummary | null;
   activeProjectId: string | null;
@@ -35,8 +39,8 @@ export function AtelierPreview({ officeState, activeProjectId, selectedId }: Ate
   const [showFurnitureMenu, setShowFurnitureMenu] = useState(false);
   const [showCameraMenu, setShowCameraMenu] = useState(false);
 
-  const furniture: FurnitureItem[] = officeState?.furniture ?? [];
-  const layout: Record<string, number[]> = officeState?.stationLayout ?? {};
+  const furniture = officeState?.furniture ?? EMPTY_FURNITURE;
+  const layout = officeState?.stationLayout ?? EMPTY_LAYOUT;
 
   // Local draggable positions — initialised from officeState, updated live during drag.
   const [positions, setPositions] = useState<Record<string, [number, number]>>({});

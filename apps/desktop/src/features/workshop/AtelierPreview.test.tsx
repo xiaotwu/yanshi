@@ -84,4 +84,25 @@ describe("AtelierPreview", () => {
     const stages = screen.getAllByTestId("stub-stage");
     expect(stages.length).toBeGreaterThan(0);
   });
+
+  it("renders without crashing when officeState is null (no render loop)", () => {
+    // Without stable EMPTY_FURNITURE / EMPTY_LAYOUT constants the ?? fallbacks
+    // create new array/object references on every render, causing the useEffect
+    // deps [layout, furniture] to change each render → setPositions re-renders →
+    // infinite loop → React throws "Maximum update depth exceeded".
+    // With the fix the refs are stable and this render completes cleanly.
+    render(
+      <AtelierPreview
+        officeState={null}
+        activeProjectId="proj-1"
+        selectedId={null}
+      />,
+    );
+
+    // Use getAllByRole to handle StrictMode double-render; just assert at least one exists.
+    expect(screen.getAllByRole("button", { name: "workshop.addFurniture" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "workshop.camera" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "workshop.snap" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "workshop.resetLayout" }).length).toBeGreaterThan(0);
+  });
 });
