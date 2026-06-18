@@ -14,13 +14,20 @@ vi.mock("./WorkerRail", () => ({
   WorkerRail: () => <div data-testid="stub-worker-rail" />,
 }));
 
+// Stub AtelierPreview so WorkshopWorkspace test stays pane-level only.
+vi.mock("./AtelierPreview", () => ({
+  AtelierPreview: () => <div data-testid="stub-atelier-preview" />,
+}));
+
 // Stub runtimeStore so WorkshopWorkspace's own useRuntimeStore call doesn't throw.
 vi.mock("../../stores/runtimeStore", () => ({
   useRuntimeStore: () => ({
     agentProfiles: [],
     liveAgents: [],
     activeProjectId: null,
+    officeState: null,
     loadAgentProfiles: vi.fn(),
+    loadOfficeState: vi.fn(),
     createAgentProfile: vi.fn(),
   }),
 }));

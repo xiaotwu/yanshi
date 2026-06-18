@@ -3544,6 +3544,68 @@ textarea:focus-visible {
 .zaowutai-rail, .zaowutai-inspector { background: var(--ws-panel); border: 1px solid var(--ws-edge); border-radius: 10px; overflow: auto; }
 .zaowutai-preview { background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ws-wood) 70%, var(--ws-lamp)), var(--ws-wood)); border: 1px solid var(--ws-edge); border-radius: 10px; position: relative; overflow: hidden; }
 
+/* ── AtelierPreview: live scene + editable SVG overlay + floating toolbar ─── */
+.atelier-preview { position: relative; width: 100%; height: 100%; }
+.atelier-preview-stage { position: absolute; inset: 0; }
+.atelier-preview-overlay {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; /* SVG itself is click-through; markers opt back in */
+}
+.atelier-preview-overlay .office-station,
+.atelier-preview-overlay .office-furniture {
+  pointer-events: all;
+  cursor: grab;
+}
+.atelier-preview-overlay .office-station.dragging,
+.atelier-preview-overlay .office-furniture.dragging { cursor: grabbing; }
+.atelier-preview-overlay .office-station circle { transition: r 0.12s; }
+/* Floating toolbar pill */
+.atelier-preview-toolbar {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px;
+  background: var(--ws-panel);
+  border: 1px solid var(--ws-edge);
+  border-radius: 999px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.atelier-toolbar-group { position: relative; display: flex; align-items: center; }
+.atelier-toolbar-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--ws-text-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.atelier-toolbar-btn:hover { color: var(--ws-text); background: color-mix(in srgb, var(--ws-panel) 70%, var(--ws-brass)); }
+.atelier-toolbar-btn.active { color: var(--ws-brass); }
+.atelier-toolbar-popover {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--ws-panel);
+  border: 1px solid var(--ws-edge);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 80px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 10;
+}
+.atelier-popover-item {
+  padding: 4px 10px;
+  border: none; background: transparent;
+  color: var(--ws-text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.82rem;
+}
+.atelier-popover-item:hover { background: color-mix(in srgb, var(--ws-panel) 70%, var(--ws-brass)); color: var(--ws-text); }
+.atelier-popover-item.active { color: var(--ws-brass); font-weight: 600; }
+
 /* ── WorkerRail: icon-avatar team list + forge entry ────────────────────────────── */
 .worker-rail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; }
 .worker-avatar {

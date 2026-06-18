@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 
 import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
-import { OfficeEditor, WorkshopInstalled } from "../workshop"; // temporary, replaced in Tasks 5-8
+import { WorkshopInstalled } from "../workshop"; // temporary, replaced in Tasks 6-8
+import { AtelierPreview } from "./AtelierPreview";
 import { WorkerRail } from "./WorkerRail";
 
 export function WorkshopWorkspace() {
   const { t } = useT();
-  const { agentProfiles, liveAgents, activeProjectId, loadAgentProfiles, createAgentProfile } = useRuntimeStore();
+  const { agentProfiles, liveAgents, activeProjectId, officeState, loadAgentProfiles, loadOfficeState, createAgentProfile } = useRuntimeStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,12 +22,19 @@ export function WorkshopWorkspace() {
     }
   }, [selectedId, agentProfiles]);
 
-  void activeProjectId; // consumed by future panes (Tasks 5-8)
+  // Load office state scoped to the active project.
+  useEffect(() => {
+    void loadOfficeState(activeProjectId);
+  }, [activeProjectId, loadOfficeState]);
 
   const handleForge = () => {
     // Stub for Task 8 guided flow: insert a default-configured new agent profile.
     void createAgentProfile({ name: "New Agent", station: "manager", behaviorMode: "balanced", accent: "#7a6f86" });
   };
+
+  // Resolve selectedId to the station of the selected agent profile.
+  const selectedProfile = agentProfiles.find((p) => p.id === selectedId);
+  const selectedStation = selectedProfile?.station ?? null;
 
   return (
     <div className="zaowutai" aria-label={t("nav.workshop")}>
@@ -40,7 +48,11 @@ export function WorkshopWorkspace() {
         />
       </div>
       <div className="zaowutai-preview" data-testid="workshop-preview">
-        <OfficeEditor />
+        <AtelierPreview
+          officeState={officeState}
+          activeProjectId={activeProjectId}
+          selectedId={selectedStation}
+        />
       </div>
       <aside className="zaowutai-inspector" data-testid="workshop-inspector">
         <WorkshopInstalled />
