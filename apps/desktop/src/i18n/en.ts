@@ -188,6 +188,13 @@ export const en = {
   "workshop.agentPrompt": "Prompt",
   "workshop.exportDesc": "Export your agent team and office theme as a pack. The file re-imports under Installed.",
   "workshop.forgeWorker": "Forge worker",
+  "workshop.identity": "Identity",
+  "workshop.temperament": "Temperament",
+  "workshop.mind": "Mind",
+  "workshop.abilities": "Abilities",
+  "workshop.incantation": "Incantation",
+  "workshop.themeColor": "Theme color",
+  "workshop.pendingRuntime": "Pending runtime support",
 
   // Account menu
   "account.profile": "Profile",

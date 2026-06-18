@@ -4480,3 +4480,141 @@ textarea:focus-visible {
 .office-resize:hover::after { background: var(--accent); }
 /* On narrow windows the panel overlays (fixed) and isn't a resizable column. */
 @media (max-width: 1080px) { .office-resize { display: none; } }
+
+/* ── WorkerInspector (造物台 right-pane inspector) ────────────────────────────── */
+.worker-inspector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--ws-panel);
+  color: var(--ws-text);
+  overflow: hidden;
+}
+
+/* Identity header */
+.wi-identity-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--ws-edge);
+  background: var(--ws-wood);
+}
+.wi-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--avatar-accent, var(--accent)) 20%, var(--ws-panel));
+  color: var(--avatar-accent, var(--accent));
+  flex-shrink: 0;
+}
+.wi-identity-meta { flex: 1; min-width: 0; }
+
+/* Icon tab strip */
+.wi-tab-strip {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--ws-edge);
+  background: var(--ws-wood);
+}
+.wi-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ws-text-dim);
+  cursor: pointer;
+  transition: background 0.13s ease, color 0.13s ease;
+}
+.wi-tab-btn:hover { background: var(--ws-edge); color: var(--ws-text); }
+.wi-tab-btn.active { background: color-mix(in srgb, var(--ws-brass) 18%, var(--ws-panel)); color: var(--ws-brass); }
+
+/* Section panel */
+.wi-section-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.wi-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wi-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ws-text-dim);
+}
+.wi-section label input,
+.wi-section label select {
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--ws-edge);
+  border-radius: 6px;
+  background: var(--ws-panel);
+  color: var(--ws-text);
+}
+
+/* Pending runtime note (MindSection) */
+.wi-pending-note {
+  font-size: 12.5px;
+  color: var(--ws-text-dim);
+  font-style: italic;
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* 咒文 parchment textarea (IncantationSection) */
+.wi-parchment-textarea {
+  resize: vertical;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-edge);
+  border-radius: 8px;
+  background: var(--ws-parchment);
+  color: var(--ws-parchment-ink);
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: var(--font-sans);
+}
+.wi-parchment-textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--ws-brass) 50%, transparent);
+  outline-offset: 1px;
+}
+
+/* Tool chips (AbilitiesSection) — read-only, non-interactive */
+.wi-tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+.wi-tool-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 550;
+  pointer-events: none;
+  user-select: none;
+}
+.wi-tool-chip.lit {
+  background: color-mix(in srgb, var(--ws-brass) 20%, var(--ws-panel));
+  color: var(--ws-brass);
+  border: 1px solid color-mix(in srgb, var(--ws-brass) 35%, transparent);
+}
+.wi-tool-chip.dim {
+  background: var(--ws-panel);
+  color: var(--ws-text-dim);
+  border: 1px solid var(--ws-edge);
+  opacity: 0.65;
+}

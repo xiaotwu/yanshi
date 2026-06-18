@@ -190,6 +190,13 @@ export const zh: Record<TKey, string> = {
   "workshop.agentPrompt": "提示词",
   "workshop.exportDesc": "将你的智能体团队和工坊主题导出为扩展包，可在”已安装”中重新导入。",
   "workshop.forgeWorker": "铸造偃师",
+  "workshop.identity": "身份",
+  "workshop.temperament": "性情",
+  "workshop.mind": "心智",
+  "workshop.abilities": "本事",
+  "workshop.incantation": "咒文",
+  "workshop.themeColor": "主题色",
+  "workshop.pendingRuntime": "待运行时支持",
 
   // Account menu
   "account.profile": "个人资料",

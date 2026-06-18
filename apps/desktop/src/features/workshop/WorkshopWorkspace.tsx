@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 
 import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
-import { WorkshopInstalled } from "../workshop"; // temporary, replaced in Tasks 6-8
+import { WorkshopInstalled } from "../workshop"; // kept for Task 7
 import { AtelierPreview } from "./AtelierPreview";
+import { WorkerInspector } from "./WorkerInspector";
 import { WorkerRail } from "./WorkerRail";
 
 export function WorkshopWorkspace() {
@@ -55,7 +56,11 @@ export function WorkshopWorkspace() {
         />
       </div>
       <aside className="zaowutai-inspector" data-testid="workshop-inspector">
-        <WorkshopInstalled />
+        {selectedProfile ? (
+          <WorkerInspector profile={selectedProfile} />
+        ) : (
+          <WorkshopInstalled />
+        )}
       </aside>
     </div>
   );
