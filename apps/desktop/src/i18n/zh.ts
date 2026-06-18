@@ -197,6 +197,7 @@ export const zh: Record<TKey, string> = {
   "workshop.incantation": "咒文",
   "workshop.themeColor": "主题色",
   "workshop.pendingRuntime": "待运行时支持",
+  "workshop.share": "分享",
 
   // Account menu
   "account.profile": "个人资料",

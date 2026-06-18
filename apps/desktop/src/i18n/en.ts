@@ -195,6 +195,7 @@ export const en = {
   "workshop.incantation": "Incantation",
   "workshop.themeColor": "Theme color",
   "workshop.pendingRuntime": "Pending runtime support",
+  "workshop.share": "Share",
 
   // Account menu
   "account.profile": "Profile",

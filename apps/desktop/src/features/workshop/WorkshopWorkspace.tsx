@@ -1,9 +1,11 @@
+import { Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
 import { WorkshopInstalled } from "../workshop"; // kept for Task 7
 import { AtelierPreview } from "./AtelierPreview";
+import { SharePanel } from "./SharePanel";
 import { WorkerInspector } from "./WorkerInspector";
 import { WorkerRail } from "./WorkerRail";
 
@@ -11,6 +13,7 @@ export function WorkshopWorkspace() {
   const { t } = useT();
   const { agentProfiles, liveAgents, activeProjectId, officeState, loadAgentProfiles, loadOfficeState, createAgentProfile } = useRuntimeStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     if (agentProfiles.length === 0) void loadAgentProfiles();
@@ -39,6 +42,18 @@ export function WorkshopWorkspace() {
 
   return (
     <div className="zaowutai" aria-label={t("nav.workshop")}>
+      <div className="zaowutai-topbar" data-testid="workshop-topbar">
+        <button
+          className="ws-share-btn"
+          aria-label={t("workshop.share")}
+          title={t("workshop.share")}
+          aria-expanded={shareOpen}
+          onClick={() => setShareOpen((prev) => !prev)}
+        >
+          <Share2 size={18} />
+        </button>
+        {shareOpen && <SharePanel />}
+      </div>
       <div className="zaowutai-rail" data-testid="workshop-rail">
         <WorkerRail
           profiles={agentProfiles}
