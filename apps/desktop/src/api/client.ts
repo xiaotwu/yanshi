@@ -196,7 +196,7 @@ export const runtimeApi = {
     request<AgentProfileSummary[]>(projectId ? `/agent-profiles?projectId=${encodeURIComponent(projectId)}` : "/agent-profiles"),
   createAgentProfile: (body: { name: string; role?: string; station?: string; behaviorMode?: BehaviorMode; accent?: string; taskPriority?: number }, projectId?: string | null) =>
     request<AgentProfileSummary>(projectId ? `/agent-profiles?projectId=${encodeURIComponent(projectId)}` : "/agent-profiles", { method: "POST", body: JSON.stringify(body) }),
-  updateAgentProfile: (id: string, update: Partial<Pick<AgentProfileSummary, "name" | "prompt" | "personality" | "accent" | "behaviorMode" | "station" | "taskPriority">>) =>
+  updateAgentProfile: (id: string, update: Partial<Pick<AgentProfileSummary, "name" | "prompt" | "personality" | "accent" | "behaviorMode" | "station" | "taskPriority" | "model" | "defaultTools">>) =>
     request<AgentProfileSummary>(`/agent-profiles/${id}`, { method: "PUT", body: JSON.stringify(update) }),
   deleteAgentProfile: (id: string) => request<void>(`/agent-profiles/${id}`, { method: "DELETE" }),
   agentInstances: (projectId?: string | null) =>

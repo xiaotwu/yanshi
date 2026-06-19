@@ -8,10 +8,17 @@ vi.mock("../../i18n", () => ({
   useT: () => ({ t: (key: string) => key }),
 }));
 
-// Stub the store — WorkerInspector calls saveAgentProfile.
+// Stub the store — WorkerInspector / sections call saveAgentProfile and read appSettings.
+const mockSaveAgentProfile = vi.fn().mockResolvedValue(undefined);
+
 vi.mock("../../stores/runtimeStore", () => ({
   useRuntimeStore: () => ({
-    saveAgentProfile: vi.fn(),
+    saveAgentProfile: mockSaveAgentProfile,
+    appSettings: {
+      browserToolEnabled: true,
+      computerToolEnabled: false, // globally OFF — toggle must be disabled
+      terminalToolEnabled: true,
+    },
   }),
 }));
 
@@ -28,15 +35,19 @@ const fakeProfile: AgentProfileSummary = {
   taskPriority: 5,
   personality: "calm",
   prompt: "You are a manager agent.",
-  defaultTools: ["bash", "browser"],
+  defaultTools: ["browser"],
   defaultPermissions: [],
   motionPack: "default",
+  model: "claude-3-5-sonnet-20241022",
   createdAt: "2024-01-01T00:00:00Z",
   updatedAt: "2024-01-01T00:00:00Z",
 };
 
 describe("WorkerInspector", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    mockSaveAgentProfile.mockClear();
+  });
 
   it("renders an editable name input in the identity header", () => {
     render(<WorkerInspector profile={fakeProfile} />);
@@ -53,19 +64,50 @@ describe("WorkerInspector", () => {
     expect(screen.getByRole("button", { name: "workshop.incantation" })).toBeInTheDocument();
   });
 
-  it("clicking the 本事 (abilities) tab shows tool chips but NO checkbox or switch", () => {
+  it("clicking the 本事 (abilities) tab shows interactive switches, NOT static chips", () => {
     render(<WorkerInspector profile={fakeProfile} />);
     fireEvent.click(screen.getByRole("button", { name: "workshop.abilities" }));
-    // A tool chip should appear (one of the defaultTools)
-    expect(screen.getByText("bash")).toBeInTheDocument();
-    // Absolutely NO interactive toggles — the runtime doesn't support per-worker tools yet
-    expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByRole("switch")).toBeNull();
+
+    // Each capability tool now has a role="switch" — runtime-enforced capabilities are togglable.
+    const switches = screen.getAllByRole("switch");
+    expect(switches.length).toBeGreaterThanOrEqual(4);
+
+    // The "computer" switch is globally OFF, so it must be disabled (honesty cap).
+    const computerSwitch = screen.getByRole("switch", { name: "computer" });
+    expect(computerSwitch).toBeDisabled();
+
+    // The "browser" switch is globally ON and is in defaultTools — should be checked.
+    const browserSwitch = screen.getByRole("switch", { name: "browser" });
+    expect(browserSwitch).not.toBeDisabled();
+    expect(browserSwitch).toHaveAttribute("aria-checked", "true");
   });
 
-  it("clicking the 心智 (mind) tab shows the pending runtime note", () => {
+  it("toggling a globally-enabled ability calls saveAgentProfile with updated defaultTools", async () => {
+    render(<WorkerInspector profile={fakeProfile} />);
+    fireEvent.click(screen.getByRole("button", { name: "workshop.abilities" }));
+
+    // "terminal" is globally enabled and not in defaultTools (fakeProfile.defaultTools = ["browser"]).
+    const terminalSwitch = screen.getByRole("switch", { name: "terminal" });
+    expect(terminalSwitch).not.toBeDisabled();
+    fireEvent.click(terminalSwitch);
+
+    // saveAgentProfile should have been called with defaultTools including "terminal"
+    expect(mockSaveAgentProfile).toHaveBeenCalledWith(
+      "p1",
+      expect.objectContaining({ defaultTools: expect.arrayContaining(["browser", "terminal"]) }),
+    );
+  });
+
+  it("clicking the 心智 (mind) tab shows an editable model input — no pendingRuntime note", () => {
     render(<WorkerInspector profile={fakeProfile} />);
     fireEvent.click(screen.getByRole("button", { name: "workshop.mind" }));
-    expect(screen.getByText("workshop.pendingRuntime")).toBeInTheDocument();
+
+    // An input bound to the model value must exist.
+    const modelInput = screen.getByDisplayValue("claude-3-5-sonnet-20241022");
+    expect(modelInput).toBeInTheDocument();
+    expect(modelInput.tagName).toBe("INPUT");
+
+    // The old read-only note must be gone.
+    expect(screen.queryByText("workshop.pendingRuntime")).toBeNull();
   });
 });

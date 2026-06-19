@@ -202,6 +202,10 @@ export const zh: Record<TKey, string> = {
   "workshop.themeColor": "主题色",
   "workshop.pendingRuntime": "待运行时支持",
   "workshop.share": "分享",
+  "workshop.modelLabel": "模型",
+  "workshop.modelHint": "留空 = 继承全局模型",
+  "workshop.abilityGloballyOff": "已在设置中关闭",
+  "workshop.abilitiesInheritNote": "空列表 = 继承所有全局工具",
 
   // Account menu
   "account.profile": "个人资料",

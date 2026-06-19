@@ -346,6 +346,8 @@ export interface AgentProfileSummary {
   sound?: string | null;
   motionPack: string;
   taskPriority: number;
+  /** Per-worker model override. Empty / null = inherit the global model. */
+  model?: string | null;
   createdAt: string;
   updatedAt: string;
 }

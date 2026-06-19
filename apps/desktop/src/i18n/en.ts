@@ -200,6 +200,10 @@ export const en = {
   "workshop.themeColor": "Theme color",
   "workshop.pendingRuntime": "Pending runtime support",
   "workshop.share": "Share",
+  "workshop.modelLabel": "Model",
+  "workshop.modelHint": "Empty = inherit the global model",
+  "workshop.abilityGloballyOff": "Turned off in Settings",
+  "workshop.abilitiesInheritNote": "Empty list = inherit all global tools",
 
   // Account menu
   "account.profile": "Profile",
