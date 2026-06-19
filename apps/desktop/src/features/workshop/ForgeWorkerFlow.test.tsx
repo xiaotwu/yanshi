@@ -8,6 +8,22 @@ vi.mock("../../i18n", () => ({
   useT: () => ({ t: (key: string) => key }),
 }));
 
+// Stub modal-stack so Modal's pushModal/releaseModal/isTopModal work in jsdom.
+vi.mock("../../lib/modal-stack", () => {
+  let stack: symbol[] = [];
+  return {
+    pushModal: () => {
+      const token = Symbol("modal");
+      stack.push(token);
+      return token;
+    },
+    releaseModal: (token: symbol) => {
+      stack = stack.filter((t) => t !== token);
+    },
+    isTopModal: (token: symbol) => stack.length > 0 && stack[stack.length - 1] === token,
+  };
+});
+
 import { ForgeWorkerFlow } from "./ForgeWorkerFlow";
 
 describe("ForgeWorkerFlow", () => {
@@ -62,5 +78,29 @@ describe("ForgeWorkerFlow", () => {
     // Attempt fire anyway (disabled buttons don't fire click handlers)
     fireEvent.click(createBtn);
     expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it("pressing Escape calls onClose", () => {
+    const onClose = vi.fn();
+    render(<ForgeWorkerFlow onCreate={vi.fn()} onClose={onClose} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking the backdrop (modal-overlay) calls onClose", () => {
+    const onClose = vi.fn();
+    const { container } = render(<ForgeWorkerFlow onCreate={vi.fn()} onClose={onClose} />);
+    const overlay = container.querySelector(".modal-overlay");
+    expect(overlay).not.toBeNull();
+    fireEvent.mouseDown(overlay!);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking inside the dialog does NOT call onClose", () => {
+    const onClose = vi.fn();
+    render(<ForgeWorkerFlow onCreate={vi.fn()} onClose={onClose} />);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.mouseDown(dialog);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

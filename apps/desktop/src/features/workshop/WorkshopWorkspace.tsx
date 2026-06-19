@@ -41,8 +41,9 @@ export function WorkshopWorkspace() {
     setForgeOpen(true);
   };
 
-  const handleForgeCreate = ({ name, station }: { name: string; station: string }) => {
-    void createAgentProfile({ name, station, behaviorMode: "balanced", accent: "#7a6f86" });
+  const handleForgeCreate = async ({ name, station }: { name: string; station: string }) => {
+    const id = await createAgentProfile({ name, station, behaviorMode: "balanced", accent: "#7a6f86" });
+    setSelectedId(id);
     setForgeOpen(false);
   };
 

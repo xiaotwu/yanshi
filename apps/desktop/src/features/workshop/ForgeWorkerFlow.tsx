@@ -1,6 +1,7 @@
 import { Bot } from "lucide-react";
 import { useState } from "react";
 
+import { Modal } from "../../components/modal";
 import { useT } from "../../i18n";
 import { STATION_OPTIONS } from "../../lib/shared";
 import { ROLE_ICONS } from "./WorkerRail";
@@ -21,7 +22,7 @@ export function ForgeWorkerFlow({ onCreate, onClose }: ForgeWorkerFlowProps) {
   };
 
   return (
-    <div className="forge-flow" role="dialog" aria-label={t("workshop.forgeWorker")}>
+    <Modal onClose={onClose} className="forge-flow" size="sm">
       <div className="forge-flow-inner">
         <p className="forge-flow-label">{t("workshop.forgeStation")}</p>
         <div className="forge-station-grid" role="group" aria-label={t("workshop.forgeStation")}>
@@ -52,7 +53,7 @@ export function ForgeWorkerFlow({ onCreate, onClose }: ForgeWorkerFlowProps) {
           value={name}
           placeholder={t("workshop.forgeName")}
           onChange={(e) => setName(e.target.value)}
-          autoFocus
+          data-autofocus
         />
 
         <div className="forge-flow-actions">
@@ -73,6 +74,6 @@ export function ForgeWorkerFlow({ onCreate, onClose }: ForgeWorkerFlowProps) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

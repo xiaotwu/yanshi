@@ -87,7 +87,7 @@ interface RuntimeStore {
   disconnectExternalAgent: (agentId: string) => Promise<void>;
   loadAgentProfiles: () => Promise<void>;
   saveAgentProfile: (id: string, update: Partial<AgentProfileSummary>) => Promise<void>;
-  createAgentProfile: (body: { name: string; station?: string; behaviorMode?: BehaviorMode; accent?: string }) => Promise<void>;
+  createAgentProfile: (body: { name: string; station?: string; behaviorMode?: BehaviorMode; accent?: string }) => Promise<string>;
   deleteAgentProfile: (id: string) => Promise<void>;
   loadOfficeState: (projectId: string | null) => Promise<void>;
   saveOfficeState: (projectId: string | null, update: Partial<LiveOfficeStateSummary>) => Promise<void>;
@@ -639,8 +639,9 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
   },
 
   createAgentProfile: async (body) => {
-    await runtimeApi.createAgentProfile(body, get().activeProjectId);
+    const profile = await runtimeApi.createAgentProfile(body, get().activeProjectId);
     await get().loadAgentProfiles();
+    return profile.id;
   },
 
   deleteAgentProfile: async (id) => {
