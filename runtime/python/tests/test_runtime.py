@@ -2719,6 +2719,55 @@ def test_agent_profiles_table_has_model_and_reasoning_columns(tmp_path: Path) ->
     assert rows and all(row["reasoning"] is None for row in rows)
 
 
+def test_update_agent_profile_model_can_be_cleared_storage(tmp_path: Path) -> None:
+    """Storage level: setting model to None after setting it must persist as None (clear to inherit)."""
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "runtime.db", "test")
+    # Pick the seeded global manager profile.
+    profile = storage.get_agent_profile("agent_manager")
+    assert profile.model is None  # starts as None
+
+    # Set a custom model.
+    storage.update_agent_profile(profile.id, {"model": "custom-x"})
+    assert storage.get_agent_profile(profile.id).model == "custom-x"
+
+    # Clear it back to None (inherit global).
+    storage.update_agent_profile(profile.id, {"model": None})
+    assert storage.get_agent_profile(profile.id).model is None, (
+        "Clearing model to None must persist; update_agent_profile must not silently discard explicit nulls."
+    )
+
+
+def test_update_agent_profile_model_clear_via_route(tmp_path: Path) -> None:
+    """Route level: PUT model=null must clear the model; PUT without model must leave it unchanged."""
+    client = make_client(tmp_path)
+
+    # Set a custom model via the API.
+    resp = client.put("/agent-profiles/agent_manager", json={"model": "custom-x"})
+    assert resp.status_code == 200
+    assert resp.json()["model"] == "custom-x"
+
+    # A PUT that does NOT include the model field must NOT clear it (guards against exclude_unset regressions).
+    resp2 = client.put("/agent-profiles/agent_manager", json={"personality": "unchanged-model-check"})
+    assert resp2.status_code == 200
+    assert resp2.json()["model"] == "custom-x", (
+        "A PATCH that omits 'model' must leave the existing model intact (exclude_unset regression guard)."
+    )
+
+    # A PUT with model=null must clear it.
+    resp3 = client.put("/agent-profiles/agent_manager", json={"model": None})
+    assert resp3.status_code == 200
+    assert resp3.json()["model"] is None, (
+        "PUT model=null must clear model back to None so the worker inherits the global model."
+    )
+
+    # Confirm the GET also returns null.
+    profiles = client.get("/agent-profiles").json()
+    manager = next(p for p in profiles if p["id"] == "agent_manager")
+    assert manager["model"] is None, "GET must reflect the cleared model."
+
+
 def test_get_project_agent_profile_resolves_by_role(tmp_path: Path) -> None:
     from yanshi_runtime.storage import Storage
 

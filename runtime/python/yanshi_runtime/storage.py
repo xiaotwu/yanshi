@@ -33,6 +33,11 @@ from .secrets import SecretStore, default_secret_store
 
 PROVIDER_API_KEY_SECRET = "provider_api_key"
 
+# Fields in agent_profiles that are nullable scalars and may be intentionally cleared to None.
+# An explicit null in the patch for one of these means "clear / revert to inherit"; for all
+# other fields a None in the patch means "field not provided — keep current value".
+_CLEARABLE_AGENT_PROFILE_FIELDS = {"model", "reasoning"}
+
 # Integration (ACP/MCP) env values are secrets: they're stored in the SecretStore (off-DB) as refs
 # and never returned raw by the API. A non-empty value reads back as this sentinel so the UI can
 # show "set" without seeing it; sending the sentinel back on save preserves the stored secret.
@@ -1329,8 +1334,12 @@ class Storage:
     @locked_storage_method
     def update_agent_profile(self, profile_id: str, patch: dict[str, Any]) -> AgentProfileSummary:
         current = self.get_agent_profile(profile_id)
-        # Allow explicit lists (including empty []) to replace; filter scalar Nones.
-        merged = current.model_copy(update={k: v for k, v in patch.items() if v is not None})
+        # Merge patch into current: explicit None clears the nullable model/reasoning columns
+        # (so a worker can revert to "inherit the global model"); empty lists still replace
+        # defaultTools; other scalar Nones mean "field not provided — keep current value".
+        merged = current.model_copy(
+            update={k: v for k, v in patch.items() if v is not None or k in _CLEARABLE_AGENT_PROFILE_FIELDS}
+        )
         self.conn.execute(
             """
             UPDATE agent_profiles SET name = ?, prompt = ?, personality = ?, accent = ?,

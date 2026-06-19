@@ -954,7 +954,7 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.put("/agent-profiles/{profile_id}", response_model=AgentProfileSummary)
     def update_agent_profile(profile_id: str, request: UpdateAgentProfileRequest, service: RuntimeService = Depends(service_dep)):
         try:
-            profile = service.storage.update_agent_profile(profile_id, request.model_dump())
+            profile = service.storage.update_agent_profile(profile_id, request.model_dump(exclude_unset=True))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Agent profile not found.") from exc
         service.storage.append_event("agent.updated", agent_id=profile.id, payload=profile.model_dump())
