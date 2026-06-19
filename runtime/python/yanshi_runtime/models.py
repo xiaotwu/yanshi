@@ -163,7 +163,6 @@ class AgentProfileSummary(BaseModel):
     taskPriority: int = 5
     projectId: str | None = None
     model: str | None = None
-    reasoning: str | None = None
     createdAt: str
     updatedAt: str
 
@@ -177,7 +176,6 @@ class UpdateAgentProfileRequest(BaseModel):
     station: str | None = None
     taskPriority: int | None = None
     model: str | None = None
-    reasoning: str | None = None
     defaultTools: list[str] | None = None
 
 

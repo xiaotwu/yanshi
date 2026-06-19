@@ -36,7 +36,7 @@ PROVIDER_API_KEY_SECRET = "provider_api_key"
 # Fields in agent_profiles that are nullable scalars and may be intentionally cleared to None.
 # An explicit null in the patch for one of these means "clear / revert to inherit"; for all
 # other fields a None in the patch means "field not provided — keep current value".
-_CLEARABLE_AGENT_PROFILE_FIELDS = {"model", "reasoning"}
+_CLEARABLE_AGENT_PROFILE_FIELDS = {"model"}
 
 # Integration (ACP/MCP) env values are secrets: they're stored in the SecretStore (off-DB) as refs
 # and never returned raw by the API. A non-empty value reads back as this sentinel so the UI can
@@ -125,9 +125,9 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
 # Schema version tracked via SQLite's built-in `PRAGMA user_version`. Bump this and register a step
 # in `_run_migrations` whenever the schema changes in a way the declarative `CREATE TABLE IF NOT
 # EXISTS` block can't express (column drops/renames, backfills, data reshapes). The current
-# declarative schema is the v3 baseline; v1→v2 column addition (project_id) and v2→v3 column
-# additions (model, reasoning) are handled idempotently by their respective migration methods.
-_SCHEMA_VERSION = 3
+# declarative schema is the v4 baseline; v1→v2 added project_id, v2→v3 added model, v3→v4
+# dropped the inert reasoning column.
+_SCHEMA_VERSION = 4
 
 # Once a run reaches one of these it is finished; its status must not change again.
 _TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -325,7 +325,6 @@ class Storage:
               task_priority INTEGER NOT NULL DEFAULT 5,
               project_id TEXT,
               model TEXT,
-              reasoning TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
@@ -422,14 +421,20 @@ class Storage:
             self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN project_id TEXT")
 
     @locked_storage_method
-    def _migrate_add_agent_profile_model_reasoning(self) -> None:
-        """v3: each 偃师 gains nullable model and reasoning overrides. Idempotent — a fresh db
-        already has both columns from the declarative schema, so guard before each ALTER."""
+    def _migrate_add_agent_profile_model(self) -> None:
+        """v3: each 偃师 gains a nullable model override. Idempotent — a fresh db already has the
+        column from the declarative schema, so guard before ALTER."""
         existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
         if "model" not in existing:
             self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN model TEXT")
-        if "reasoning" not in existing:
-            self.conn.execute("ALTER TABLE agent_profiles ADD COLUMN reasoning TEXT")
+
+    @locked_storage_method
+    def _migrate_drop_agent_profile_reasoning(self) -> None:
+        """v4: drop the inert reasoning column (schema v3 added it; it was never consumed).
+        Idempotent — skips ALTER if the column is already absent."""
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
+        if "reasoning" in existing:
+            self.conn.execute("ALTER TABLE agent_profiles DROP COLUMN reasoning")
 
     @locked_storage_method
     def schema_version(self) -> int:
@@ -449,7 +454,8 @@ class Storage:
             return
         migrations: dict[int, Callable[[], None]] = {
             2: self._migrate_add_agent_profile_project_id,
-            3: self._migrate_add_agent_profile_model_reasoning,
+            3: self._migrate_add_agent_profile_model,
+            4: self._migrate_drop_agent_profile_reasoning,
         }
         for version in range(current + 1, _SCHEMA_VERSION + 1):
             step = migrations.get(version)
@@ -1210,9 +1216,9 @@ class Storage:
                 INSERT INTO agent_profiles (
                   id, name, role, prompt, personality, default_tools_json, default_permissions_json,
                   accent, behavior_mode, station, sound, motion_pack, task_priority,
-                  model, reasoning, created_at, updated_at
+                  model, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'default', ?, NULL, NULL, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'default', ?, NULL, ?, ?)
                 """,
                 (
                     profile["id"],
@@ -1266,15 +1272,15 @@ class Storage:
                 INSERT INTO agent_profiles (
                   id, name, role, prompt, personality, default_tools_json, default_permissions_json,
                   accent, behavior_mode, station, sound, motion_pack, task_priority, project_id,
-                  model, reasoning, created_at, updated_at
+                  model, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_id("agent"), row["name"], row["role"], row["prompt"], row["personality"],
                     row["default_tools_json"], row["default_permissions_json"], row["accent"],
                     row["behavior_mode"], row["station"], row["sound"], row["motion_pack"],
-                    row["task_priority"], project_id, row["model"], row["reasoning"], now, now,
+                    row["task_priority"], project_id, row["model"], now, now,
                 ),
             )
         self.conn.commit()
@@ -1322,9 +1328,9 @@ class Storage:
             INSERT INTO agent_profiles (
               id, name, role, prompt, personality, default_tools_json, default_permissions_json,
               accent, behavior_mode, station, sound, motion_pack, task_priority, project_id,
-              model, reasoning, created_at, updated_at
+              model, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, NULL, NULL, ?, ?)
+            VALUES (?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, NULL, 'default', ?, ?, NULL, ?, ?)
             """,
             (profile_id, name, role, prompt, personality, accent, behavior_mode, station, task_priority, project_id, now, now),
         )
@@ -1389,7 +1395,6 @@ class Storage:
             taskPriority=row["task_priority"],
             projectId=row["project_id"],
             model=row["model"],
-            reasoning=row["reasoning"],
             createdAt=row["created_at"],
             updatedAt=row["updated_at"],
         )

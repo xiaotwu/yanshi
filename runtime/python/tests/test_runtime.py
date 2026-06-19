@@ -2632,7 +2632,7 @@ def test_agent_profiles_table_has_project_id_column(tmp_path: Path) -> None:
     storage = Storage(tmp_path / "runtime.db", "test")
     cols = {row["name"] for row in storage.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
     assert "project_id" in cols
-    assert storage.schema_version() == 3
+    assert storage.schema_version() == 4
     # Seeded global profiles have NULL project_id.
     rows = storage.conn.execute("SELECT project_id FROM agent_profiles").fetchall()
     assert rows and all(row["project_id"] is None for row in rows)
@@ -2705,18 +2705,17 @@ def test_agent_profiles_api_is_project_scoped(tmp_path: Path) -> None:
     assert created["id"] not in {p["id"] for p in client.get("/agent-profiles").json()}
 
 
-def test_agent_profiles_table_has_model_and_reasoning_columns(tmp_path: Path) -> None:
+def test_agent_profiles_table_has_model_column_no_reasoning(tmp_path: Path) -> None:
     from yanshi_runtime.storage import Storage
 
     storage = Storage(tmp_path / "runtime.db", "test")
     cols = {row["name"] for row in storage.conn.execute("PRAGMA table_info(agent_profiles)").fetchall()}
     assert "model" in cols
-    assert "reasoning" in cols
-    assert storage.schema_version() == 3
-    # Seeded global profiles have NULL model and reasoning.
-    rows = storage.conn.execute("SELECT model, reasoning FROM agent_profiles").fetchall()
+    assert "reasoning" not in cols
+    assert storage.schema_version() == 4
+    # Seeded global profiles have NULL model.
+    rows = storage.conn.execute("SELECT model FROM agent_profiles").fetchall()
     assert rows and all(row["model"] is None for row in rows)
-    assert rows and all(row["reasoning"] is None for row in rows)
 
 
 def test_update_agent_profile_model_can_be_cleared_storage(tmp_path: Path) -> None:
