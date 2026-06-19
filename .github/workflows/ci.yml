@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python runtime (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: runtime/python
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync dependencies (incl. dev group)
+        run: uv sync --frozen
+      - name: Run pytest
+        run: uv run python -m pytest -p no:cacheprovider
+
+  web:
+    name: Desktop + shared (tsc + vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (tsc --noEmit, all packages)
+        run: pnpm -r lint
+      - name: Unit tests (vitest, all packages)
+        run: pnpm -r test
+
+  rust:
+    name: Tauri shell (cargo test)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      # Tauri's build.rs expects the built frontend (frontendDist) to exist, so
+      # build the web app before compiling the Rust shell.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build frontend (produces apps/desktop/dist for build.rs)
+        run: pnpm --filter @yanshi/desktop build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: cargo test
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
