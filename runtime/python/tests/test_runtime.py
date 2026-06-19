@@ -3203,3 +3203,63 @@ def test_provider_models_route_returns_empty_when_unconfigured(tmp_path: Path) -
     response = client.get("/provider/models")
     assert response.status_code == 200
     assert response.json() == {"models": []}
+
+
+# ---------------------------------------------------------------------------
+# MCP client tests
+# ---------------------------------------------------------------------------
+
+import sys
+from pathlib import Path
+from yanshi_runtime.mcp_client import McpManager
+from yanshi_runtime.models import McpServerConfig
+
+_FAKE_MCP = Path(__file__).parent / "fixtures" / "fake_mcp_server.py"
+
+
+def _stdio_server(server_id: str, *extra_args: str) -> McpServerConfig:
+    return McpServerConfig(
+        id=server_id, name="Fake", transport="stdio",
+        command=sys.executable, args=[str(_FAKE_MCP), *extra_args], enabled=True,
+    )
+
+
+def test_mcp_manager_connects_handshakes_and_discovers_tools() -> None:
+    manager = McpManager()
+    try:
+        conn = manager.connect(_stdio_server("mcp_fake"))
+        assert conn.status == "connected"
+        assert conn.protocol_version == "2024-11-05"
+        assert [t.name for t in conn.tools] == ["echo", "add"]
+        assert manager.live_state("mcp_fake") is conn
+    finally:
+        manager.shutdown()
+
+
+def test_mcp_manager_disconnect_clears_live_state() -> None:
+    manager = McpManager()
+    manager.connect(_stdio_server("mcp_fake2"))
+    manager.disconnect("mcp_fake2")
+    assert manager.live_state("mcp_fake2") is None
+    manager.shutdown()
+
+
+def test_mcp_connect_failure_is_honest() -> None:
+    manager = McpManager()
+    try:
+        conn = manager.connect(_stdio_server("mcp_crash", "crash"))
+        assert conn.status == "error"
+        assert conn.error
+        assert conn.tools == []
+    finally:
+        manager.shutdown()
+
+
+def test_mcp_connect_rejects_non_stdio_and_commandless() -> None:
+    import pytest
+    manager = McpManager()
+    with pytest.raises(ValueError):
+        manager.connect(McpServerConfig(id="h", name="H", transport="http", url="http://x"))
+    with pytest.raises(ValueError):
+        manager.connect(McpServerConfig(id="n", name="N", transport="stdio", command=None))
+    manager.shutdown()
