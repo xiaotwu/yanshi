@@ -120,6 +120,10 @@ export const runtimeApi = {
     request<AiIntegrationsConfig>(`/settings/integrations/agents/${agentId}/connect`, { method: "POST", body: "{}" }),
   disconnectExternalAgent: (agentId: string) =>
     request<AiIntegrationsConfig>(`/settings/integrations/agents/${agentId}/disconnect`, { method: "POST", body: "{}" }),
+  connectMcpServer: (id: string) =>
+    request<AiIntegrationsConfig>(`/settings/integrations/mcp/${id}/connect`, { method: "POST", body: "{}" }),
+  disconnectMcpServer: (id: string) =>
+    request<AiIntegrationsConfig>(`/settings/integrations/mcp/${id}/disconnect`, { method: "POST", body: "{}" }),
   providerSettings: () => request<ProviderSettingsPublic>("/settings/provider"),
   updateProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) =>
     request<ProviderSettingsPublic>("/settings/provider", {

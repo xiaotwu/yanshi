@@ -85,6 +85,8 @@ interface RuntimeStore {
   saveAiIntegrations: (update: Partial<AiIntegrationsConfig>) => Promise<void>;
   connectExternalAgent: (agentId: string) => Promise<void>;
   disconnectExternalAgent: (agentId: string) => Promise<void>;
+  connectMcpServer: (id: string) => Promise<void>;
+  disconnectMcpServer: (id: string) => Promise<void>;
   loadAgentProfiles: () => Promise<void>;
   saveAgentProfile: (id: string, update: Partial<AgentProfileSummary>) => Promise<void>;
   createAgentProfile: (body: { name: string; station?: string; behaviorMode?: BehaviorMode; accent?: string }) => Promise<string>;
@@ -625,6 +627,28 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     } catch (error) {
       reportError("YANSHI_ACP_001", error);
       set({ error: error instanceof Error ? error.message : "Could not disconnect the agent.", loading: false });
+    }
+  },
+
+  connectMcpServer: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      const aiIntegrations = await runtimeApi.connectMcpServer(id);
+      set({ aiIntegrations, loading: false });
+    } catch (error) {
+      reportError("YANSHI_MCP_001", error);
+      set({ error: error instanceof Error ? error.message : "Could not connect the MCP server.", loading: false });
+    }
+  },
+
+  disconnectMcpServer: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      const aiIntegrations = await runtimeApi.disconnectMcpServer(id);
+      set({ aiIntegrations, loading: false });
+    } catch (error) {
+      reportError("YANSHI_MCP_001", error);
+      set({ error: error instanceof Error ? error.message : "Could not disconnect the MCP server.", loading: false });
     }
   },
 

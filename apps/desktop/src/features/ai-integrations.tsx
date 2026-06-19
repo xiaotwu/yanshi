@@ -317,7 +317,7 @@ function ExternalAgentDialog({
 
 export function McpServersSection() {
   const { t } = useT();
-  const { aiIntegrations, saveAiIntegrations, loadAiIntegrations, loading } = useRuntimeStore();
+  const { aiIntegrations, saveAiIntegrations, loadAiIntegrations, connectMcpServer, disconnectMcpServer, loading } = useRuntimeStore();
   const [editing, setEditing] = useState<McpServerConfig | null>(null);
 
   useEffect(() => {
@@ -344,16 +344,31 @@ export function McpServersSection() {
       <div className="integration-list">
         {servers.length === 0 && <p className="muted">{t("integrations.mcp.empty")}</p>}
         {servers.map((server) => (
-          <IntegrationCard
-            key={server.id}
-            icon={<Server size={16} />}
-            name={server.name}
-            subtitle={`${server.transport}${server.transport === "stdio" ? (server.command ? ` · ${server.command}` : "") : server.url ? ` · ${server.url}` : ""}`}
-            onConfigure={() => setEditing(server)}
-            switchControl={<Switch checked={server.enabled} onChange={(enabled) => setEnabled(server, enabled)} ariaLabel={server.name} disabled={loading} />}
-          >
-            <StatusBadge status={server.status} />
-          </IntegrationCard>
+          <div key={server.id}>
+            <IntegrationCard
+              icon={<Server size={16} />}
+              name={server.name}
+              subtitle={`${server.transport}${server.transport === "stdio" ? (server.command ? ` · ${server.command}` : "") : server.url ? ` · ${server.url}` : ""}`}
+              onConfigure={() => setEditing(server)}
+              switchControl={<Switch checked={server.enabled} onChange={(enabled) => setEnabled(server, enabled)} ariaLabel={server.name} disabled={loading} />}
+            >
+              <StatusBadge status={server.status} />
+              {server.status === "connected" ? (
+                <IconAction icon={Unplug} label={t("integrations.disconnect")} onClick={() => void disconnectMcpServer(server.id)} disabled={loading} />
+              ) : (
+                <IconAction icon={Plug} label={t("integrations.connect")} onClick={() => void connectMcpServer(server.id)} disabled={loading} />
+              )}
+            </IntegrationCard>
+            {server.tools.length > 0 && (
+              <div className="provider-caps">
+                {server.tools.map((name) => (
+                  <span key={name} className="cap-badge">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </div>
       <div className="settings-actions">
