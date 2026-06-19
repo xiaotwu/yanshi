@@ -575,45 +575,93 @@ class RuntimeGraph:
         self._complete_agent_task(task_id, result["ok"], {"summary": result["summary"]})
         return result
 
+    _TOOL_OBSERVATION_TYPE: dict[str, str] = {
+        "agent_browser": "BrowserObservation",
+        "agent_computer": "ComputerObservation",
+        "agent_terminal": "TerminalObservation",
+        "agent_file": "FileObservation",
+    }
+
+    _TOOL_LABEL: dict[str, str] = {
+        "agent_browser": "Browser Tool",
+        "agent_computer": "Computer Tool",
+        "agent_terminal": "Terminal Tool",
+        "agent_file": "File Tool",
+    }
+
+    def _worker_tool_allowed(self, run_id: str, agent_id: str) -> bool:
+        """Return False when the 偃师's non-empty whitelist excludes the agent's tool.
+
+        An empty defaultTools means "inherit global" (no extra restriction).
+        A None profile means no project override — allowed.
+        This check can only SUBTRACT from what the global toggle permits.
+        """
+        role = agent_id.removeprefix("agent_")
+        project_id = self._project_id_for(run_id)
+        profile = self.storage.get_project_agent_profile(project_id, role)
+        if profile is None:
+            return True
+        if not profile.defaultTools:
+            return True
+        return role in profile.defaultTools
+
     def _tool_disabled_result(
         self, state: GraphState, assignment: dict[str, Any], agent_id: str
     ) -> AgentExecutionResult | None:
         toggle = TOOL_TOGGLE_BY_AGENT.get(agent_id)
-        if toggle is None:
-            return None
-        settings = self.storage.get_app_settings()
-        if getattr(settings, toggle):
-            return None
-        observation_type = {
-            "agent_browser": "BrowserObservation",
-            "agent_computer": "ComputerObservation",
-            "agent_terminal": "TerminalObservation",
-        }[agent_id]
-        tool_label = {
-            "agent_browser": "Browser Tool",
-            "agent_computer": "Computer Tool",
-            "agent_terminal": "Terminal Tool",
-        }[agent_id]
-        summary = f"{tool_label} is turned off in Settings."
-        output = {"setting": toggle, "agentId": agent_id}
-        action_id = self.storage.create_action(
-            state["run_id"],
-            "ToolGateAction",
-            state.get("risk_level", "low"),
-            {"task": str(assignment.get("task") or ""), "setting": toggle},
-            agent_id,
-        )
-        self.storage.complete_action(action_id, state["run_id"], status="failed", agent_id=agent_id)
-        self.storage.create_observation(
-            state["run_id"],
-            observation_type,
-            summary,
-            action_id=action_id,
-            agent_id=agent_id,
-            structured_output=output,
-            error="tool_disabled",
-        )
-        return self._agent_execution_result(agent_id, assignment, False, summary, observation_type, "tool_disabled", output)
+        if toggle is not None:
+            settings = self.storage.get_app_settings()
+            if not getattr(settings, toggle):
+                observation_type = self._TOOL_OBSERVATION_TYPE[agent_id]
+                tool_label = self._TOOL_LABEL[agent_id]
+                summary = f"{tool_label} is turned off in Settings."
+                output = {"setting": toggle, "agentId": agent_id}
+                action_id = self.storage.create_action(
+                    state["run_id"],
+                    "ToolGateAction",
+                    state.get("risk_level", "low"),
+                    {"task": str(assignment.get("task") or ""), "setting": toggle},
+                    agent_id,
+                )
+                self.storage.complete_action(action_id, state["run_id"], status="failed", agent_id=agent_id)
+                self.storage.create_observation(
+                    state["run_id"],
+                    observation_type,
+                    summary,
+                    action_id=action_id,
+                    agent_id=agent_id,
+                    structured_output=output,
+                    error="tool_disabled",
+                )
+                return self._agent_execution_result(agent_id, assignment, False, summary, observation_type, "tool_disabled", output)
+
+        # Per-偃师 whitelist check (only subtracts; never enables globally-disabled tools).
+        if agent_id in self._TOOL_OBSERVATION_TYPE and not self._worker_tool_allowed(state["run_id"], agent_id):
+            role = agent_id.removeprefix("agent_")
+            observation_type = self._TOOL_OBSERVATION_TYPE[agent_id]
+            tool_label = self._TOOL_LABEL[agent_id]
+            summary = f"{tool_label}: this 偃师's abilities don't include {role}."
+            output = {"agentId": agent_id, "role": role}
+            action_id = self.storage.create_action(
+                state["run_id"],
+                "ToolGateAction",
+                state.get("risk_level", "low"),
+                {"task": str(assignment.get("task") or ""), "role": role},
+                agent_id,
+            )
+            self.storage.complete_action(action_id, state["run_id"], status="failed", agent_id=agent_id)
+            self.storage.create_observation(
+                state["run_id"],
+                observation_type,
+                summary,
+                action_id=action_id,
+                agent_id=agent_id,
+                structured_output=output,
+                error="tool_not_in_worker_abilities",
+            )
+            return self._agent_execution_result(agent_id, assignment, False, summary, observation_type, "tool_not_in_worker_abilities", output)
+
+        return None
 
     def _execute_file_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
         run_id = state["run_id"]

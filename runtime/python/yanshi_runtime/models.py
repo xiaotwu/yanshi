@@ -178,6 +178,7 @@ class UpdateAgentProfileRequest(BaseModel):
     taskPriority: int | None = None
     model: str | None = None
     reasoning: str | None = None
+    defaultTools: list[str] | None = None
 
 
 class CreateAgentProfileRequest(BaseModel):

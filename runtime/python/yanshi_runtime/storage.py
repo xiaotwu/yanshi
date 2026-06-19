@@ -1329,11 +1329,13 @@ class Storage:
     @locked_storage_method
     def update_agent_profile(self, profile_id: str, patch: dict[str, Any]) -> AgentProfileSummary:
         current = self.get_agent_profile(profile_id)
+        # Allow explicit lists (including empty []) to replace; filter scalar Nones.
         merged = current.model_copy(update={k: v for k, v in patch.items() if v is not None})
         self.conn.execute(
             """
             UPDATE agent_profiles SET name = ?, prompt = ?, personality = ?, accent = ?,
-              behavior_mode = ?, station = ?, task_priority = ?, model = ?, updated_at = ?
+              behavior_mode = ?, station = ?, task_priority = ?, model = ?,
+              default_tools_json = ?, updated_at = ?
             WHERE id = ?
             """,
             (
@@ -1345,6 +1347,7 @@ class Storage:
                 merged.station,
                 merged.taskPriority,
                 merged.model,
+                json.dumps(merged.defaultTools),
                 utc_now(),
                 profile_id,
             ),

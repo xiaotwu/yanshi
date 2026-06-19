@@ -2945,3 +2945,113 @@ def test_per_worker_model_none_inherits_default(tmp_path: Path) -> None:
         assert call["model"] is None, (
             f"Expected model=None (inherit default) but got model={call['model']!r} for {call['kind']} call"
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-偃师 tool whitelist gating (Task 5)
+# ---------------------------------------------------------------------------
+
+
+def test_worker_whitelist_excludes_tool_blocks_with_honest_error(tmp_path: Path) -> None:
+    """A 偃师 whose defaultTools excludes its own tool → blocked with tool_not_in_worker_abilities.
+    Global toggle is ON so the global gate passes; the whitelist check must block it."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    # Create a project and enable the terminal tool globally.
+    project = client.post("/projects", json={"name": "WhitelistBlockProject"}).json()
+    project_id = project["id"]
+    client.put("/settings", json={"terminalToolEnabled": True})
+
+    # Set the project's terminal 偃师 defaultTools to ["docker"] — excludes "terminal".
+    proj_terminal_profile = service.storage.get_project_agent_profile(project_id, "terminal")
+    assert proj_terminal_profile is not None
+    service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": ["docker"]})
+
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `ls` in terminal", "permissionMode": "full_access", "projectId": project_id},
+    )
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    terminal_obs = next((o for o in observations if o["type"] == "TerminalObservation"), None)
+    assert terminal_obs is not None, "Expected a TerminalObservation"
+    assert terminal_obs["error"] == "tool_not_in_worker_abilities", (
+        f"Expected tool_not_in_worker_abilities but got {terminal_obs['error']!r}"
+    )
+    # Must NOT be a fake success.
+    terminal_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_terminal")
+    assert all(t.status == "failed" for t in terminal_tasks)
+
+
+def test_worker_whitelist_empty_inherits_global_toggle(tmp_path: Path) -> None:
+    """A 偃师 with empty defaultTools does not restrict: global toggle governs (allowed when ON).
+    This is the 'empty whitelist = inherit' contract."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    project = client.post("/projects", json={"name": "EmptyWhitelistProject"}).json()
+    project_id = project["id"]
+    client.put("/settings", json={"terminalToolEnabled": True})
+
+    # Explicitly set empty defaultTools — verifies the 'empty = inherit' rule.
+    proj_terminal_profile = service.storage.get_project_agent_profile(project_id, "terminal")
+    assert proj_terminal_profile is not None
+    service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": []})
+    refreshed = service.storage.get_project_agent_profile(project_id, "terminal")
+    assert refreshed is not None and refreshed.defaultTools == [], "defaultTools should be empty after update"
+
+    # Run; should NOT be blocked by whitelist (falls through to actual execution).
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `ls` in terminal", "permissionMode": "full_access", "projectId": project_id},
+    )
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    # Must not have a whitelist-gate error.
+    terminal_obs = next((o for o in observations if o["type"] == "TerminalObservation"), None)
+    if terminal_obs is not None:
+        assert terminal_obs.get("error") != "tool_not_in_worker_abilities", (
+            "Empty defaultTools should not block the tool"
+        )
+
+
+def test_global_toggle_off_blocks_regardless_of_whitelist(tmp_path: Path) -> None:
+    """Global toggle OFF → blocked with tool_disabled, regardless of the 偃师's whitelist.
+    Existing behavior must be preserved exactly."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    project = client.post("/projects", json={"name": "GlobalToggleOffProject"}).json()
+    project_id = project["id"]
+    # Leave terminalToolEnabled at its default (False) — global gate blocks first.
+
+    # Give the terminal 偃师 a whitelist that INCLUDES "terminal" — should not matter.
+    proj_terminal_profile = service.storage.get_project_agent_profile(project_id, "terminal")
+    assert proj_terminal_profile is not None
+    service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": ["terminal", "docker"]})
+
+    created = client.post(
+        "/runs",
+        json={"task": "Run command `ls` in terminal", "permissionMode": "full_access", "projectId": project_id},
+    )
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    terminal_obs = next((o for o in observations if o["type"] == "TerminalObservation"), None)
+    assert terminal_obs is not None, "Expected a TerminalObservation"
+    assert terminal_obs["error"] == "tool_disabled", (
+        f"Expected tool_disabled (global gate) but got {terminal_obs['error']!r}"
+    )
