@@ -147,7 +147,7 @@ class OpenAICompatibleProvider:
                 model=self._config.model,
             )
 
-    def chat_completion(self, messages: list[ChatMessage]) -> str:
+    def chat_completion(self, messages: list[ChatMessage], model: str | None = None) -> str:
         if self._config is None:
             raise ProviderCallError("Model provider is not configured.")
         try:
@@ -155,7 +155,7 @@ class OpenAICompatibleProvider:
         except BlockedHostError as exc:
             raise ProviderCallError(f"Provider endpoint is blocked: {exc}") from exc
         payload = {
-            "model": self._config.model,
+            "model": model or self._config.model,
             "messages": [message.model_dump() for message in messages],
             "stream": False,
         }
@@ -208,7 +208,7 @@ class OpenAICompatibleProvider:
             raise ProviderCallError("Provider returned an empty assistant message.")
         return text
 
-    def stream_chat_completion(self, messages: list[ChatMessage]):
+    def stream_chat_completion(self, messages: list[ChatMessage], model: str | None = None):
         """Yield assistant *content* deltas as they arrive (OpenAI SSE format). Reasoning deltas
         are ignored. Used to stream the final answer to the UI; falls back cleanly — callers that
         want the whole string can ``"".join(...)`` the chunks."""
@@ -219,7 +219,7 @@ class OpenAICompatibleProvider:
         except BlockedHostError as exc:
             raise ProviderCallError(f"Provider endpoint is blocked: {exc}") from exc
         payload = {
-            "model": self._config.model,
+            "model": model or self._config.model,
             "messages": [message.model_dump() for message in messages],
             "stream": True,
         }

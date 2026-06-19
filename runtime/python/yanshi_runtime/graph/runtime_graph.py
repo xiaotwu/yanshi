@@ -130,11 +130,11 @@ class RuntimeGraph:
     def _is_cancelled(self, run_id: str) -> bool:
         return run_id in self._cancelled
 
-    def _stream_manager_answer(self, run_id: str, messages: list[ChatMessage]) -> str:
+    def _stream_manager_answer(self, run_id: str, messages: list[ChatMessage], model: str | None = None) -> str:
         """Stream the manager's answer into the run's partial buffer and return the full text."""
         self._begin_partial(run_id)
         chunks: list[str] = []
-        generator = self.provider.stream_chat_completion(messages)
+        generator = self.provider.stream_chat_completion(messages, model=model)
         try:
             for piece in generator:
                 if self._is_cancelled(run_id):
@@ -778,7 +778,8 @@ class RuntimeGraph:
                             f"Page text:\n{result.structuredOutput.get('textSnippet', '')}"
                         ),
                     ),
-                ]
+                ],
+                model=self._worker_model(run_id, "browser"),
             )
         except ProviderCallError as exc:
             summary = str(exc)
@@ -1020,6 +1021,7 @@ class RuntimeGraph:
                         ),
                     ),
                 ],
+                model=self._worker_model(run_id, "manager"),
             )
         except ProviderCallError as exc:
             summary = str(exc)
@@ -1274,6 +1276,8 @@ class RuntimeGraph:
     def _provider_agent_plan(
         self, task: str, risk_level: str, reasoning: str = "medium", project_id: str | None = None
     ) -> tuple[list[str], list[dict[str, Any]]]:
+        mgr_prof = self.storage.get_project_agent_profile(project_id, "manager")
+        mgr_model = (mgr_prof.model or None) if mgr_prof else None
         response = self.provider.chat_completion(
             [
                 ChatMessage(
@@ -1290,7 +1294,8 @@ class RuntimeGraph:
                     ),
                 ),
                 ChatMessage(role="user", content=f"Risk: {risk_level}\nReasoning: {reasoning}\nTask: {task}"),
-            ]
+            ],
+            model=mgr_model,
         )
         payload = self._parse_json_object(response)
         steps = payload.get("steps")
@@ -1480,6 +1485,16 @@ class RuntimeGraph:
 
     def _project_id_for(self, run_id: str) -> str | None:
         return self.storage.get_run(run_id).projectId
+
+    def _worker_model(self, run_id: str, role: str) -> str | None:
+        """Return the per-偃师 model override for *role* in this run's project, or None.
+
+        None means "inherit the configured provider default" — the provider uses
+        ``model or self._config.model``, so passing None through is intentional.
+        """
+        project_id = self._project_id_for(run_id)
+        prof = self.storage.get_project_agent_profile(project_id, role)
+        return (prof.model or None) if prof else None
 
     def _update_actor(self, run_id: str, agent_id: str, status: str, *, current_task: str | None = None, fatigue_delta: float = 0.0) -> None:
         """Persist the agent's instance + 3D actor state from real run events."""

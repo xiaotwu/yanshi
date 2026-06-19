@@ -1333,7 +1333,7 @@ class Storage:
         self.conn.execute(
             """
             UPDATE agent_profiles SET name = ?, prompt = ?, personality = ?, accent = ?,
-              behavior_mode = ?, station = ?, task_priority = ?, updated_at = ?
+              behavior_mode = ?, station = ?, task_priority = ?, model = ?, updated_at = ?
             WHERE id = ?
             """,
             (
@@ -1344,6 +1344,7 @@ class Storage:
                 merged.behaviorMode,
                 merged.station,
                 merged.taskPriority,
+                merged.model,
                 utc_now(),
                 profile_id,
             ),

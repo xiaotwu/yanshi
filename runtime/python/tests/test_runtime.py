@@ -129,13 +129,13 @@ class SequencedProvider:
         self.responses = responses
         self.calls: list[list[dict[str, object]]] = []
 
-    def chat_completion(self, messages: list[object]) -> str:
+    def chat_completion(self, messages: list[object], model: str | None = None) -> str:
         self.calls.append([message.model_dump() if hasattr(message, "model_dump") else {"content": str(message)} for message in messages])
         if not self.responses:
             raise AssertionError("SequencedProvider received an unexpected chat completion call.")
         return self.responses.pop(0)
 
-    def stream_chat_completion(self, messages: list[object]):
+    def stream_chat_completion(self, messages: list[object], model: str | None = None):
         # Stream the next sequenced response as a single chunk (the graph joins chunks).
         yield self.chat_completion(messages)
 
@@ -2847,3 +2847,101 @@ def test_project_run_uses_project_team_persona_in_file_action(tmp_path: Path) ->
     standalone_file_action = next((a for a in standalone_actions if a["type"] == "FileAction"), None)
     assert standalone_file_action is not None, "Expected a FileAction in the standalone run"
     assert "ProjectFile-persona-signature" not in standalone_file_action["input"]["persona"]
+
+
+# ---------------------------------------------------------------------------
+# Per-偃师 model override tests
+# ---------------------------------------------------------------------------
+
+class ModelRecordingProvider:
+    """Fake provider that records the model= kwarg received on each call."""
+
+    configured = True
+    public_base_url = "fixture://provider"
+    model = "fixture-model"
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = list(responses)
+        # Each entry: {"kind": "chat"|"stream", "model": str|None, "messages": [...]}
+        self.recorded_calls: list[dict] = []
+
+    def chat_completion(self, messages: list[object], model: str | None = None) -> str:
+        self.recorded_calls.append({"kind": "chat", "model": model, "messages": messages})
+        if not self.responses:
+            raise AssertionError("ModelRecordingProvider received an unexpected call.")
+        return self.responses.pop(0)
+
+    def stream_chat_completion(self, messages: list[object], model: str | None = None):
+        self.recorded_calls.append({"kind": "stream", "model": model, "messages": messages})
+        if not self.responses:
+            raise AssertionError("ModelRecordingProvider received an unexpected stream call.")
+        yield self.responses.pop(0)
+
+
+def test_per_worker_model_override_manager(tmp_path: Path) -> None:
+    """A manager 偃师 with model='custom-x' causes both the planning call and the synthesis
+    stream call to use model='custom-x'. A 偃师 with empty/None model passes None through
+    (inherits the configured provider default — no silent substitution)."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    # Create a project and give its manager 偃师 a custom model.
+    project = client.post("/projects", json={"name": "ModelOverrideProject"}).json()
+    project_id = project["id"]
+
+    proj_mgr_profile = service.storage.get_project_agent_profile(project_id, "manager")
+    assert proj_mgr_profile is not None
+    service.storage.update_agent_profile(proj_mgr_profile.id, {"model": "custom-x"})
+
+    # Verify the model was persisted.
+    refreshed = service.storage.get_project_agent_profile(project_id, "manager")
+    assert refreshed is not None and refreshed.model == "custom-x"
+
+    provider = ModelRecordingProvider(
+        [
+            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer the question."}]}),
+            "Final answer with custom model.",
+        ]
+    )
+    service.provider = provider
+    service.graph.provider = provider
+
+    created = client.post("/runs", json={"task": "Write a hello", "projectId": project_id})
+    assert created.status_code == 200
+    run = client.get(f"/runs/{created.json()['id']}").json()
+    assert run["status"] == "completed"
+
+    # All provider calls for this project run should use the manager's custom model.
+    assert len(provider.recorded_calls) >= 2, "Expected at least planning + synthesis calls"
+    for call in provider.recorded_calls:
+        assert call["model"] == "custom-x", (
+            f"Expected model='custom-x' but got model={call['model']!r} for {call['kind']} call"
+        )
+
+
+def test_per_worker_model_none_inherits_default(tmp_path: Path) -> None:
+    """A 偃师 with no model set passes None to the provider (inherits the configured default).
+    No silent substitution — the provider receives None, not the profile's empty string."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    # Standalone run (no project) — global manager profile has no model set by default.
+    provider = ModelRecordingProvider(
+        [
+            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer."}]}),
+            "Done.",
+        ]
+    )
+    service.provider = provider
+    service.graph.provider = provider
+
+    created = client.post("/runs", json={"task": "Write a hello"})
+    assert created.status_code == 200
+    run = client.get(f"/runs/{created.json()['id']}").json()
+    assert run["status"] == "completed"
+
+    assert len(provider.recorded_calls) >= 2, "Expected at least planning + synthesis calls"
+    for call in provider.recorded_calls:
+        assert call["model"] is None, (
+            f"Expected model=None (inherit default) but got model={call['model']!r} for {call['kind']} call"
+        )
