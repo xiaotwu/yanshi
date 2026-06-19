@@ -209,7 +209,7 @@ sandbox); Apple Developer ID is needed only for public signing/notarization.
 | Computer Use | Requires macOS Accessibility / Screen Recording for full control and screenshots. |
 | Native providers | OpenAI-compatible path works; native Anthropic / Gemini are planned. |
 | Atelier workers | 2D generated SVG standees + fallback are real; richer sprite/Lottie/3D animation and pathfinding are future work. |
-| Chat continuation | Finished runs reopen as real history; follow-up turns on an existing run are planned. |
+| Chat continuation | Real: finished runs reopen as history and follow-up turns thread onto the same run, carrying prior conversation forward. |
 
 ## Links
 
