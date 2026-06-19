@@ -3104,3 +3104,103 @@ def test_global_toggle_off_blocks_regardless_of_whitelist(tmp_path: Path) -> Non
     assert terminal_obs["error"] == "tool_disabled", (
         f"Expected tool_disabled (global gate) but got {terminal_obs['error']!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# list_models / /provider/models
+# ---------------------------------------------------------------------------
+
+
+class FakeModelsHandler(BaseHTTPRequestHandler):
+    response_body: bytes = json.dumps({"data": [{"id": "m2"}, {"id": "m1"}]}).encode()
+    response_status: int = 200
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/v1/models":
+            body = self.response_body
+            self.send_response(self.response_status)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+class FakeModelsServer:
+    def __init__(self, response_body: bytes | None = None, response_status: int = 200) -> None:
+        self._body = response_body or json.dumps({"data": [{"id": "m2"}, {"id": "m1"}]}).encode()
+        self._status = response_status
+
+    def __enter__(self) -> str:
+        FakeModelsHandler.response_body = self._body
+        FakeModelsHandler.response_status = self._status
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeModelsHandler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        return f"http://127.0.0.1:{self.server.server_port}/v1"
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.server.shutdown()
+        self.thread.join(timeout=5)
+
+
+def test_list_models_returns_sorted_ids() -> None:
+    from yanshi_runtime.providers.openai_compatible import OpenAICompatibleProvider, ProviderConfig
+
+    with FakeModelsServer() as base_url:
+        cfg = ProviderConfig(base_url=base_url, model="any", api_key="")
+        provider = OpenAICompatibleProvider(cfg)
+        result = provider.list_models()
+
+    assert result == ["m1", "m2"]
+
+
+def test_list_models_returns_empty_on_http_error() -> None:
+    from yanshi_runtime.providers.openai_compatible import OpenAICompatibleProvider, ProviderConfig
+
+    with FakeModelsServer(response_status=500) as base_url:
+        cfg = ProviderConfig(base_url=base_url, model="any", api_key="")
+        provider = OpenAICompatibleProvider(cfg)
+        result = provider.list_models()
+
+    assert result == []
+
+
+def test_list_models_returns_empty_when_not_configured() -> None:
+    from yanshi_runtime.providers.openai_compatible import OpenAICompatibleProvider
+
+    provider = OpenAICompatibleProvider(config=None)
+    result = provider.list_models()
+    assert result == []
+
+
+def test_provider_models_route_returns_models(tmp_path: Path) -> None:
+    from yanshi_runtime.server.app import create_app
+    from yanshi_runtime.config import RuntimeSettings
+    from yanshi_runtime.providers.openai_compatible import ProviderConfig
+
+    with FakeModelsServer() as base_url:
+        settings = RuntimeSettings(data_dir=tmp_path, runtime_version="test", synchronous_runs=True, api_token="test-token")
+        app = create_app(settings)
+        service = app.state.runtime_service
+        service.provider.update_config(ProviderConfig(base_url=base_url, model="any", api_key=""))
+
+        client = TestClient(app, headers={"Authorization": "Bearer test-token"})
+        response = client.get("/provider/models")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "models" in body
+    assert body["models"] == ["m1", "m2"]
+
+
+def test_provider_models_route_returns_empty_when_unconfigured(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    response = client.get("/provider/models")
+    assert response.status_code == 200
+    assert response.json() == {"models": []}

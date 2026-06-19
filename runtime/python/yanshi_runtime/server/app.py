@@ -823,6 +823,10 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     def provider_health(service: RuntimeService = Depends(service_dep)):
         return service.provider_health()
 
+    @app.get("/provider/models")
+    def provider_models(service: RuntimeService = Depends(service_dep)):
+        return {"models": service.provider.list_models()}
+
     @app.get("/settings", response_model=AppSettings)
     def get_app_settings(service: RuntimeService = Depends(service_dep)):
         return service.app_settings()

@@ -104,6 +104,32 @@ class OpenAICompatibleProvider:
         assert self._config is not None
         validate_outbound_url(self._config.base_url, block_private=False)
 
+    def list_models(self) -> list[str]:
+        """Return sorted model ids from the provider's /models endpoint.
+
+        Returns an empty list if the provider is not configured or on any error —
+        never raises and never fabricates ids.
+        """
+        if self._config is None:
+            return []
+        try:
+            self._ensure_endpoint_allowed()
+        except BlockedHostError:
+            return []
+        try:
+            with httpx.Client(timeout=_HEALTH_TIMEOUT_SECONDS) as client:
+                response = client.get(
+                    f"{self._config.base_url}/models",
+                    headers=self._headers(),
+                )
+            if response.status_code >= 400:
+                return []
+            data = response.json()
+            models = [entry["id"] for entry in data.get("data", []) if isinstance(entry.get("id"), str)]
+            return sorted(models)
+        except Exception:  # noqa: BLE001 — never raise, mirror healthcheck tolerance
+            return []
+
     def healthcheck(self) -> ProviderHealth:
         if self._config is None:
             return ProviderHealth(ok=False, status="not_configured", detail="Model provider is not configured.")

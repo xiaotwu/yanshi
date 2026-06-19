@@ -131,6 +131,7 @@ export const runtimeApi = {
       method: "POST",
       body: "{}",
     }),
+  providerModels: () => request<{ models: string[] }>("/provider/models"),
   projects: () => request<ProjectSummary[]>("/projects"),
   project: (projectId: string) => request<ProjectSummary>(`/projects/${projectId}`),
   createProject: (name: string, description?: string) =>
