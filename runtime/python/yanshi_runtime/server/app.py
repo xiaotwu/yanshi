@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from yanshi_runtime.acp import AcpManager
 from yanshi_runtime.config import RuntimeSettings, settings_from_env
+from yanshi_runtime.mcp_client import McpManager
 from yanshi_runtime.graph import RuntimeGraph
 from yanshi_runtime.models import (
     AgentActor3DSummary,
@@ -107,6 +108,7 @@ class RuntimeService:
         )
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
+        self.mcp = McpManager()
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
         # Short-lived, scoped tickets for the header-less callers (WS, <img> preview, download links)
         # so the real bearer token never rides in a URL. ticket -> (scope, expiry epoch).
@@ -193,6 +195,7 @@ class RuntimeService:
         for _ in self._run_workers:
             self._run_queue.put(None)
         self.acp.shutdown()
+        self.mcp.shutdown()
 
     # --- Scoped tickets ------------------------------------------------------------------------
     TICKET_SCOPES = {"events", "preview", "export"}
@@ -449,7 +452,7 @@ class RuntimeService:
         return settings
 
     def ai_integrations(self) -> AiIntegrationsConfig:
-        return self._overlay_acp_state(self.storage.get_ai_integrations())
+        return self._overlay_mcp_state(self._overlay_acp_state(self.storage.get_ai_integrations()))
 
     def _overlay_acp_state(self, config: AiIntegrationsConfig) -> AiIntegrationsConfig:
         """Overlay live ACP connection state (never persisted) on the honest stored baseline."""
@@ -481,6 +484,34 @@ class RuntimeService:
         self.acp.disconnect(agent_id)
         return self.ai_integrations()
 
+    def _overlay_mcp_state(self, config: AiIntegrationsConfig) -> AiIntegrationsConfig:
+        """Overlay live MCP connection state (never persisted) on the honest stored baseline."""
+        for server in config.mcpServers:
+            live = self.mcp.live_state(server.id)
+            if live is not None:
+                server.status = live.status
+                server.tools = [tool.name for tool in live.tools]
+        return config
+
+    def connect_mcp_server(self, server_id: str) -> AiIntegrationsConfig:
+        resolved = self.storage.get_ai_integrations_resolved()
+        server = next((item for item in resolved.mcpServers if item.id == server_id), None)
+        if server is None:
+            raise HTTPException(status_code=404, detail="MCP server not found.")
+        try:
+            connection = self.mcp.connect(server)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        self.storage.append_event(
+            "runtime.status.changed",
+            payload={"status": "mcp.connection", "serverId": server_id, "result": connection.status},
+        )
+        return self._overlay_mcp_state(self._overlay_acp_state(self.storage.get_ai_integrations()))
+
+    def disconnect_mcp_server(self, server_id: str) -> AiIntegrationsConfig:
+        self.mcp.disconnect(server_id)
+        return self._overlay_mcp_state(self._overlay_acp_state(self.storage.get_ai_integrations()))
+
     def update_ai_integrations(self, request: AiIntegrationsUpdate) -> AiIntegrationsConfig:
         # Drop live connections for agents that were removed or had their config replaced.
         if request.externalAgents is not None:
@@ -488,6 +519,11 @@ class RuntimeService:
             for agent in self.storage.get_ai_integrations().externalAgents:
                 if agent.id not in kept:
                     self.acp.disconnect(agent.id)
+        if request.mcpServers is not None:
+            kept_mcp = {server.id for server in request.mcpServers}
+            for server in self.storage.get_ai_integrations().mcpServers:
+                if server.id not in kept_mcp:
+                    self.mcp.disconnect(server.id)
         config = self.storage.update_ai_integrations(request)
         self.storage.append_event(
             "runtime.status.changed",
@@ -497,7 +533,7 @@ class RuntimeService:
                 "mcpServers": len(config.mcpServers),
             },
         )
-        return self._overlay_acp_state(config)
+        return self._overlay_mcp_state(self._overlay_acp_state(config))
 
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         name = request.name.strip()
@@ -850,6 +886,14 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.post("/settings/integrations/agents/{agent_id}/disconnect", response_model=AiIntegrationsConfig)
     def disconnect_external_agent(agent_id: str, service: RuntimeService = Depends(service_dep)):
         return service.disconnect_external_agent(agent_id)
+
+    @app.post("/settings/integrations/mcp/{server_id}/connect", response_model=AiIntegrationsConfig)
+    def connect_mcp_server(server_id: str, service: RuntimeService = Depends(service_dep)):
+        return service.connect_mcp_server(server_id)
+
+    @app.post("/settings/integrations/mcp/{server_id}/disconnect", response_model=AiIntegrationsConfig)
+    def disconnect_mcp_server(server_id: str, service: RuntimeService = Depends(service_dep)):
+        return service.disconnect_mcp_server(server_id)
 
     @app.post("/runs")
     def create_run(

@@ -103,8 +103,9 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
     stored baseline is: ACP agents with a launch command are "configured" (saved, connectable);
     endpoint-only or custom-protocol entries are "not_implemented" (no client for those paths);
     entries missing details are "not_configured". Capabilities are cleared at rest — only a live
-    handshake may report them. MCP still has no client: complete entries stay "not_implemented",
-    discovered tools are never faked.
+    handshake may report them. MCP stdio servers with a command are "configured" (the client can
+    launch + discover tools); http/sse or command-less entries stay "not_implemented" /
+    "not_configured". Discovered tools are live-only and never persisted.
     """
     for agent in config.externalAgents:
         if agent.protocol == "acp" and agent.command:
@@ -116,9 +117,14 @@ def _with_honest_integration_statuses(config: AiIntegrationsConfig) -> AiIntegra
         agent.capabilities = []
         agent.lastError = None
     for server in config.mcpServers:
-        connectable = server.command if server.transport == "stdio" else server.url
-        server.status = "not_implemented" if connectable else "not_configured"
-        server.tools = []
+        has_stdio_command = server.transport == "stdio" and bool(server.command)
+        if has_stdio_command:
+            server.status = "configured"        # connectable: a real client can launch + discover
+        elif server.url or server.command:
+            server.status = "not_implemented"   # http/sse or other transports have no client yet
+        else:
+            server.status = "not_configured"
+        server.tools = []                        # discovered tools are live-only, never persisted
     return config
 
 

@@ -1416,19 +1416,19 @@ def test_ai_integrations_config_persists_with_honest_statuses(tmp_path: Path) ->
     assert updated.status_code == 200
     body = updated.json()
     # ACP agents with a launch command are "configured" (the stdio foundation can attempt a real
-    # connection); incomplete entries are "not_configured". MCP has no client: configured entries
-    # are "not_implemented" and discovered tools are never faked.
+    # connection); incomplete entries are "not_configured". MCP stdio servers with a command are
+    # also "configured" (the client can connect); http/sse entries are "not_implemented".
     assert body["externalAgents"][0]["status"] == "configured"
     assert body["externalAgents"][0]["capabilities"] == []
     assert body["externalAgents"][1]["status"] == "not_configured"
-    assert body["mcpServers"][0]["status"] == "not_implemented"
+    assert body["mcpServers"][0]["status"] == "configured"  # stdio + command → connectable
     assert body["mcpServers"][0]["tools"] == []
     assert body["mcpServers"][1]["status"] == "not_configured"
 
     persisted = client.get("/settings/integrations").json()
     assert [a["id"] for a in persisted["externalAgents"]] == ["ea_1", "ea_2"]
     assert persisted["mcpServers"][0]["args"] == ["-y", "@modelcontextprotocol/server-filesystem"]
-    assert persisted["mcpServers"][0]["status"] == "not_implemented"
+    assert persisted["mcpServers"][0]["status"] == "configured"  # stdio + command → connectable
 
 
 ACP_FIXTURE_AGENT = '''
@@ -3263,3 +3263,33 @@ def test_mcp_connect_rejects_non_stdio_and_commandless() -> None:
     with pytest.raises(ValueError):
         manager.connect(McpServerConfig(id="n", name="N", transport="stdio", command=None))
     manager.shutdown()
+
+
+def test_mcp_connect_endpoint_discovers_tools_and_status(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    # Configure one stdio MCP server pointing at the fake server.
+    client.put("/settings/integrations", json={"mcpServers": [{
+        "id": "mcp_fake", "name": "Fake", "transport": "stdio",
+        "command": sys.executable, "args": [str(_FAKE_MCP)], "enabled": True,
+    }]})
+    # At rest, a command-having stdio server is "configured" (connectable), not "not_implemented".
+    at_rest = client.get("/settings/integrations").json()
+    assert at_rest["mcpServers"][0]["status"] == "configured"
+
+    connected = client.post("/settings/integrations/mcp/mcp_fake/connect").json()
+    server = connected["mcpServers"][0]
+    assert server["status"] == "connected"
+    assert server["tools"] == ["echo", "add"]
+
+    disconnected = client.post("/settings/integrations/mcp/mcp_fake/disconnect").json()
+    assert disconnected["mcpServers"][0]["status"] == "configured"
+    assert disconnected["mcpServers"][0]["tools"] == []  # live tools cleared on disconnect
+
+
+def test_mcp_http_server_stays_not_implemented(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    client.put("/settings/integrations", json={"mcpServers": [{
+        "id": "mcp_http", "name": "H", "transport": "http", "url": "https://example.com/mcp", "enabled": True,
+    }]})
+    at_rest = client.get("/settings/integrations").json()
+    assert at_rest["mcpServers"][0]["status"] == "not_implemented"
