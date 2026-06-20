@@ -25,6 +25,18 @@ ACP_PROTOCOL_VERSION = 1
 HANDSHAKE_TIMEOUT_SECONDS = 15.0
 
 
+def _agent_chunk_text(payload: dict) -> str | None:
+    """Return the text of a session/update agent_message_chunk, else None (ignores tool/permission updates)."""
+    if payload.get("method") != "session/update":
+        return None
+    update = (payload.get("params") or {}).get("update") or {}
+    if update.get("sessionUpdate") != "agent_message_chunk":
+        return None
+    content = update.get("content") or {}
+    text = content.get("text")
+    return text if isinstance(text, str) and text else None
+
+
 def _flatten_capabilities(value: object, prefix: str = "") -> list[str]:
     """Flatten the agent's reported capability object into readable badge strings.
 
@@ -101,6 +113,65 @@ class AcpConnection:
                 raise ConnectionError(f"Agent returned an error for {method}: {detail}")
             value = result.get("result")
             return value if isinstance(value, dict) else {}
+
+    def new_session(self, timeout: float, cwd: str | None = None) -> str:
+        result = self.request("session/new", {"cwd": cwd or os.getcwd(), "mcpServers": []}, timeout)
+        session_id = result.get("sessionId")
+        if not isinstance(session_id, str) or not session_id:
+            raise ConnectionError("The agent did not return a session id.")
+        return session_id
+
+    def prompt(self, session_id: str, text: str, timeout: float) -> str:
+        """Send session/prompt and collect agent_message_chunk text until the prompt resolves."""
+        with self._lock:
+            request_id = self._next_id
+            self._next_id += 1
+            message = json.dumps({
+                "jsonrpc": "2.0", "id": request_id, "method": "session/prompt",
+                "params": {"sessionId": session_id, "prompt": [{"type": "text", "text": text}]},
+            })
+            if self.process is None or self.process.stdin is None or self.process.stdout is None:
+                raise ConnectionError("The agent process is not running.")
+            self.process.stdin.write(message + "\n")
+            self.process.stdin.flush()
+
+            chunks: list[str] = []
+            failure: list[str] = []
+            stdout = self.process.stdout
+
+            def read_loop() -> None:
+                while True:
+                    line = stdout.readline()
+                    if not line:
+                        failure.append("The agent process closed its output before responding.")
+                        return
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if payload.get("id") == request_id:
+                        if "error" in payload:
+                            error = payload["error"]
+                            failure.append(error.get("message", str(error)) if isinstance(error, dict) else str(error))
+                        return
+                    piece = _agent_chunk_text(payload)
+                    if piece:
+                        chunks.append(piece)
+
+            reader = threading.Thread(target=read_loop, daemon=True)
+            reader.start()
+            reader.join(timeout)
+            if reader.is_alive():
+                raise TimeoutError(f"No response to session/prompt within {timeout:.0f}s.")
+            if failure:
+                raise ConnectionError(failure[0])
+            answer = "".join(chunks)
+            if not answer:
+                raise ConnectionError("The agent returned an empty response.")
+            return answer
 
     def close(self) -> None:
         if self.process is None:

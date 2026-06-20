@@ -1510,6 +1510,50 @@ def test_acp_connect_reports_honest_errors(tmp_path: Path) -> None:
     assert refused.status_code == 400
 
 
+ACP_PROMPT_FIXTURE_AGENT = '''
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    msg = json.loads(line)
+    method = msg.get("method")
+    if method == "initialize":
+        sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":msg["id"],"result":{"protocolVersion":1,"agentCapabilities":{}}}) + "\\n")
+    elif method == "session/new":
+        sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":msg["id"],"result":{"sessionId":"s1"}}) + "\\n")
+    elif method == "session/prompt":
+        text = msg["params"]["prompt"][0]["text"]
+        # stream one agent_message_chunk notification, then resolve the prompt request
+        sys.stdout.write(json.dumps({"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Echo: " + text}}}}) + "\\n")
+        sys.stdout.write(json.dumps({"jsonrpc":"2.0","id":msg["id"],"result":{"stopReason":"end_turn"}}) + "\\n")
+    sys.stdout.flush()
+'''
+
+
+def test_agent_chunk_text_extracts_only_message_chunks() -> None:
+    from yanshi_runtime.acp import _agent_chunk_text
+    assert _agent_chunk_text({"method": "session/update", "params": {"update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "hi"}}}}) == "hi"
+    assert _agent_chunk_text({"method": "session/update", "params": {"update": {"sessionUpdate": "tool_call", "content": {}}}}) is None
+    assert _agent_chunk_text({"id": 1, "result": {}}) is None
+
+
+def test_acp_new_session_and_prompt_collect_text(tmp_path: Path) -> None:
+    from yanshi_runtime.acp import AcpManager
+    from yanshi_runtime.models import ExternalAgentConfig
+    agent_script = tmp_path / "acp_prompt_agent.py"
+    agent_script.write_text(ACP_PROMPT_FIXTURE_AGENT)
+    manager = AcpManager()
+    try:
+        conn = manager.connect(ExternalAgentConfig(id="ea", name="x", protocol="acp", command=f"{sys.executable} {agent_script}", enabled=True))
+        assert conn.status == "connected"
+        session_id = conn.new_session(timeout=5)
+        assert session_id == "s1"
+        assert conn.prompt(session_id, "hello", timeout=5) == "Echo: hello"
+    finally:
+        manager.shutdown()
+
+
 def test_profile_and_preferred_actions_persist(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
