@@ -119,7 +119,7 @@ class RuntimeService:
         # pooled executor's worker context. The pool size caps concurrency; excess runs wait in the
         # queue as "created" until a worker frees up. Tests use synchronous_runs and skip the pool.
         self._shutting_down = False
-        self._run_queue: "queue.Queue[tuple[str, str, str, bool, str] | None]" = queue.Queue()
+        self._run_queue: "queue.Queue[tuple[str, str, str, bool, str, str | None] | None]" = queue.Queue()
         self._run_workers: list[threading.Thread] = []
         if not settings.synchronous_runs:
             for i in range(max(1, settings.max_concurrent_runs)):
@@ -164,14 +164,14 @@ class RuntimeService:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         reasoning = request.reasoning or self.storage.get_app_settings().reasoning
         self.storage.append_event("run.created", run_id=run.id, project_id=run.projectId, payload=run.model_dump())
-        self._dispatch_run(run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning)
+        self._dispatch_run(run.id, request.task.strip(), request.permissionMode, request.planFirst, reasoning, request.externalAgentId)
         return run
 
-    def _dispatch_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool, reasoning: str = "medium") -> None:
+    def _dispatch_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool, reasoning: str = "medium", external_agent_id: str | None = None) -> None:
         if self.settings.synchronous_runs:
-            self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+            self.start_run(run_id, task, permission_mode, plan_first, reasoning, external_agent_id)
             return
-        self._run_queue.put((run_id, task, permission_mode, plan_first, reasoning))
+        self._run_queue.put((run_id, task, permission_mode, plan_first, reasoning, external_agent_id))
 
     def _run_worker(self) -> None:
         """Worker loop: pull queued runs and execute them one at a time. A ``None`` item is the
@@ -184,8 +184,8 @@ class RuntimeService:
                     return
                 if self._shutting_down:
                     continue
-                run_id, task, permission_mode, plan_first, reasoning = item
-                self.start_run(run_id, task, permission_mode, plan_first, reasoning)
+                run_id, task, permission_mode, plan_first, reasoning, external_agent_id = item
+                self.start_run(run_id, task, permission_mode, plan_first, reasoning, external_agent_id)
             finally:
                 self._run_queue.task_done()
 
@@ -228,11 +228,14 @@ class RuntimeService:
                 return False
             return True
 
-    def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium") -> None:
+    def start_run(self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium", external_agent_id: str | None = None) -> None:
         started = time.monotonic()
         logger.info("run %s started", run_id)
         try:
-            self.graph.start(run_id, task, permission_mode, plan_first, reasoning)
+            if external_agent_id:
+                self._run_via_external_agent(run_id, task, external_agent_id)
+            else:
+                self.graph.start(run_id, task, permission_mode, plan_first, reasoning)
             logger.info("run %s finished in %.1fs", run_id, time.monotonic() - started)
         except Exception:  # noqa: BLE001 — a crashing run must not silently kill the worker
             logger.exception("run %s crashed", run_id)
@@ -241,6 +244,38 @@ class RuntimeService:
                 self.storage.append_event("run.failed", run_id=run_id, payload={"summary": "Run failed unexpectedly."})
             except Exception:  # noqa: BLE001
                 logger.exception("failed to mark run %s failed after crash", run_id)
+
+    _ACP_SESSION_TIMEOUT = 30.0
+    _ACP_PROMPT_TIMEOUT = 300.0
+
+    def _fail_run(self, run_id: str, message: str, error: str) -> None:
+        self.storage.update_run(run_id, status="failed", result_summary=message, completed=True)
+        self.storage.append_event("run.failed", run_id=run_id, payload={"summary": message, "error": error})
+
+    def _run_via_external_agent(self, run_id: str, task: str, agent_id: str) -> None:
+        connection = self.acp.live_state(agent_id)
+        if connection is None or connection.status != "connected":
+            resolved = self.storage.get_ai_integrations_resolved()
+            agent = next((item for item in resolved.externalAgents if item.id == agent_id), None)
+            if agent is None:
+                self._fail_run(run_id, "External agent not found.", "external_agent_not_found")
+                return
+            try:
+                connection = self.acp.connect(agent)
+            except ValueError as exc:
+                self._fail_run(run_id, str(exc), "external_agent_failed")
+                return
+        if connection.status != "connected":
+            self._fail_run(run_id, connection.error or "External agent failed to connect.", "external_agent_failed")
+            return
+        try:
+            session_id = connection.new_session(timeout=self._ACP_SESSION_TIMEOUT)
+            answer = connection.prompt(session_id, task, timeout=self._ACP_PROMPT_TIMEOUT)
+        except (TimeoutError, ConnectionError, OSError) as exc:
+            self._fail_run(run_id, f"External agent error: {exc}", "external_agent_failed")
+            return
+        self.storage.update_run(run_id, status="completed", result_summary=answer, completed=True)
+        self.storage.append_event("run.completed", run_id=run_id, payload={"summary": answer, "executor": f"external_agent:{agent_id}"})
 
     def list_project_files(self, project_id: str) -> dict:
         try:

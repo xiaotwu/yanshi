@@ -3455,3 +3455,23 @@ def test_build_provider_selects_by_type() -> None:
     assert isinstance(o, OpenAICompatibleProvider)
     assert isinstance(build_provider(None), OpenAICompatibleProvider)
     assert AnthropicProvider(None).configured is False
+
+
+def test_run_routes_to_external_agent(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    agent_script = tmp_path / "acp_prompt_agent.py"
+    agent_script.write_text(ACP_PROMPT_FIXTURE_AGENT)
+    client.put("/settings/integrations", json={"externalAgents": [{"id": "ea_ok", "name": "Fixture", "protocol": "acp", "command": f"{sys.executable} {agent_script}", "enabled": True}]})
+    client.post("/settings/integrations/agents/ea_ok/connect")
+
+    run = client.post("/runs", json={"task": "hello", "externalAgentId": "ea_ok"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "completed"
+    assert fetched["resultSummary"] == "Echo: hello"
+
+
+def test_run_via_unknown_external_agent_fails_honestly(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    run = client.post("/runs", json={"task": "hello", "externalAgentId": "nope"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "failed"

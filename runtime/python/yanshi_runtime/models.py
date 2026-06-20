@@ -66,6 +66,8 @@ class CreateRunRequest(BaseModel):
     reasoning: ReasoningLevel | None = None
     # When set, this run is a follow-up turn in the same chat as parentRunId.
     parentRunId: str | None = None
+    # When set, route this run to the named external ACP agent instead of the internal graph.
+    externalAgentId: str | None = None
 
 
 class ProjectSummary(BaseModel):
