@@ -1,0 +1,76 @@
+name: Release (signed macOS bundle)
+
+# Builds the distributable, code-signed + notarized macOS bundle (.app + .dmg)
+# on a version tag, or on manual dispatch. Signing/notarization happen ONLY when
+# the Apple secrets below are configured (see docs/BUILD_AND_RELEASE.md →
+# "Signed release via GitHub Actions"). Without them the build still runs but is
+# UNSIGNED (not for distribution). The Apple Developer ID assets are the
+# repository owner's to provide — they are never committed.
+#
+# Required repo secrets for a real signed release:
+#   APPLE_CERTIFICATE           base64 of the exported "Developer ID Application" .p12
+#   APPLE_CERTIFICATE_PASSWORD  the .p12 export password
+#   APPLE_SIGNING_IDENTITY      e.g. "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID                    your Apple ID email
+#   APPLE_PASSWORD              an app-specific password (appleid.apple.com)
+#   APPLE_TEAM_ID               your 10-char Apple Team ID
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# No untrusted event input is used in any run step; tag name flows only into the
+# tauri-action release inputs, never into a shell command.
+
+jobs:
+  release-macos:
+    name: Build signed macOS bundle
+    runs-on: macos-14
+    permissions:
+      contents: write # create/attach the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: pnpm install --frozen-lockfile
+
+      # PyInstaller (dev group, via uv) builds + stages the standalone runtime
+      # sidecar at apps/desktop/src-tauri/resources/yanshi-runtime-sidecar.
+      - name: Build runtime sidecar
+        run: pnpm sidecar:build
+
+      # tauri-action imports APPLE_CERTIFICATE into a temporary keychain, builds
+      # with the sidecar overlay config, and (when APPLE_ID/APPLE_PASSWORD/
+      # APPLE_TEAM_ID are present) codesigns → notarizes → staples the bundle,
+      # then attaches the artifacts to a GitHub release.
+      - name: Build, sign, notarize, and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/desktop
+          # Bundle the embedded sidecar (the overlay config used by `pnpm desktop:release`).
+          args: --config src-tauri/tauri.sidecar.conf.json
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.run_number) }}
+          releaseName: "Yanshi __VERSION__"
+          releaseDraft: true
+          prerelease: false

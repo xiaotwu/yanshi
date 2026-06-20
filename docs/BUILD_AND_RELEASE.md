@@ -162,6 +162,41 @@ Gatekeeper will block/warn on another Mac. To ship publicly:
 Until steps 2–3 are completed, the release notes must state: a functionally distributable local
 build exists; a signed/notarized public release remains pending.
 
+## Signed release via GitHub Actions (`.github/workflows/release.yml`)
+
+`release.yml` automates the distributable build (sidecar + `--config src-tauri/tauri.sidecar.conf.json`)
+and, **when the Apple secrets are configured**, codesigns → notarizes → staples it via Tauri's
+bundler (through `tauri-apps/tauri-action`) and attaches `.app`/`.dmg` to a draft GitHub release.
+Without the secrets it still runs but produces an **unsigned** build (not for distribution).
+
+These Apple Developer ID assets are **yours to provide** — they are never committed to the repo.
+The signing/notarization step (and obtaining the cert) is the human-owned part; once the secrets are
+set, pushing a tag does the rest. Add these as **repository secrets** (Settings → Secrets and
+variables → Actions):
+
+| Secret | How to obtain |
+| --- | --- |
+| `APPLE_CERTIFICATE` | Export your "Developer ID Application" cert from Keychain as a `.p12`, then `base64 -i cert.p12 | pbcopy` and paste. |
+| `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting the `.p12`. |
+| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` (exact string from `security find-identity -p codesigning -v`). |
+| `APPLE_ID` | Your Apple ID email. |
+| `APPLE_PASSWORD` | An app-specific password from appleid.apple.com (not your Apple ID password). |
+| `APPLE_TEAM_ID` | Your 10-character Apple Team ID. |
+
+**Trigger:** push a `vX.Y.Z` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`), or run the
+workflow manually (Actions → Release → Run workflow). The job runs on `macos-14`.
+
+**After it produces a signed bundle**, complete the human verification step that CI cannot do —
+Gatekeeper acceptance on a *second* Mac:
+
+```bash
+spctl -a -vvv -t install Yanshi.app      # → "accepted", source "Notarized Developer ID"
+xcrun stapler validate Yanshi.app        # → "The validate action worked!"
+```
+
+This is the automated counterpart to the manual "Codesign & Notarization" commands above; either
+path produces the same signed/notarized artifact.
+
 ## Provider API Key Storage
 
 The provider API key is never stored inline in SQLite. `set_provider_settings` writes the
