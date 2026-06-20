@@ -203,11 +203,11 @@ sandbox); Apple Developer ID is needed only for public signing/notarization.
 | Area | Honest state |
 | --- | --- |
 | Public macOS release | Pending Developer ID signing, notarization, stapling, and Gatekeeper second-machine verification. |
-| ACP External Agents | Foundation: stdio launch + `initialize` handshake. Prompt/session/tool/permission routing is planned. |
-| MCP Servers | Configuration persists honestly. Runtime MCP client and tool discovery are planned. |
+| ACP External Agents | A whole run can be routed to a connected stdio agent (`session/new` + `session/prompt`, streaming its reply). Tool/permission call-back, multi-turn sessions, and custom protocol are planned. |
+| MCP Servers | Stdio MCP servers connect and discover their tools live (`initialize` + `tools/list`). Tool invocation by the agent and HTTP/SSE transport are planned. |
 | Browser tool | Requires Playwright Chromium provisioning when missing. |
 | Computer Use | Requires macOS Accessibility / Screen Recording for full control and screenshots. |
-| Native providers | OpenAI-compatible path works; native Anthropic / Gemini are planned. |
+| Native providers | OpenAI-compatible and native Anthropic (Messages API) both work, selectable by provider type; native Gemini is planned. |
 | Atelier workers | 2D generated SVG standees + fallback are real; richer sprite/Lottie/3D animation and pathfinding are future work. |
 | Chat continuation | Real: finished runs reopen as history and follow-up turns thread onto the same run, carrying prior conversation forward. |
 
