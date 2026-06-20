@@ -9,13 +9,38 @@ vi.mock("../i18n", () => ({
 }));
 
 const mockSave = vi.fn().mockResolvedValue(true);
+const mockCreateRun = vi.fn().mockResolvedValue(undefined);
 
-// Mock the store hook to return all fields consumed by both McpServersSection and ProvidersSection.
+// Mock the store hook to return all fields consumed by ExternalAgentsSection, McpServersSection,
+// and ProvidersSection.
 vi.mock("../stores/runtimeStore", () => ({
   useRuntimeStore: () => ({
-    // Fields for McpServersSection
+    // Fields for ExternalAgentsSection
     aiIntegrations: {
-      externalAgents: [],
+      externalAgents: [
+        {
+          id: "ea_connected",
+          name: "ConnectedAgent",
+          protocol: "acp",
+          command: "npx my-agent",
+          args: [],
+          env: {},
+          enabled: true,
+          status: "connected",
+          capabilities: [],
+        },
+        {
+          id: "ea_configured",
+          name: "ConfiguredAgent",
+          protocol: "acp",
+          command: "npx other-agent",
+          args: [],
+          env: {},
+          enabled: false,
+          status: "configured",
+          capabilities: [],
+        },
+      ],
       mcpServers: [
         {
           id: "m1",
@@ -36,6 +61,8 @@ vi.mock("../stores/runtimeStore", () => ({
     disconnectMcpServer: vi.fn(),
     connectExternalAgent: vi.fn(),
     disconnectExternalAgent: vi.fn(),
+    createRun: mockCreateRun,
+    activeProjectId: "proj_1",
     // Fields for ProvidersSection / ProviderConfigDialog
     providerSettings: {
       baseUrl: "https://api.openai.com/v1",
@@ -52,7 +79,7 @@ vi.mock("../stores/runtimeStore", () => ({
   }),
 }));
 
-import { McpServersSection, ProvidersSection } from "./ai-integrations";
+import { ExternalAgentsSection, McpServersSection, ProvidersSection } from "./ai-integrations";
 
 describe("MCP section", () => {
   afterEach(() => {
@@ -146,6 +173,54 @@ describe("ProvidersSection provider type", () => {
     await vi.waitFor(() => {
       expect(mockSave).toHaveBeenCalledWith(
         expect.objectContaining({ providerType: "anthropic" }),
+      );
+    });
+  });
+});
+
+describe("ExternalAgentsSection — Run a task", () => {
+  afterEach(() => {
+    cleanup();
+    mockCreateRun.mockClear();
+  });
+
+  it("shows 'Run a task' button only for the connected agent, not the configured one", () => {
+    render(<ExternalAgentsSection />);
+    // The connected agent should have a "Run a task" icon-action button.
+    const runButtons = screen.getAllByRole("button", { name: "integrations.runTask" });
+    expect(runButtons).toHaveLength(1);
+  });
+
+  it("does not show 'Run a task' button for a non-connected agent", () => {
+    render(<ExternalAgentsSection />);
+    // Both agents are rendered; only 1 run button should exist (for the connected one).
+    // Verify the configured agent does NOT add another run button.
+    expect(screen.queryAllByRole("button", { name: "integrations.runTask" })).toHaveLength(1);
+  });
+
+  it("opens the run-task dialog when clicking 'Run a task'", () => {
+    render(<ExternalAgentsSection />);
+    const runBtn = screen.getByRole("button", { name: "integrations.runTask" });
+    fireEvent.click(runBtn);
+    // The modal should now show the task placeholder textarea.
+    expect(screen.getByPlaceholderText("integrations.runTaskPlaceholder")).toBeInTheDocument();
+  });
+
+  it("calls createRun with the task text and agent id as the 7th argument", async () => {
+    render(<ExternalAgentsSection />);
+    fireEvent.click(screen.getByRole("button", { name: "integrations.runTask" }));
+    const textarea = screen.getByPlaceholderText("integrations.runTaskPlaceholder");
+    fireEvent.change(textarea, { target: { value: "Do something cool" } });
+    fireEvent.click(screen.getByRole("button", { name: "integrations.runTaskRun" }));
+    await vi.waitFor(() => {
+      expect(mockCreateRun).toHaveBeenCalledWith(
+        "Do something cool",
+        "default",
+        "proj_1",
+        false,
+        undefined,
+        undefined,
+        "ea_connected",
       );
     });
   });

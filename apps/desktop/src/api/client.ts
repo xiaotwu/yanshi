@@ -161,6 +161,7 @@ export const runtimeApi = {
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
     parentRunId?: string | null,
+    externalAgentId?: string | null,
   ) =>
     request<RunSummary>("/runs", {
       method: "POST",
@@ -171,6 +172,7 @@ export const runtimeApi = {
         ...(planFirst ? { planFirst } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(parentRunId ? { parentRunId } : {}),
+        ...(externalAgentId ? { externalAgentId } : {}),
       }),
     }),
   projectFiles: (projectId: string) => request<ProjectFilesResult>(`/projects/${projectId}/files`),

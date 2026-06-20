@@ -3,6 +3,7 @@ import {
   Bot,
   Cloud,
   HardDrive,
+  Play,
   Plug,
   Plus,
   Save,
@@ -138,8 +139,9 @@ function IconAction({
 
 export function ExternalAgentsSection() {
   const { t } = useT();
-  const { aiIntegrations, saveAiIntegrations, loadAiIntegrations, loading } = useRuntimeStore();
+  const { aiIntegrations, saveAiIntegrations, loadAiIntegrations, loading, createRun, activeProjectId } = useRuntimeStore();
   const [editing, setEditing] = useState<ExternalAgentConfig | null>(null);
+  const [runningAgent, setRunningAgent] = useState<ExternalAgentConfig | null>(null);
 
   useEffect(() => {
     if (!aiIntegrations) void loadAiIntegrations();
@@ -174,6 +176,9 @@ export function ExternalAgentsSection() {
             switchControl={<Switch checked={agent.enabled} onChange={(enabled) => setEnabled(agent, enabled)} ariaLabel={agent.name} disabled={loading} />}
           >
             <StatusBadge status={agent.status} />
+            {agent.status === "connected" && (
+              <IconAction icon={Play} label={t("integrations.runTask")} onClick={() => setRunningAgent(agent)} />
+            )}
           </IntegrationCard>
         ))}
       </div>
@@ -199,7 +204,52 @@ export function ExternalAgentsSection() {
           onClose={() => setEditing(null)}
         />
       )}
+      {runningAgent && (
+        <RunTaskDialog
+          agent={runningAgent}
+          onRun={(task) => void createRun(task, "default", activeProjectId ?? null, false, undefined, undefined, runningAgent.id)}
+          onClose={() => setRunningAgent(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function RunTaskDialog({
+  agent,
+  onRun,
+  onClose,
+}: {
+  agent: ExternalAgentConfig;
+  onRun: (task: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useT();
+  const [task, setTask] = useState("");
+
+  const submit = () => {
+    if (!task.trim()) return;
+    onRun(task.trim());
+    onClose();
+  };
+
+  return (
+    <Modal onClose={onClose} size="md" labelledBy="run-task-dialog-title">
+      <ModalHeader title={`${t("integrations.runTask")} · ${agent.name}`} id="run-task-dialog-title" onClose={onClose} />
+      <div className="modal-body settings-form rows">
+        <textarea
+          value={task}
+          onChange={(event) => setTask(event.target.value)}
+          placeholder={t("integrations.runTaskPlaceholder")}
+          rows={4}
+          data-autofocus
+          spellCheck={false}
+        />
+      </div>
+      <div className="modal-actions icons">
+        <IconAction icon={Play} label={t("integrations.runTaskRun")} onClick={submit} disabled={!task.trim()} accent />
+      </div>
+    </Modal>
   );
 }
 

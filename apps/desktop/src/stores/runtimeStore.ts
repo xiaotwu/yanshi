@@ -63,6 +63,7 @@ interface RuntimeStore {
     planFirst?: boolean,
     reasoning?: "low" | "medium" | "high" | "extra_high",
     parentRunId?: string | null,
+    externalAgentId?: string | null,
   ) => Promise<void>;
   /** Continue the currently-open chat with a follow-up turn (threaded to the active run). */
   continueChat: (task: string) => Promise<void>;
@@ -359,11 +360,11 @@ export const useRuntimeStore = create<RuntimeStore>((set, get) => ({
     }
   },
 
-  createRun: async (task, permissionMode, projectId, planFirst, reasoning, parentRunId) => {
+  createRun: async (task, permissionMode, projectId, planFirst, reasoning, parentRunId, externalAgentId) => {
     set({ loading: true, error: null });
     try {
       const previousProjectId = get().activeProjectId;
-      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning, parentRunId);
+      const run = await runtimeApi.createRun(task, permissionMode, projectId, planFirst, reasoning, parentRunId, externalAgentId);
       const [runs, approvals] = await Promise.all([runtimeApi.runs(), runtimeApi.approvals()]);
       const nextProjectId = projectId === undefined ? previousProjectId : (projectId ?? null);
       set({
