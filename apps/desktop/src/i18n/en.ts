@@ -504,7 +504,7 @@ export const en = {
   "integrations.mcp.intro": "Connect tools and context through Model Context Protocol.",
   "integrations.mcp.empty": "No MCP servers yet.",
   "integrations.mcp.add": "Add Server",
-  "integrations.mcp.honest": "MCP runtime connection is not implemented yet — configurations are saved and statuses stay honest; discovered tools are never faked.",
+  "integrations.mcp.honest": "Stdio MCP servers connect and discover tools live (HTTP/SSE not yet). Configs are saved, statuses are honest, and discovered tools are never faked.",
   "integrations.skills.title": "Skills",
   "integrations.skills.intro": "Reusable behaviors and instructions for Yanshi agents.",
   "integrations.skills.builtIn": "Built-in",

@@ -504,7 +504,7 @@ export const zh: Record<TKey, string> = {
   "integrations.mcp.intro": "通过 Model Context Protocol 连接工具和上下文。",
   "integrations.mcp.empty": "还没有 MCP 服务器。",
   "integrations.mcp.add": "添加服务器",
-  "integrations.mcp.honest": "MCP 运行时连接尚未实现：配置会被保存，状态如实显示，不会伪造工具列表。",
+  "integrations.mcp.honest": "stdio MCP 服务器可连接并实时发现工具（HTTP/SSE 暂未支持）。配置会被保存，状态如实显示，工具列表绝不伪造。",
   "integrations.skills.title": "技能",
   "integrations.skills.intro": "供偃师 Agent 使用的可复用能力与指令。",
   "integrations.skills.builtIn": "内置",
