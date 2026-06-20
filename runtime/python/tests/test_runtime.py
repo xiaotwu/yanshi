@@ -1325,6 +1325,7 @@ def test_provider_settings_persist_without_returning_api_key(tmp_path: Path) -> 
         "baseUrl": "http://127.0.0.1:9999/v1",
         "model": "yanshi-test-model",
         "apiKeyConfigured": True,
+        "providerType": "openai",
     }
     assert "secret-key" not in response.text
 
@@ -3385,4 +3386,28 @@ def test_anthropic_configured_requires_key() -> None:
     from yanshi_runtime.providers.anthropic import AnthropicProvider
     assert AnthropicProvider(_anthropic_cfg("http://127.0.0.1:1", key="sk")).configured is True
     assert AnthropicProvider(_anthropic_cfg("http://127.0.0.1:1", key="")).configured is False
+
+
+def test_provider_type_persists_and_rebuilds_to_anthropic(tmp_path: Path) -> None:
+    client = make_client(tmp_path)  # the existing helper
+    # Switch to Anthropic.
+    client.put("/settings/provider", json={"providerType": "anthropic", "baseUrl": "https://api.anthropic.com", "model": "claude-a", "apiKey": "sk-test"})
+    public = client.get("/settings/provider").json()
+    assert public["providerType"] == "anthropic"
+    # The live provider was rebuilt to the Anthropic implementation.
+    service = client.app.state.runtime_service
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    assert isinstance(service.provider, AnthropicProvider)
+    assert service.graph.provider is service.provider  # graph got the swapped instance
+
+
+def test_build_provider_selects_by_type() -> None:
+    from yanshi_runtime.providers import build_provider
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    from yanshi_runtime.providers.openai_compatible import OpenAICompatibleProvider, ProviderConfig
+    a = build_provider(ProviderConfig(base_url="https://x", model="m", api_key="k", provider_type="anthropic"))
+    o = build_provider(ProviderConfig(base_url="https://x", model="m", api_key="k", provider_type="openai"))
+    assert isinstance(a, AnthropicProvider)
+    assert isinstance(o, OpenAICompatibleProvider)
+    assert isinstance(build_provider(None), OpenAICompatibleProvider)
     assert AnthropicProvider(None).configured is False

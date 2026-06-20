@@ -321,12 +321,14 @@ class ProviderSettingsUpdate(BaseModel):
     baseUrl: str = "https://api.openai.com/v1"
     model: str
     apiKey: str | None = None
+    providerType: str = "openai"
 
 
 class ProviderSettingsPublic(BaseModel):
     baseUrl: str = "https://api.openai.com/v1"
     model: str | None = None
     apiKeyConfigured: bool = False
+    providerType: str = "openai"
 
 
 class ProviderHealth(BaseModel):

@@ -57,7 +57,7 @@ from yanshi_runtime.models import (
     WorkshopPackEnableRequest,
     WorkshopPackSummary,
 )
-from yanshi_runtime.providers import OpenAICompatibleProvider, ProviderConfig
+from yanshi_runtime.providers import build_provider, OpenAICompatibleProvider, ProviderConfig
 from yanshi_runtime.storage import Storage
 from yanshi_runtime.workshop import WorkshopPackValidator
 from yanshi_runtime.workshop.packs import MAX_WORKSHOP_UPLOAD_BYTES, is_zip_symlink, safe_archive_path
@@ -99,7 +99,7 @@ class RuntimeService:
         self.api_token = resolve_api_token(settings)
         self.storage = Storage(settings.database_path, settings.runtime_version)
         self._seed_provider_from_env()
-        self.provider = OpenAICompatibleProvider(ProviderConfig.from_secret_settings(self.storage.get_provider_settings_secret()))
+        self.provider = build_provider(ProviderConfig.from_secret_settings(self.storage.get_provider_settings_secret()))
         self.graph = RuntimeGraph(
             storage=self.storage,
             checkpoint_path=settings.checkpoint_path,
@@ -429,11 +429,15 @@ class RuntimeService:
             base_url=request.baseUrl,
             model=request.model,
             api_key=request.apiKey,
+            provider_type=request.providerType,
         )
-        self.provider.update_config(ProviderConfig.from_secret_settings(self.storage.get_provider_settings_secret()))
+        # Rebuild the provider (the type may have changed — that needs a new instance, not update_config)
+        # and hand the same instance to the graph so runs use it immediately.
+        self.provider = build_provider(ProviderConfig.from_secret_settings(self.storage.get_provider_settings_secret()))
+        self.graph.provider = self.provider
         self.storage.append_event(
             "runtime.status.changed",
-            payload={"status": "provider.updated", "baseUrl": settings.baseUrl, "model": settings.model},
+            payload={"status": "provider.updated", "baseUrl": settings.baseUrl, "model": settings.model, "providerType": settings.providerType},
         )
         return settings
 

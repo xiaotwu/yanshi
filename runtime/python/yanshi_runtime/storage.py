@@ -1684,17 +1684,12 @@ class Storage:
         return json.loads(row["value_json"] or "{}")
 
     @locked_storage_method
-    def set_provider_settings(self, *, base_url: str, model: str, api_key: str | None) -> ProviderSettingsPublic:
+    def set_provider_settings(self, *, base_url: str, model: str, api_key: str | None, provider_type: str = "openai") -> ProviderSettingsPublic:
         existing = self.get_setting("provider") or {}
         api_key_ref = existing.get("apiKeyRef")
         if api_key is not None:
             api_key_ref = self.secret_store.set_secret(PROVIDER_API_KEY_SECRET, api_key)
-        next_value = {
-            "baseUrl": base_url.rstrip("/"),
-            "model": model,
-            "apiKeyRef": api_key_ref,
-        }
-        # Never persist the raw key in SQLite.
+        next_value = {"baseUrl": base_url.rstrip("/"), "model": model, "apiKeyRef": api_key_ref, "providerType": provider_type}
         next_value.pop("apiKey", None)
         self.set_setting("provider", next_value)
         return self.get_provider_settings_public()
@@ -1708,7 +1703,7 @@ class Storage:
         # fully usable with just an endpoint + model. Resolve the key when present.
         ref = value.get("apiKeyRef")
         api_key = self.secret_store.get_secret(ref) if ref else ""
-        return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key or ""}
+        return {"baseUrl": value["baseUrl"], "model": value["model"], "apiKey": api_key or "", "providerType": value.get("providerType") or "openai"}
 
     @locked_storage_method
     def get_provider_settings_public(self) -> ProviderSettingsPublic:
@@ -1717,6 +1712,7 @@ class Storage:
             baseUrl=value.get("baseUrl") or "https://api.openai.com/v1",
             model=value.get("model"),
             apiKeyConfigured=bool(value.get("apiKeyRef")),
+            providerType=value.get("providerType") or "openai",
         )
 
     @locked_storage_method
