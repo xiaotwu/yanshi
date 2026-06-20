@@ -62,6 +62,7 @@ class ProviderConfig:
     base_url: str
     model: str
     api_key: str
+    provider_type: str = "openai"
 
     @classmethod
     def from_secret_settings(cls, value: dict[str, Any] | None) -> "ProviderConfig | None":
@@ -73,9 +74,10 @@ class ProviderConfig:
         # vLLM/SGLang) are keyless. A provider is "configured" once it has an endpoint and
         # a model; auth is only sent when a key is present.
         api_key = str(value.get("apiKey") or "")
+        provider_type = str(value.get("providerType") or "openai")
         if not (base_url and model):
             return None
-        return cls(base_url=base_url, model=model, api_key=api_key)
+        return cls(base_url=base_url, model=model, api_key=api_key, provider_type=provider_type)
 
 
 class OpenAICompatibleProvider:

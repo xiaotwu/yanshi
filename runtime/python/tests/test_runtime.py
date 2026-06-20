@@ -9,6 +9,7 @@ import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -3293,3 +3294,95 @@ def test_mcp_http_server_stays_not_implemented(tmp_path: Path) -> None:
     }]})
     at_rest = client.get("/settings/integrations").json()
     assert at_rest["mcpServers"][0]["status"] == "not_implemented"
+
+
+# ---------------------------------------------------------------------------
+# AnthropicProvider — loopback fake-server tests
+# ---------------------------------------------------------------------------
+
+@contextmanager
+def FakeAnthropicServer(*, models=("claude-b", "claude-a"), answer="Hello from Claude", stream_text="Hi", status=200):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *a):  # silence
+            pass
+
+        def _send(self, code, body: dict):
+            payload = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_GET(self):
+            if self.path == "/v1/models":
+                self._send(status, {"data": [{"id": m} for m in models]})
+            else:
+                self._send(404, {})
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if self.path != "/v1/messages":
+                self._send(404, {})
+                return
+            if body.get("stream"):
+                # Minimal Anthropic SSE: one content_block_delta then message_stop.
+                self.send_response(status)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(b"event: content_block_delta\n")
+                self.wfile.write(("data: " + json.dumps({"type": "content_block_delta", "delta": {"type": "text_delta", "text": stream_text}}) + "\n\n").encode())
+                self.wfile.write(b"event: message_stop\n")
+                self.wfile.write(("data: " + json.dumps({"type": "message_stop"}) + "\n\n").encode())
+                self.wfile.flush()
+            else:
+                self._send(status, {"content": [{"type": "text", "text": answer}], "role": "assistant"})
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+
+
+def _anthropic_cfg(base_url: str, *, key: str = "sk-test"):
+    from yanshi_runtime.providers.openai_compatible import ProviderConfig
+    return ProviderConfig(base_url=base_url, model="claude-a", api_key=key, provider_type="anthropic")
+
+
+def test_anthropic_chat_completion_translates_and_parses() -> None:
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    from yanshi_runtime.models import ChatMessage
+    with FakeAnthropicServer(answer="42") as base:
+        provider = AnthropicProvider(_anthropic_cfg(base))
+        out = provider.chat_completion([ChatMessage(role="system", content="be terse"), ChatMessage(role="user", content="q")])
+    assert out == "42"
+
+
+def test_anthropic_stream_yields_text_deltas() -> None:
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    from yanshi_runtime.models import ChatMessage
+    with FakeAnthropicServer(stream_text="streamed") as base:
+        provider = AnthropicProvider(_anthropic_cfg(base))
+        chunks = list(provider.stream_chat_completion([ChatMessage(role="user", content="q")]))
+    assert "".join(chunks) == "streamed"
+
+
+def test_anthropic_list_models_sorted_and_honest() -> None:
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    with FakeAnthropicServer(models=("claude-b", "claude-a")) as base:
+        assert AnthropicProvider(_anthropic_cfg(base)).list_models() == ["claude-a", "claude-b"]
+    with FakeAnthropicServer(status=500) as base:
+        assert AnthropicProvider(_anthropic_cfg(base)).list_models() == []
+    from yanshi_runtime.providers.anthropic import AnthropicProvider as AP
+    assert AP(None).list_models() == []
+
+
+def test_anthropic_configured_requires_key() -> None:
+    from yanshi_runtime.providers.anthropic import AnthropicProvider
+    assert AnthropicProvider(_anthropic_cfg("http://127.0.0.1:1", key="sk")).configured is True
+    assert AnthropicProvider(_anthropic_cfg("http://127.0.0.1:1", key="")).configured is False
+    assert AnthropicProvider(None).configured is False
