@@ -574,20 +574,21 @@ export interface ProviderCatalogEntry {
   status: ProviderStatus;
   caps: Cap[];
   hint?: string;
+  providerType?: "openai" | "anthropic";
 }
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
-  { id: "openai", name: "OpenAI", local: false, status: "available", caps: ["reasoning", "tools", "vision", "streaming"], hint: "https://api.openai.com/v1" },
-  { id: "openai-compatible", name: "OpenAI Compatible", local: false, status: "available", caps: ["reasoning", "tools", "vision", "streaming"] },
-  { id: "anthropic", name: "Anthropic", local: false, status: "notImplemented", caps: ["reasoning", "tools", "vision", "streaming"] },
+  { id: "openai", name: "OpenAI", local: false, status: "available", caps: ["reasoning", "tools", "vision", "streaming"], hint: "https://api.openai.com/v1", providerType: "openai" },
+  { id: "openai-compatible", name: "OpenAI Compatible", local: false, status: "available", caps: ["reasoning", "tools", "vision", "streaming"], providerType: "openai" },
+  { id: "anthropic", name: "Anthropic", local: false, status: "available", caps: ["reasoning", "tools", "vision", "streaming"], hint: "https://api.anthropic.com", providerType: "anthropic" },
   { id: "gemini", name: "Google Gemini", local: false, status: "notImplemented", caps: ["reasoning", "tools", "vision", "streaming"] },
-  { id: "openrouter", name: "OpenRouter", local: false, status: "customEndpoint", caps: ["tools", "vision", "streaming"], hint: "https://openrouter.ai/api/v1" },
-  { id: "deepseek", name: "DeepSeek", local: false, status: "customEndpoint", caps: ["reasoning", "tools", "streaming"], hint: "https://api.deepseek.com/v1" },
-  { id: "mistral", name: "Mistral", local: false, status: "customEndpoint", caps: ["tools", "streaming"], hint: "https://api.mistral.ai/v1" },
-  { id: "ollama", name: "Ollama", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:11434/v1" },
-  { id: "lmstudio", name: "LM Studio", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:1234/v1" },
-  { id: "vllm", name: "vLLM / SGLang", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:8000/v1" },
-  { id: "custom", name: "Custom provider", local: false, status: "customEndpoint", caps: [] },
+  { id: "openrouter", name: "OpenRouter", local: false, status: "customEndpoint", caps: ["tools", "vision", "streaming"], hint: "https://openrouter.ai/api/v1", providerType: "openai" },
+  { id: "deepseek", name: "DeepSeek", local: false, status: "customEndpoint", caps: ["reasoning", "tools", "streaming"], hint: "https://api.deepseek.com/v1", providerType: "openai" },
+  { id: "mistral", name: "Mistral", local: false, status: "customEndpoint", caps: ["tools", "streaming"], hint: "https://api.mistral.ai/v1", providerType: "openai" },
+  { id: "ollama", name: "Ollama", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:11434/v1", providerType: "openai" },
+  { id: "lmstudio", name: "LM Studio", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:1234/v1", providerType: "openai" },
+  { id: "vllm", name: "vLLM / SGLang", local: true, status: "customEndpoint", caps: ["tools", "streaming"], hint: "http://localhost:8000/v1", providerType: "openai" },
+  { id: "custom", name: "Custom provider", local: false, status: "customEndpoint", caps: [], providerType: "openai" },
 ];
 
 const PREFERRED_ACTIONS = ["chat", "coding", "everyday"] as const;
@@ -597,9 +598,12 @@ export function ProvidersSection() {
   const { providerSettings, appSettings } = useRuntimeStore();
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null);
 
-  // The single active provider config is OpenAI-compatible; the catalog row whose hint matches the
-  // saved base URL (or the generic compatible row) is the "active" one.
-  const activeId = PROVIDER_CATALOG.find((entry) => entry.hint && providerSettings?.baseUrl === entry.hint)?.id ?? "openai-compatible";
+  // The active catalog entry is matched first by hint (baseUrl), then by providerType, then falls
+  // back to the generic OpenAI-compatible row.
+  const activeId =
+    PROVIDER_CATALOG.find((entry) => entry.hint && providerSettings?.baseUrl === entry.hint)?.id ??
+    (providerSettings?.providerType ? PROVIDER_CATALOG.find((entry) => entry.providerType === providerSettings.providerType && entry.hint)?.id : undefined) ??
+    "openai-compatible";
   const preferredActions = appSettings?.preferredActions ?? {};
 
   return (
@@ -647,7 +651,13 @@ function ProviderConfigDialog({ entry, isActive, onClose }: { entry: ProviderCat
   const preferredActions = appSettings?.preferredActions ?? {};
 
   const save = async () => {
-    const ok = await saveProviderSettings({ baseUrl: baseUrl.trim(), model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
+    const providerType = entry.providerType;
+    const ok = await saveProviderSettings({
+      baseUrl: baseUrl.trim(),
+      model: model.trim(),
+      ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+      ...(providerType ? { providerType } : {}),
+    });
     setApiKey("");
     if (ok) notify(t("notice.providerSaved"));
   };

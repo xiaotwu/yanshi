@@ -125,7 +125,7 @@ export const runtimeApi = {
   disconnectMcpServer: (id: string) =>
     request<AiIntegrationsConfig>(`/settings/integrations/mcp/${id}/disconnect`, { method: "POST", body: "{}" }),
   providerSettings: () => request<ProviderSettingsPublic>("/settings/provider"),
-  updateProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) =>
+  updateProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string; providerType?: "openai" | "anthropic" }) =>
     request<ProviderSettingsPublic>("/settings/provider", {
       method: "PUT",
       body: JSON.stringify(settings),

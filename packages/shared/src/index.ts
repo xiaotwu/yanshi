@@ -161,6 +161,7 @@ export interface ProviderSettingsPublic {
   baseUrl: string;
   model?: string | null;
   apiKeyConfigured: boolean;
+  providerType?: "openai" | "anthropic" | null;
 }
 
 export interface ProviderHealth {

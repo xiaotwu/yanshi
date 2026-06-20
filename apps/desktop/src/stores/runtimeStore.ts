@@ -78,7 +78,7 @@ interface RuntimeStore {
   cancelRun: (runId: string) => Promise<void>;
   restartRuntime: () => Promise<void>;
   refreshMacosPermissions: () => Promise<void>;
-  saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string }) => Promise<boolean>;
+  saveProviderSettings: (settings: { baseUrl: string; model: string; apiKey?: string; providerType?: "openai" | "anthropic" }) => Promise<boolean>;
   checkProviderHealth: () => Promise<void>;
   saveAppSettings: (settings: Partial<AppSettings>) => Promise<void>;
   loadAiIntegrations: () => Promise<void>;
