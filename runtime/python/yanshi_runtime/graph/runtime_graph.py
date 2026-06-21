@@ -524,6 +524,115 @@ class RuntimeGraph:
         self._clear_partial(run_id)
         return state
 
+    def _decide_node(self, state: GraphState) -> GraphState:
+        """ReAct-loop entry node: one-time setup on step 0, then call the manager for the next action.
+
+        On step 0:
+          - ensure the agent team exists and emit run.started
+          - initialise observations=[], step=0, max_steps from settings
+
+        On every step:
+          - call _provider_next_action to get {"action":"answer","text"} or {"action":"assign",...}
+          - set next_action and risk_level (via policy.decide on the assigned task)
+          - on ProviderCallError or malformed output set provider_failed=True and write
+            the same ErrorObservation that _manager_node writes on plan failure, next_action=None
+        """
+        run_id = state["run_id"]
+        task = state["task"]
+        permission_mode = state.get("permission_mode", "default")
+
+        # --- one-time setup on first step ---
+        if not state.get("step"):
+            try:
+                self.storage.ensure_agent_team(self._project_id_for(run_id))
+            except Exception:  # noqa: BLE001
+                pass
+            self.storage.append_event("run.started", run_id=run_id, payload={"task": task})
+            state = {
+                **state,
+                "observations": [],
+                "step": 0,
+                "max_steps": self.storage.get_app_settings().maxAgentSteps,
+            }
+
+        observations = state.get("observations") or []
+        reasoning = state.get("reasoning", "medium")
+        project_id = self._project_id_for(run_id)
+
+        try:
+            next_action = self._provider_next_action(task, observations, reasoning, project_id)
+        except (ProviderCallError, ValueError, json.JSONDecodeError) as exc:
+            summary = f"Manager could not decide next action: {exc}"
+            action_id = self.storage.create_action(
+                run_id,
+                "PlanAction",
+                "low",
+                {"task": task, "permissionMode": permission_mode},
+                agent_id="agent_manager",
+            )
+            self.storage.complete_action(action_id, run_id, status="failed", agent_id="agent_manager")
+            self.storage.create_observation(
+                run_id,
+                "ErrorObservation",
+                summary,
+                action_id=action_id,
+                agent_id="agent_manager",
+                structured_output={"missingRequirement": "structured_manager_plan"},
+                error="manager_plan_failed",
+            )
+            return {
+                **state,
+                "risk_level": "low",
+                "provider_failed": True,
+                "result_summary": summary,
+                "next_action": None,
+            }
+
+        # Determine risk_level from the assign task (or the top-level task for answer actions).
+        if next_action["action"] == "assign":
+            assign_task = next_action.get("task", task)
+        else:
+            assign_task = task
+        decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
+
+        return {
+            **state,
+            "next_action": next_action,
+            "risk_level": decision.risk_level,
+            "approval_required": decision.requires_approval,
+        }
+
+    def _route_after_decide(self, state: GraphState) -> Literal["permission_gate", "act", "finalizer"]:
+        """Route after _decide_node.
+
+        → finalizer: cancelled, provider_failed, next_action is None, action=="answer", step >= max_steps
+        → permission_gate: assign action where policy.decide requires approval (same gating as
+          _route_after_manager so high-risk actions are always intercepted consistently)
+        → act: assign action that may proceed directly
+        """
+        run_id = state.get("run_id", "")
+        if self._is_cancelled(run_id):
+            return "finalizer"
+        if state.get("provider_failed"):
+            return "finalizer"
+        next_action = state.get("next_action")
+        if next_action is None:
+            return "finalizer"
+        if next_action.get("action") == "answer":
+            return "finalizer"
+        step = state.get("step", 0)
+        max_steps = state.get("max_steps", 8)
+        if step >= max_steps:
+            return "finalizer"
+        # assign action — gate identically to _route_after_manager by re-running policy.decide
+        # on the sub-task so high-risk tool assignments are always intercepted.
+        permission_mode = state.get("permission_mode", "default")
+        assign_task = next_action.get("task", state.get("task", ""))
+        decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
+        if decision.requires_approval:
+            return "permission_gate"
+        return "act"
+
     def _route_after_manager(self, state: GraphState) -> Literal["permission_gate", "execute", "finalizer"]:
         if state.get("blocked"):
             return "finalizer"

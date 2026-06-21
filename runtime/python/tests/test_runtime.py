@@ -3533,3 +3533,36 @@ def test_provider_next_action_parses_answer_and_assign(tmp_path: Path) -> None:
     graph.provider = _DecideProvider('{"action":"assign","agentId":"agent_file","task":"list files"}')
     out2 = graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
     assert out2["action"] == "assign" and out2["agentId"] == "agent_file"
+
+
+def test_route_after_decide(tmp_path: Path) -> None:
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.providers import OpenAICompatibleProvider
+    from yanshi_runtime.storage import Storage
+
+    storage = Storage(tmp_path / "db.sqlite", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "cp.sqlite",
+        workspace_root=tmp_path / "ws",
+        provider=OpenAICompatibleProvider(None),
+    )
+    base = {"run_id": "r", "step": 0, "max_steps": 8, "permission_mode": "default", "approval_required": False}
+
+    # answer → finalizer
+    assert graph._route_after_decide({**base, "next_action": {"action": "answer", "text": "x"}}) == "finalizer"
+    # assign, step < max_steps, no approval → act
+    assert graph._route_after_decide({**base, "next_action": {"action": "assign", "agentId": "agent_file", "task": "t"}}) == "act"
+    # step >= max_steps → finalizer
+    assert graph._route_after_decide({**base, "step": 8, "next_action": {"action": "assign", "agentId": "agent_file", "task": "t"}}) == "finalizer"
+    # provider_failed → finalizer
+    assert graph._route_after_decide({**base, "provider_failed": True, "next_action": None}) == "finalizer"
+    # next_action is None → finalizer
+    assert graph._route_after_decide({**base, "next_action": None}) == "finalizer"
+    # cancelled → finalizer
+    graph.request_cancel("r")
+    assert graph._route_after_decide({**base, "next_action": {"action": "assign", "agentId": "agent_file", "task": "t"}}) == "finalizer"
+    graph._cancelled.discard("r")
+    # assign with high-risk task in default mode → permission_gate (requires_approval=True)
+    high_risk_base = {**base, "permission_mode": "default"}
+    assert graph._route_after_decide({**high_risk_base, "next_action": {"action": "assign", "agentId": "agent_terminal", "task": "delete the file"}}) == "permission_gate"
