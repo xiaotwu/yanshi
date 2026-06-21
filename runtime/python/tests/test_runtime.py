@@ -3566,3 +3566,48 @@ def test_route_after_decide(tmp_path: Path) -> None:
     # assign with high-risk task in default mode → permission_gate (requires_approval=True)
     high_risk_base = {**base, "permission_mode": "default"}
     assert graph._route_after_decide({**high_risk_base, "next_action": {"action": "assign", "agentId": "agent_terminal", "task": "delete the file"}}) == "permission_gate"
+
+
+def test_act_node_appends_observation_and_increments_step(tmp_path: Path) -> None:
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.providers import OpenAICompatibleProvider
+    from yanshi_runtime.storage import Storage
+
+    workspace = tmp_path / "ws" / "default"
+    workspace.mkdir(parents=True)
+    (workspace / "readme.txt").write_text("hi", encoding="utf-8")
+
+    storage = Storage(tmp_path / "db.sqlite", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "cp.sqlite",
+        workspace_root=tmp_path / "ws",
+        provider=OpenAICompatibleProvider(None),
+    )
+
+    run = storage.create_run("list workspace files")
+    run_id = run.id
+    storage.update_run(run_id, status="running")
+
+    file_assignment = {"agentId": "agent_file", "task": "list workspace files"}
+    state = {
+        "run_id": run_id,
+        "task": "list workspace files",
+        "permission_mode": "default",
+        "risk_level": "low",
+        "observations": [],
+        "step": 0,
+        "max_steps": 8,
+        "next_action": {"action": "assign", **file_assignment},
+        "agent_tasks": [],
+    }
+
+    result_state = graph._act_node(state)
+
+    observations = result_state["observations"]
+    assert len(observations) == 1, f"Expected 1 observation, got {len(observations)}"
+    obs = observations[0]
+    assert obs["agentId"] == "agent_file"
+    assert isinstance(obs["ok"], bool)
+    assert isinstance(obs["summary"], str) and obs["summary"]
+    assert result_state["step"] == 1

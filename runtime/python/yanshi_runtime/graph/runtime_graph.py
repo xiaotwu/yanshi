@@ -633,6 +633,23 @@ class RuntimeGraph:
             return "permission_gate"
         return "act"
 
+    def _act_node(self, state: GraphState) -> GraphState:
+        """ReAct-loop act node: execute ONE tool assignment from next_action, append a compact
+        observation to state["observations"], and increment state["step"].
+
+        Delegates entirely to the existing _execute_tool_assignment — no gating or execution
+        logic is reimplemented here.
+        """
+        assignment = state["next_action"]
+        result = self._execute_tool_assignment(state, assignment)
+        obs = list(state.get("observations") or [])
+        obs.append({
+            "agentId": result["agent_id"],
+            "ok": result["ok"],
+            "summary": result["summary"],
+        })
+        return {**state, "observations": obs, "step": state.get("step", 0) + 1}
+
     def _route_after_manager(self, state: GraphState) -> Literal["permission_gate", "execute", "finalizer"]:
         if state.get("blocked"):
             return "finalizer"
