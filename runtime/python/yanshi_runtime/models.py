@@ -375,6 +375,7 @@ class AppSettings(BaseModel):
     dockerCpus: str = "1"
     dockerPidsLimit: int = 128
     gpuAcceleration: bool = True
+    maxAgentSteps: int = 8
     # In-app shortcut overrides keyed by command id; defaults live in the frontend.
     shortcuts: dict[str, str] = Field(default_factory=dict)
     profile: UserProfileSettings = Field(default_factory=UserProfileSettings)
@@ -401,6 +402,7 @@ class AppSettingsUpdate(BaseModel):
     dockerCpus: str | None = None
     dockerPidsLimit: int | None = None
     gpuAcceleration: bool | None = None
+    maxAgentSteps: int | None = None
     shortcuts: dict[str, str] | None = None
     profile: UserProfileSettings | None = None
     preferredActions: dict[str, str] | None = None

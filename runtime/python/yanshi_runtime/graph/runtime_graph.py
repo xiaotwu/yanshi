@@ -43,6 +43,10 @@ class GraphState(TypedDict, total=False):
     failure_reviewed: bool
     result_summary: str
     agent_tasks: list[dict[str, Any]]
+    observations: list[dict[str, Any]]
+    step: int
+    max_steps: int
+    next_action: dict[str, Any] | None
 
 
 class AgentExecutionResult(TypedDict, total=False):
@@ -1320,6 +1324,70 @@ class RuntimeGraph:
             if role in candidate:
                 return f"agent_{role}"
         return None
+
+    _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal"}
+
+    def _provider_next_action(
+        self, task: str, observations: list[dict[str, Any]], reasoning: str, project_id: str | None
+    ) -> dict[str, Any]:
+        """Call the manager to decide the next action in the ReAct loop.
+
+        Returns either ``{"action": "answer", "text": str}`` (manager can answer now) or
+        ``{"action": "assign", "agentId": str, "task": str}`` (delegate to a tool agent).
+        Raises ``ValueError`` or ``json.JSONDecodeError`` on malformed output so the caller
+        can fall back.  ``ProviderCallError`` (connectivity) propagates unchanged.
+        """
+        mgr_prof = self.storage.get_project_agent_profile(project_id, "manager")
+        mgr_model = (mgr_prof.model or None) if mgr_prof else None
+        obs_payload = [
+            {"agentId": obs.get("agentId", ""), "summary": str(obs.get("summary", ""))[:500]}
+            for obs in observations
+        ]
+        response = self.provider.chat_completion(
+            [
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "You are Yanshi Manager Agent." + self._agent_persona("agent_manager", project_id) + " "
+                        "Decide the next action as JSON only. "
+                        'Reply with EXACTLY ONE of: {"action":"answer","text":"<final answer>"} '
+                        'or {"action":"assign","agentId":"<id>","task":"<task>"}. '
+                        "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal. "
+                        "Choose answer when you can reply from available observations. "
+                        "Choose assign when you need a tool to gather more information. "
+                        + self._reasoning_directive(reasoning)
+                    ),
+                ),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(
+                        {
+                            "task": task,
+                            "observations": obs_payload,
+                        },
+                        ensure_ascii=False,
+                    ),
+                ),
+            ],
+            model=mgr_model,
+        )
+        payload = self._parse_json_object(response)
+        action = payload.get("action")
+        if action not in {"answer", "assign"}:
+            raise ValueError(f"Provider next_action must have action 'answer' or 'assign', got: {action!r}")
+        if action == "answer":
+            text = payload.get("text")
+            if not isinstance(text, str):
+                raise ValueError("Provider next_action 'answer' must include a string 'text' field.")
+            return {"action": "answer", "text": text}
+        # action == "assign"
+        agent_id = payload.get("agentId")
+        assign_task = str(payload.get("task") or "").strip()
+        if agent_id not in self._NEXT_ACTION_AGENT_IDS:
+            raise ValueError(f"Provider next_action 'assign' has invalid agentId: {agent_id!r}")
+        if not assign_task:
+            raise ValueError("Provider next_action 'assign' must include a non-empty 'task' field.")
+        return {"action": "assign", "agentId": agent_id, "task": assign_task}
 
     def _provider_agent_plan(
         self, task: str, risk_level: str, reasoning: str = "medium", project_id: str | None = None

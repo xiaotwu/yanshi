@@ -3496,3 +3496,40 @@ def test_run_via_unknown_external_agent_fails_honestly(tmp_path: Path) -> None:
     run = client.post("/runs", json={"task": "hello", "externalAgentId": "nope"}).json()
     fetched = client.get(f"/runs/{run['id']}").json()
     assert fetched["status"] == "failed"
+
+
+def test_provider_next_action_parses_answer_and_assign(tmp_path: Path) -> None:
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.storage import Storage
+
+    class _DecideProvider:
+        configured = True
+        public_base_url = None
+        model = "m"
+
+        def __init__(self, payload: str) -> None:
+            self._payload = payload
+
+        def update_config(self, c) -> None: ...
+        def list_models(self) -> list: return []
+        def healthcheck(self) -> None: ...
+
+        def chat_completion(self, messages, model=None) -> str:
+            return self._payload
+
+        def stream_chat_completion(self, messages, model=None):
+            yield self._payload
+
+    storage = Storage(tmp_path / "db.sqlite", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "cp.sqlite",
+        workspace_root=tmp_path / "ws",
+        provider=_DecideProvider('{"action":"answer","text":"42"}'),
+    )
+    out = graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    assert out == {"action": "answer", "text": "42"}
+
+    graph.provider = _DecideProvider('{"action":"assign","agentId":"agent_file","task":"list files"}')
+    out2 = graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    assert out2["action"] == "assign" and out2["agentId"] == "agent_file"
