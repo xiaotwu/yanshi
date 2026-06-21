@@ -32,10 +32,16 @@ class BlockedHostError(ValueError):
 def _addr_is_blocked(addr: ipaddress._BaseAddress, *, block_private: bool) -> bool:
     if str(addr) in _METADATA_IPS:
         return True
+    # Loopback (IPv4 127/8 and IPv6 ::1) is the local-model-server case. Gate it ONLY by
+    # block_private so the provider (block_private=False) can reach it. This must come BEFORE the
+    # is_reserved always-block below: IPv6 ::1 reports is_reserved=True, which otherwise blocked
+    # `localhost` providers (Ollama/LM Studio) on macOS, where localhost resolves to ::1.
+    if addr.is_loopback:
+        return block_private
     # Always unroutable / abuse-prone, regardless of caller.
     if addr.is_unspecified or addr.is_multicast or addr.is_reserved:
         return True
-    if block_private and (addr.is_private or addr.is_loopback or addr.is_link_local):
+    if block_private and (addr.is_private or addr.is_link_local):
         return True
     # Link-local (169.254/16, fe80::/10) covers the metadata IP and is never a real provider host.
     if addr.is_link_local:

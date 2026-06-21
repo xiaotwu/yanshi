@@ -1767,6 +1767,27 @@ def test_net_guard_blocks_internal_and_metadata_targets() -> None:
     validate_outbound_url("http://127.0.0.1:11434/v1", block_private=False)
 
 
+def test_net_guard_allows_ipv6_loopback_for_provider() -> None:
+    """`localhost` resolves to IPv6 ::1 on macOS; local model servers (Ollama/LM Studio) live there.
+    The provider guard (block_private=False) must allow loopback for BOTH families; the browser
+    guard blocks it. Regression: ::1 was wrongly always-blocked via is_reserved, so a `localhost`
+    provider failed every run with "Refusing to reach blocked address ::1"."""
+    from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
+
+    # Provider allows IPv6 loopback (this used to raise).
+    validate_outbound_url("http://[::1]:11434/v1", block_private=False)
+    # Browser-style guard still blocks loopback (both families).
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://[::1]:11434/v1", block_private=True)
+    # Genuinely unroutable / abuse ranges stay blocked for everyone, even with block_private=False.
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://[::]/", block_private=False)  # unspecified
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://[ff02::1]/", block_private=False)  # multicast
+    with pytest.raises(BlockedHostError):
+        validate_outbound_url("http://[fd00:ec2::254]/", block_private=False)  # AWS IPv6 metadata
+
+
 def test_terminal_run_status_is_frozen(tmp_path: Path) -> None:
     from yanshi_runtime.storage import Storage
 
