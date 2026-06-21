@@ -43,3 +43,6 @@ qa/**/*.pid
 
 # Brainstorming visual companion (local mockups)
 .superpowers/
+
+# Eval harness — local run reports (never commit)
+runtime/python/evals/last_report.json

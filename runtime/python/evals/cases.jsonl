@@ -1,0 +1,3 @@
+{"id": "math_basic", "task": "What is 2+2? Reply with just the number.", "expect": {"completed": true, "contains": ["4"]}}
+{"id": "knowledge_capital", "task": "What is the capital of France? Answer in one word.", "expect": {"completed": true, "regex": "(?i)paris"}}
+{"id": "greeting", "task": "Say hello in English.", "expect": {"completed": true, "regex": "(?i)hello"}}
