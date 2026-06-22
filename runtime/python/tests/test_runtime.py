@@ -3569,9 +3569,8 @@ def test_route_after_decide(tmp_path: Path) -> None:
     graph.request_cancel("r")
     assert graph._route_after_decide({**base, "next_action": {"action": "assign", "agentId": "agent_file", "task": "t"}}) == "finalizer"
     graph._cancelled.discard("r")
-    # assign with high-risk task in default mode → permission_gate (requires_approval=True)
-    high_risk_base = {**base, "permission_mode": "default"}
-    assert graph._route_after_decide({**high_risk_base, "next_action": {"action": "assign", "agentId": "agent_terminal", "task": "delete the file"}}) == "permission_gate"
+    # assign with approval_required=True → permission_gate (decide node sets this flag; router reads it)
+    assert graph._route_after_decide({**base, "approval_required": True, "next_action": {"action": "assign", "agentId": "agent_terminal", "task": "delete the file"}}) == "permission_gate"
 
 
 def test_act_node_appends_observation_and_increments_step(tmp_path: Path) -> None:
@@ -3660,3 +3659,34 @@ def test_loop_budget_exhaustion_is_honest(tmp_path: Path) -> None:
     fetched = client.get(f"/runs/{run['id']}").json()
     assert fetched["status"] == "completed"  # best-effort, not failed
     assert "step limit" in (fetched.get("resultSummary") or "").lower()
+
+
+def test_blocked_task_fails_with_permission_boundary_and_does_not_execute(tmp_path: Path) -> None:
+    """A task on the critical blocklist must be immediately rejected with a ReviewObservation
+    carrying error='permission_boundary' and blocked=True.  No tool action must be taken."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    # Wire a provider so we can assert it is NEVER called (the block check precedes all provider use).
+    provider = SequencedProvider([])
+    service.provider = provider
+    service.graph.provider = provider
+
+    # "Make a payment" is on the critical blocklist in PermissionPolicy.
+    created = client.post("/runs", json={"task": "Make a payment of $100"})
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    run = client.get(f"/runs/{run_id}").json()
+    assert run["status"] == "failed"
+    assert "boundary" in (run.get("resultSummary") or "").lower()
+
+    events = client.get("/events", params={"runId": run_id}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    blocked_obs = [obs for obs in observations if obs.get("error") == "permission_boundary"]
+    assert len(blocked_obs) == 1
+    assert blocked_obs[0]["type"] == "ReviewObservation"
+    assert blocked_obs[0]["structuredOutput"]["blocked"] is True
+
+    # Provider must never have been called (the blocked check must stop execution completely).
+    assert provider.calls == []

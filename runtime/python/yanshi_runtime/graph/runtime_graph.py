@@ -172,7 +172,7 @@ class RuntimeGraph:
         builder.add_conditional_edges(
             "permission_gate",
             self._route_after_permission,
-            {"act": "act", "finalizer": "finalizer"},
+            {"decide": "decide", "finalizer": "finalizer"},
         )
         builder.add_edge("act", "decide")  # the loop
         builder.add_edge("finalizer", END)
@@ -555,8 +555,13 @@ class RuntimeGraph:
           - initialise observations=[], step=0, max_steps from settings
 
         On every step:
+          - (D) if provider not configured and task cannot run without model, emit model_not_configured
+            ErrorObservation and route to finalizer
           - call _provider_next_action to get {"action":"answer","text"} or {"action":"assign",...}
           - set next_action and risk_level (via policy.decide on the assigned task)
+          - (A) if policy blocked → emit ReviewObservation with permission_boundary, route to finalizer
+          - (B+C) if requires_approval (including plan_first on step 0) → create approval record,
+            set pending_approval status, route to permission_gate
           - on ProviderCallError or malformed output set provider_failed=True and write
             the same ErrorObservation that _manager_node writes on plan failure, next_action=None
         """
@@ -576,6 +581,102 @@ class RuntimeGraph:
                 "observations": [],
                 "step": 0,
                 "max_steps": self.storage.get_app_settings().maxAgentSteps,
+            }
+
+        # Run policy.decide on the top-level task to check for early-exit conditions
+        # (blocked, approval, missing_model) BEFORE calling the provider.  This mirrors
+        # the old _manager_node ordering: policy first, provider second.
+        decision = self.policy.decide(task, permission_mode)  # type: ignore[arg-type]
+
+        # --- A: policy blocked (SAFETY) — task must NOT execute ---
+        if decision.blocked:
+            action_id = self.storage.create_action(
+                run_id,
+                "PlanAction",
+                decision.risk_level,
+                {"task": task, "permissionMode": permission_mode},
+                agent_id="agent_manager",
+            )
+            self.storage.create_observation(
+                run_id,
+                "ReviewObservation",
+                decision.reason,
+                action_id=action_id,
+                agent_id="agent_reviewer",
+                structured_output={"riskLevel": decision.risk_level, "blocked": True},
+                error="permission_boundary",
+            )
+            return {
+                **state,
+                "next_action": None,
+                "risk_level": decision.risk_level,
+                "blocked": True,
+                "result_summary": decision.reason,
+            }
+
+        # --- B+C: approval gating (plan_first on step 0, or policy requires_approval) ---
+        # Check approval BEFORE missing_model and BEFORE calling the provider, so the run pauses
+        # for human review first (the human may also configure a provider before approving).
+        # Skip the approval check if the user already approved (state.approved=True means we resumed
+        # from permission_gate and must not re-gate on the same decision).
+        step = state.get("step", 0)
+        plan_first = bool(state.get("plan_first"))
+        already_approved = state.get("approved") is True
+        requires_approval = (not already_approved) and (decision.requires_approval or (plan_first and step == 0))
+        if requires_approval:
+            request_message = (
+                f"Yanshi needs approval before continuing this {decision.risk_level}-risk task."
+                if decision.requires_approval
+                else "Review the plan before Yanshi starts working."
+            )
+            plan = state.get("plan") or self._plan_for_task(task, decision.risk_level)
+            approval = self.storage.create_approval(
+                run_id,
+                "run",
+                run_id,
+                decision.risk_level,
+                request_message,
+            )
+            approval_id = approval.id
+            self.storage.update_run(run_id, status="pending_approval", plan=plan)
+            return {
+                **state,
+                "risk_level": decision.risk_level,
+                "plan": plan,
+                "approval_required": True,
+                "approval_id": approval_id,
+                "next_action": None,
+            }
+
+        # --- D: missing provider check (before calling provider) ---
+        # In the ReAct loop every step is a structured provider call, so any run needs a
+        # configured provider — there is no offline keyword shortcut. No provider → honest
+        # missing_model failure (not a generic provider error later).
+        if not self.provider.configured:
+            summary = "Yanshi needs a configured model provider before it can execute this task."
+            self.storage.create_observation(
+                run_id,
+                "ErrorObservation",
+                summary,
+                agent_id="agent_reviewer",
+                structured_output={
+                    "missingRequirement": "model_provider",
+                    "environment": ["YANSHI_MODEL_PROVIDER", "YANSHI_MODEL_API_KEY"],
+                },
+                error="model_not_configured",
+            )
+            # Emit plan.created so event-listeners see the plan step (mirrors _manager_node)
+            plan = self._plan_for_task(task, decision.risk_level)
+            self.storage.append_event("plan.created", run_id=run_id, agent_id="agent_manager", payload={"steps": plan})
+            self.storage.update_run(run_id, status="running", plan=plan)
+            return {
+                **state,
+                "risk_level": decision.risk_level,
+                "plan": plan,
+                "missing_model": True,
+                "failure_reviewed": True,
+                "result_summary": summary,
+                "next_action": None,
             }
 
         observations = state.get("observations") or []
@@ -611,33 +712,49 @@ class RuntimeGraph:
                 "next_action": None,
             }
 
-        # Determine risk_level from the assign task (or the top-level task for answer actions).
+        # For assign actions, re-run policy on the sub-task to get per-action risk_level.
+        # For answer actions, the top-level decision already applies.
         if next_action["action"] == "assign":
             assign_task = next_action.get("task", task)
+            action_decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
         else:
-            assign_task = task
-        decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
+            action_decision = decision
 
         return {
             **state,
             "next_action": next_action,
-            "risk_level": decision.risk_level,
-            "approval_required": decision.requires_approval,
+            "risk_level": action_decision.risk_level,
+            "approval_required": False,
+            "approval_id": None,
         }
 
     def _route_after_decide(self, state: GraphState) -> Literal["permission_gate", "act", "finalizer"]:
-        """Route after _decide_node.
+        """Route after _decide_node. Reads state flags set by _decide_node — does NOT re-run
+        policy.decide here (the decide node already decided; reading flags keeps routing testable).
 
-        → finalizer: cancelled, provider_failed, next_action is None, action=="answer", step >= max_steps
-        → permission_gate: assign action where policy.decide requires approval (same gating as
-          _route_after_manager so high-risk actions are always intercepted consistently)
-        → act: assign action that may proceed directly
+        Order (from brief):
+          cancelled → finalizer
+          blocked → finalizer
+          missing_model → finalizer
+          provider_failed → finalizer
+          approval_required → permission_gate  (checked before next_action is None, since
+                                               approval sets next_action=None intentionally)
+          next_action is None → finalizer
+          action == "answer" → finalizer
+          step >= max_steps → finalizer
+          else → act
         """
         run_id = state.get("run_id", "")
         if self._is_cancelled(run_id):
             return "finalizer"
+        if state.get("blocked"):
+            return "finalizer"
+        if state.get("missing_model"):
+            return "finalizer"
         if state.get("provider_failed"):
             return "finalizer"
+        if state.get("approval_required"):
+            return "permission_gate"
         next_action = state.get("next_action")
         if next_action is None:
             return "finalizer"
@@ -647,13 +764,6 @@ class RuntimeGraph:
         max_steps = state.get("max_steps", 8)
         if step >= max_steps:
             return "finalizer"
-        # assign action — gate identically to _route_after_manager by re-running policy.decide
-        # on the sub-task so high-risk tool assignments are always intercepted.
-        permission_mode = state.get("permission_mode", "default")
-        assign_task = next_action.get("task", state.get("task", ""))
-        decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
-        if decision.requires_approval:
-            return "permission_gate"
         return "act"
 
     def _act_node(self, state: GraphState) -> GraphState:
@@ -692,10 +802,10 @@ class RuntimeGraph:
             return "permission_gate"
         return "execute"
 
-    def _route_after_permission(self, state: GraphState) -> Literal["act", "finalizer"]:
+    def _route_after_permission(self, state: GraphState) -> Literal["decide", "finalizer"]:
         if state.get("approved") is False:
             return "finalizer"
-        return "act"
+        return "decide"
 
     def _execute_tool_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
         agent_id = str(assignment.get("agentId") or "")
