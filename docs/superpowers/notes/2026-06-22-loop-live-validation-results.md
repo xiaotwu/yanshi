@@ -1,6 +1,8 @@
 # 2026-06-22 Loop Live Validation Results
 
-Status: failed validation; stopped after the eval harness failure.
+Status: partial validation; eval and live file-tool feed-back passed after the scalar-answer fix,
+then validation stopped on a new live-provider structured-output failure during the terminal-disabled
+spot check.
 
 ## Environment
 
@@ -12,20 +14,21 @@ Status: failed validation; stopped after the eval harness failure.
 
 ## Eval Harness
 
-The harness did reach the real provider, but it did not pass:
+Initial run before `cc61c9d` failed `math_basic` because the live provider returned an
+`answer` action whose `text` was not a string. After `cc61c9d` (`fix(graph): coerce scalar
+next_action answer text to str`), the same live eval command passed:
 
 ```text
-provider call transient failure (ReadTimeout); retrying in 0.5s
-[FAIL] math_basic - status was 'failed', expected completed; missing substring '4'
+[PASS] math_basic
 [PASS] knowledge_capital
 [PASS] greeting
 
-2/3 passed
+3/3 passed
 ```
 
-`runtime/python/evals/last_report.json` reported the same `2/3` result.
+`runtime/python/evals/last_report.json` reported the same `3/3` result.
 
-## Failure Trace
+## Previous Eval Failure Trace
 
 - Failed case: `math_basic`.
 - Run id: `run_d163fd711ae74c45b3`.
@@ -48,19 +51,112 @@ No tool `act` step ran for this case. The failure occurred in the first manager 
 
 The terminal output also showed a provider `ReadTimeout` before the stored malformed-action failure. The raw provider response is not persisted in the run/event tables, so the exact malformed payload is not available from storage.
 
-## Live Checks
+## Live Multi-Step Run
 
-The live multi-step run, honest-failure spot checks, and optional cancel check were not run. The handoff says a failed eval case is a validation failure to capture rather than work around, so validation stopped here.
+Server: `yanshi-runtime --host 127.0.0.1 --port 8765` against the real `~/.yanshi` data dir.
+
+Task:
+
+```json
+{"task":"Use the File Agent to list the files in my workspace, then after the file scan tell me exactly how many items were found. Do not answer until the File Agent has scanned the workspace."}
+```
+
+Run id: `run_1d6c9589c9c54a978a`.
+
+Result:
+
+```text
+status=completed
+resultSummary=The File Agent has completed its scan of the workspace and found **1 item**.
+```
+
+Event trace:
+
+1. `run.created`
+2. `run.started`
+3. `agent.task.assigned` (`agent_file`)
+4. `agent.task.started` (`agent_file`)
+5. `action.created` (`FileAction`, `agent_file`)
+6. `action.completed` (`agent_file`)
+7. `observation.created` (`FileObservation`, `File Agent scanned 1 items.`)
+8. `artifact.created` (`File scan`)
+9. `agent.task.completed` (`agent_file`)
+10. `run.completed` with result summary saying 1 item
+
+This proves the loop reached `act`, wrote a real `FileObservation`, then made a later manager
+answer using the observation content.
+
+## Honest-Failure Checks
+
+### No Provider
+
+Used a short-lived isolated runtime on `/tmp/yanshi-handoff-a-no-provider` so the real provider
+settings were not changed.
+
+Run id: `run_848d272df3824f04a3`.
+
+Result:
+
+```text
+status=failed
+resultSummary=Yanshi needs a configured model provider before it can execute this task.
+observation=ErrorObservation error=model_not_configured missingRequirement=model_provider
+```
+
+### Terminal Disabled
+
+Main runtime setting before the run: `terminalToolEnabled=false`.
+
+Task:
+
+```json
+{"task":"Use the Terminal Agent to run command `pwd` in the workspace and report the output.","permissionMode":"full_access"}
+```
+
+Run id: `run_8004210cc7cd4e9fad`.
+
+Expected: `agent_terminal` assignment, hard gate, `tool_disabled` observation, `status=failed`.
+
+Actual:
+
+```text
+status=failed
+resultSummary=Manager could not decide next action: Provider did not return a JSON object.
+```
+
+Event trace:
+
+1. `observation.created` (`ErrorObservation`, `agent_manager`, `error=manager_plan_failed`,
+   `missingRequirement=structured_manager_plan`)
+2. `agent.task.assigned` (`agent_reviewer`)
+3. `observation.created` (`ReviewerObservation`)
+4. `run.failed`
+
+The run failed before `act`, so the terminal hard gate and `tool_disabled` observation were not
+validated. The raw provider response is not persisted in the run/event tables.
+
+### Budget Exhaustion
+
+Not run. Validation stopped at the terminal-disabled structured-output failure instead of retrying
+or changing the prompt.
 
 ## Conclusion
 
-The bounded ReAct loop is not validated end to end against the configured live Ollama provider in this run. Repro:
+The scalar-answer fix is validated against the live eval harness (`3/3`), and the live file-tool
+loop validated observation feed-back end to end. Handoff A is still not fully complete because the
+terminal-disabled honest-failure check surfaced a new live-provider structured-output failure before
+the tool gate could run.
+
+Current repro for the new blocker:
 
 ```bash
-cd runtime/python && .venv/bin/python evals/run_evals.py
+cd runtime/python
+.venv/bin/yanshi-runtime --host 127.0.0.1 --port 8765
+# in another shell, POST /runs with:
+# {"task":"Use the Terminal Agent to run command `pwd` in the workspace and report the output.","permissionMode":"full_access"}
 ```
 
-No code fix was attempted.
+No code fix was attempted during this resumed validation run.
 
 ## Resolution (2026-06-22)
 
@@ -76,7 +172,7 @@ Fix: coerce scalar `text` (int/float/bool) to `str`; still reject genuinely-malf
 `math_basic` payload (`{"action":"answer","text":4}` → `{"action":"answer","text":"4"}`). Full suite:
 153 passed.
 
-Follow-ups (optional, not done here): the run/event tables still don't persist the raw provider
-response, which made this harder to diagnose — consider storing a truncated raw payload on
-`manager_plan_failed` ErrorObservations. Re-run `evals/run_evals.py` against live Ollama to confirm
-`math_basic` now passes end to end.
+Follow-ups: the live Ollama eval rerun is now complete and `math_basic` passed end to end. The
+run/event tables still don't persist the raw provider response, which made both malformed-output
+failures harder to diagnose; consider storing a truncated raw payload on `manager_plan_failed`
+ErrorObservations.
