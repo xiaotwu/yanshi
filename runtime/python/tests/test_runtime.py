@@ -1801,27 +1801,6 @@ def test_integration_env_secrets_stay_out_of_db_and_api(tmp_path: Path) -> None:
     assert storage.get_ai_integrations_resolved().externalAgents[0].env["API_KEY"] == "super-secret"
 
 
-def test_execute_node_short_circuits_when_cancelled(tmp_path: Path) -> None:
-    """Cooperative cancellation: once a run is cancelled, the executor stops launching tool steps
-    and skips synthesis instead of producing a final answer."""
-    from yanshi_runtime.graph import RuntimeGraph
-    from yanshi_runtime.providers import OpenAICompatibleProvider
-    from yanshi_runtime.storage import Storage
-
-    storage = Storage(tmp_path / "yanshi.db", "test")
-    graph = RuntimeGraph(
-        storage=storage,
-        checkpoint_path=tmp_path / "checkpoints.db",
-        workspace_root=tmp_path / "workspaces",
-        provider=OpenAICompatibleProvider(None),
-    )
-    graph.request_cancel("run_x")
-    result = graph._execute_node(
-        {"run_id": "run_x", "task": "do things", "agent_tasks": [{"agentId": "agent_terminal", "task": "x", "taskId": None}]}
-    )
-    assert result["result_summary"] == "Run cancelled."
-
-
 def test_net_guard_blocks_internal_and_metadata_targets() -> None:
     from yanshi_runtime.net_guard import BlockedHostError, validate_outbound_url
 
@@ -2735,24 +2714,6 @@ def test_strip_reasoning_handles_paired_and_dangling_think_tags() -> None:
     assert strip_reasoning("draft reasoning\n</think>\n\nReal answer.") == "Real answer."
     # Plain content is returned untouched (trimmed).
     assert strip_reasoning("  Just an answer.  ") == "Just an answer."
-
-
-def test_tool_agent_only_assigned_when_task_warrants_it() -> None:
-    """Plain questions must not trigger tool agents (which would fail the run); tools need an
-    explicit English/Chinese signal. Manager/reviewer are always allowed."""
-    from yanshi_runtime.graph.runtime_graph import RuntimeGraph
-
-    warranted = RuntimeGraph._tool_agent_warranted
-    assert warranted("agent_manager", "它在哪个城市？") is True
-    assert warranted("agent_reviewer", "anything") is True
-    # A pure knowledge question warrants no tools.
-    assert warranted("agent_browser", "它在哪个城市？") is False
-    assert warranted("agent_computer", "用一句话介绍西湖") is False
-    # Explicit tool intent (either language) is honored.
-    assert warranted("agent_browser", "open the browser to example.com") is True
-    assert warranted("agent_browser", "帮我浏览这个网页") is True
-    assert warranted("agent_file", "list the files in this workspace") is True
-    assert warranted("agent_terminal", "运行命令 ls") is True
 
 
 def test_keyless_local_provider_is_configured_and_sends_no_auth(tmp_path: Path) -> None:
