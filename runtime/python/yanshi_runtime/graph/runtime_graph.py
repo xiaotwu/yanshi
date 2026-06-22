@@ -1114,6 +1114,12 @@ class RuntimeGraph:
             raise ValueError(f"Provider next_action must have action 'answer' or 'assign', got: {action!r}")
         if action == "answer":
             text = payload.get("text")
+            # Local models legitimately answer with a bare scalar — "reply with just the number"
+            # yields {"action":"answer","text":4}. Coerce scalars to str (the sibling 'assign'
+            # branch already str()-coerces 'task'); reject only genuinely-malformed text
+            # (None/missing or a non-scalar dict/list).
+            if isinstance(text, bool) or isinstance(text, (int, float)):
+                text = str(text)
             if not isinstance(text, str):
                 raise ValueError("Provider next_action 'answer' must include a string 'text' field.")
             return {"action": "answer", "text": text}

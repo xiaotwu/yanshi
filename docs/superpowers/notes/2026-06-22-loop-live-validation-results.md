@@ -61,3 +61,22 @@ cd runtime/python && .venv/bin/python evals/run_evals.py
 ```
 
 No code fix was attempted.
+
+## Resolution (2026-06-22)
+
+Root cause (systematic-debugging): the task "Reply with just the number" made qwen3.5 return
+`{"action":"answer","text":4}` — `text` was the JSON **integer** `4`, not a string.
+`_provider_next_action` rejected it with a strict `isinstance(text, str)` check
+(runtime_graph.py:1117), even though the sibling `assign` branch already `str()`-coerces its `task`
+field. A legitimate numeric answer was treated as malformed → `provider_failed` → run failed. The
+preceding `ReadTimeout` was a transient the retry absorbed; it was not the cause.
+
+Fix: coerce scalar `text` (int/float/bool) to `str`; still reject genuinely-malformed text
+(None/missing or non-scalar dict/list). Driven by a failing unit test that reproduces the exact
+`math_basic` payload (`{"action":"answer","text":4}` → `{"action":"answer","text":"4"}`). Full suite:
+153 passed.
+
+Follow-ups (optional, not done here): the run/event tables still don't persist the raw provider
+response, which made this harder to diagnose — consider storing a truncated raw payload on
+`manager_plan_failed` ErrorObservations. Re-run `evals/run_evals.py` against live Ollama to confirm
+`math_basic` now passes end to end.

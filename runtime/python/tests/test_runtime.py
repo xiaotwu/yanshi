@@ -3625,6 +3625,52 @@ def test_provider_next_action_parses_answer_and_assign(tmp_path: Path) -> None:
     assert out2["action"] == "assign" and out2["agentId"] == "agent_file"
 
 
+def test_provider_next_action_coerces_scalar_answer_text(tmp_path: Path) -> None:
+    """Local models legitimately answer with a bare number/bool — e.g. "reply with just the
+    number" yields {"action":"answer","text":4}. A scalar text must be coerced to str, not
+    rejected as malformed (matches the sibling 'assign' branch which already str()-coerces task).
+    None/missing or non-scalar (dict/list) text remains genuinely malformed."""
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.storage import Storage
+
+    class _DecideProvider:
+        configured = True
+        public_base_url = None
+        model = "m"
+
+        def __init__(self, payload: str) -> None:
+            self._payload = payload
+
+        def update_config(self, c) -> None: ...
+        def list_models(self) -> list: return []
+        def healthcheck(self) -> None: ...
+        def chat_completion(self, messages, model=None) -> str: return self._payload
+        def stream_chat_completion(self, messages, model=None): yield self._payload
+
+    storage = Storage(tmp_path / "db.sqlite", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "cp.sqlite",
+        workspace_root=tmp_path / "ws",
+        provider=_DecideProvider('{"action":"answer","text":4}'),
+    )
+    # Integer answer (the math_basic live-validation failure) → coerced to "4".
+    assert graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None) == {
+        "action": "answer", "text": "4",
+    }
+    # Float and bool scalars also coerce.
+    graph.provider = _DecideProvider('{"action":"answer","text":2.5}')
+    assert graph._provider_next_action("q", [], "medium", None)["text"] == "2.5"
+    graph.provider = _DecideProvider('{"action":"answer","text":true}')
+    assert graph._provider_next_action("q", [], "medium", None)["text"] == "True"
+
+    # Genuinely malformed text stays rejected.
+    for bad in ('{"action":"answer","text":null}', '{"action":"answer"}', '{"action":"answer","text":{"a":1}}'):
+        graph.provider = _DecideProvider(bad)
+        with pytest.raises(ValueError):
+            graph._provider_next_action("q", [], "medium", None)
+
+
 def test_route_after_decide(tmp_path: Path) -> None:
     from yanshi_runtime.graph import RuntimeGraph
     from yanshi_runtime.providers import OpenAICompatibleProvider
