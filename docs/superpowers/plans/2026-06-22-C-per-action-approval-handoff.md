@@ -1,5 +1,11 @@
 # Handoff C — Per-action approval/blocked defense-in-depth
 
+**STATUS: ✅ IMPLEMENTED (2026-06-22).** Per-action blocked + approval gating landed in `_decide_node`
+(shared `_blocked_state`/`_approval_state` helpers); top-level approval guarded to step 0; `_act_node`
+consumes `approved` so each new risky sub-action re-gates. Tests:
+`test_decide_blocks_escalated_critical_subaction`, `test_decide_requires_approval_for_escalated_high_risk_subaction`,
+`test_decide_escalated_approval_denied_fails`; the three existing approval tests stay green. Full suite 158.
+
 **For:** Codex, in `/Users/xiaotwu/Code/yanshi` on `main`. **Do not push to origin.**
 **venv:** `runtime/python/.venv/bin/python` · **trailer:** `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 **Size:** Small, contained. Pure hardening — must not regress any existing approval test.

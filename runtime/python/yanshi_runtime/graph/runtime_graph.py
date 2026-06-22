@@ -270,6 +270,53 @@ class RuntimeGraph:
         self._clear_partial(run_id)
         return state
 
+    def _blocked_state(
+        self, state: GraphState, run_id: str, task: str, permission_mode: str, decision
+    ) -> GraphState:
+        """Write the permission-boundary ReviewObservation and return a blocked state → finalizer
+        marks the run failed. Shared by the top-level and per-action blocked checks."""
+        action_id = self.storage.create_action(
+            run_id,
+            "PlanAction",
+            decision.risk_level,
+            {"task": task, "permissionMode": permission_mode},
+            agent_id="agent_manager",
+        )
+        self.storage.create_observation(
+            run_id,
+            "ReviewObservation",
+            decision.reason,
+            action_id=action_id,
+            agent_id="agent_reviewer",
+            structured_output={"riskLevel": decision.risk_level, "blocked": True},
+            error="permission_boundary",
+        )
+        return {
+            **state,
+            "next_action": None,
+            "risk_level": decision.risk_level,
+            "blocked": True,
+            "result_summary": decision.reason,
+        }
+
+    def _approval_state(
+        self, state: GraphState, run_id: str, task: str, decision, request_message: str
+    ) -> GraphState:
+        """Create the approval record, mark the run pending_approval, and return an approval-required
+        state (next_action=None so the action is re-derived after approval). Shared by the top-level
+        and per-action approval checks; the routing reads approval_required and goes to permission_gate."""
+        plan = state.get("plan") or self._plan_for_task(task, decision.risk_level)
+        approval = self.storage.create_approval(run_id, "run", run_id, decision.risk_level, request_message)
+        self.storage.update_run(run_id, status="pending_approval", plan=plan)
+        return {
+            **state,
+            "risk_level": decision.risk_level,
+            "plan": plan,
+            "approval_required": True,
+            "approval_id": approval.id,
+            "next_action": None,
+        }
+
     def _decide_node(self, state: GraphState) -> GraphState:
         """ReAct-loop entry node: one-time setup on step 0, then call the manager for the next action.
 
@@ -316,65 +363,26 @@ class RuntimeGraph:
         # provider second.
         decision = self.policy.decide(task, permission_mode)  # type: ignore[arg-type]
 
-        # --- A: policy blocked (SAFETY) — task must NOT execute ---
+        # --- A: top-level policy blocked (SAFETY) — task must NOT execute ---
         if decision.blocked:
-            action_id = self.storage.create_action(
-                run_id,
-                "PlanAction",
-                decision.risk_level,
-                {"task": task, "permissionMode": permission_mode},
-                agent_id="agent_manager",
-            )
-            self.storage.create_observation(
-                run_id,
-                "ReviewObservation",
-                decision.reason,
-                action_id=action_id,
-                agent_id="agent_reviewer",
-                structured_output={"riskLevel": decision.risk_level, "blocked": True},
-                error="permission_boundary",
-            )
-            return {
-                **state,
-                "next_action": None,
-                "risk_level": decision.risk_level,
-                "blocked": True,
-                "result_summary": decision.reason,
-            }
+            return self._blocked_state(state, run_id, task, permission_mode, decision)
 
-        # --- B+C: approval gating (plan_first on step 0, or policy requires_approval) ---
-        # Check approval BEFORE missing_model and BEFORE calling the provider, so the run pauses
-        # for human review first (the human may also configure a provider before approving).
-        # Skip the approval check if the user already approved (state.approved=True means we resumed
-        # from permission_gate and must not re-gate on the same decision).
+        # --- B+C: top-level approval gating (plan_first or policy requires_approval) ---
+        # This is the run-initiation gate, so it only applies before any work has run (step 0):
+        # it pauses for human review BEFORE the provider call (the human may also configure a
+        # provider before approving). Skip if the user already approved (state.approved=True means
+        # we resumed from permission_gate and must not re-gate the same decision). Per-action
+        # escalation is gated separately, AFTER the provider picks a concrete sub-action (below).
         step = state.get("step", 0)
         plan_first = bool(state.get("plan_first"))
         already_approved = state.get("approved") is True
-        requires_approval = (not already_approved) and (decision.requires_approval or (plan_first and step == 0))
-        if requires_approval:
+        if (not already_approved) and step == 0 and (decision.requires_approval or plan_first):
             request_message = (
                 f"Yanshi needs approval before continuing this {decision.risk_level}-risk task."
                 if decision.requires_approval
                 else "Review the plan before Yanshi starts working."
             )
-            plan = state.get("plan") or self._plan_for_task(task, decision.risk_level)
-            approval = self.storage.create_approval(
-                run_id,
-                "run",
-                run_id,
-                decision.risk_level,
-                request_message,
-            )
-            approval_id = approval.id
-            self.storage.update_run(run_id, status="pending_approval", plan=plan)
-            return {
-                **state,
-                "risk_level": decision.risk_level,
-                "plan": plan,
-                "approval_required": True,
-                "approval_id": approval_id,
-                "next_action": None,
-            }
+            return self._approval_state(state, run_id, task, decision, request_message)
 
         # --- D: missing provider check (before calling provider) ---
         # In the ReAct loop every step is a structured provider call, so any run needs a
@@ -458,6 +466,16 @@ class RuntimeGraph:
         if next_action["action"] == "assign":
             assign_task = next_action.get("task", task)
             action_decision = self.policy.decide(assign_task, permission_mode)  # type: ignore[arg-type]
+            # Per-action defense-in-depth: the manager can escalate to a blocked/high-risk sub-action
+            # under a benign top-level task. Gate the actual sub-action, not just the top-level task.
+            # (_act_node consumes `approved` after each step so each new risky action re-gates.)
+            if action_decision.blocked:
+                return self._blocked_state(state, run_id, assign_task, permission_mode, action_decision)
+            if action_decision.requires_approval and state.get("approved") is not True:
+                request_message = (
+                    f"Yanshi needs approval before continuing this {action_decision.risk_level}-risk action."
+                )
+                return self._approval_state(state, run_id, assign_task, action_decision, request_message)
         else:
             action_decision = decision
 
@@ -536,7 +554,15 @@ class RuntimeGraph:
             "ok": result["ok"],
             "summary": result["summary"],
         })
-        next_state: GraphState = {**state, "observations": obs, "step": state.get("step", 0) + 1}
+        # Consume any approval granted for the action just executed: a sticky `approved` would let
+        # every later sub-action bypass the per-action gate. Clearing it makes the next risky action
+        # re-gate (the top-level gate is step-0-only, so it won't re-fire on the next decide).
+        next_state: GraphState = {
+            **state,
+            "observations": obs,
+            "step": state.get("step", 0) + 1,
+            "approved": None,
+        }
         if not result["ok"] and result.get("missing_requirement") in self._HARD_TOOL_FAILURE_REQUIREMENTS:
             return {
                 **next_state,

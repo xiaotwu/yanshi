@@ -3729,6 +3729,74 @@ def test_decide_node_persists_raw_response_on_manager_plan_failure(tmp_path: Pat
     assert "Terminal Agent" in (failed[0]["structuredOutput"].get("rawResponse") or "")
 
 
+def test_decide_blocks_escalated_critical_subaction(tmp_path: Path) -> None:
+    """Defense-in-depth: a benign top-level task whose manager escalates to a critical-blocklist
+    sub-action must be blocked per-action — fail with permission_boundary, never execute the action."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    provider = SequencedProvider(
+        ['{"action":"assign","agentId":"agent_terminal","task":"Make a payment of $100 to the vendor"}'],
+        repeat_last=True,
+    )
+    service.provider = provider
+    service.graph.provider = provider
+
+    run = client.post("/runs", json={"task": "Summarize my workspace"}).json()  # low-risk top level
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    boundary = [o for o in observations if o.get("error") == "permission_boundary"]
+    assert len(boundary) == 1 and boundary[0]["structuredOutput"]["blocked"] is True
+    # The escalated sub-action must NOT have executed — no agent_terminal task was ever enqueued/run.
+    assert service.storage.list_agent_tasks(run_id=run["id"], agent_id="agent_terminal") == []
+
+
+def test_decide_requires_approval_for_escalated_high_risk_subaction(tmp_path: Path) -> None:
+    """A benign top-level task whose manager assigns a high-risk sub-action must pause for approval;
+    approving lets the run proceed to completion."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    provider = SequencedProvider(
+        [
+            '{"action":"assign","agentId":"agent_file","task":"delete the old report file"}',
+            '{"action":"answer","text":"done"}',
+        ],
+        repeat_last=True,
+    )
+    service.provider = provider
+    service.graph.provider = provider
+
+    run = client.post("/runs", json={"task": "Summarize my workspace"}).json()
+    run_id = run["id"]
+    assert client.get(f"/runs/{run_id}").json()["status"] == "pending_approval"
+    approvals = client.get("/approvals").json()
+    assert len(approvals) == 1 and approvals[0]["runId"] == run_id
+
+    client.post(f"/approvals/{approvals[0]['id']}/decision", json={"decision": "approved"})
+    assert client.get(f"/runs/{run_id}").json()["status"] == "completed"
+
+
+def test_decide_escalated_approval_denied_fails(tmp_path: Path) -> None:
+    """Denying an escalated-sub-action approval fails the run (does not execute it)."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    provider = SequencedProvider(
+        ['{"action":"assign","agentId":"agent_file","task":"delete the old report file"}'],
+        repeat_last=True,
+    )
+    service.provider = provider
+    service.graph.provider = provider
+
+    run = client.post("/runs", json={"task": "Summarize my workspace"}).json()
+    run_id = run["id"]
+    assert client.get(f"/runs/{run_id}").json()["status"] == "pending_approval"
+    approval = client.get("/approvals").json()[0]
+    client.post(f"/approvals/{approval['id']}/decision", json={"decision": "deny"})
+    assert client.get(f"/runs/{run_id}").json()["status"] == "failed"
+
+
 def test_route_after_decide(tmp_path: Path) -> None:
     from yanshi_runtime.graph import RuntimeGraph
     from yanshi_runtime.providers import OpenAICompatibleProvider
