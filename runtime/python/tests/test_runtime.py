@@ -3671,6 +3671,64 @@ def test_provider_next_action_coerces_scalar_answer_text(tmp_path: Path) -> None
             graph._provider_next_action("q", [], "medium", None)
 
 
+def test_provider_next_action_captures_raw_response_on_malformed_output(tmp_path: Path) -> None:
+    """When the provider returns no JSON object (prose / truncated reasoning-model output), the
+    failure must carry the raw response so it is diagnosable — the raw payload was previously
+    discarded, blocking root-cause analysis of live failures."""
+    from yanshi_runtime.graph import RuntimeGraph
+    from yanshi_runtime.graph.runtime_graph import ProviderDecisionError
+    from yanshi_runtime.storage import Storage
+
+    class _DecideProvider:
+        configured = True
+        public_base_url = None
+        model = "m"
+
+        def __init__(self, payload: str) -> None:
+            self._payload = payload
+
+        def update_config(self, c) -> None: ...
+        def list_models(self) -> list: return []
+        def healthcheck(self) -> None: ...
+        def chat_completion(self, messages, model=None) -> str: return self._payload
+        def stream_chat_completion(self, messages, model=None): yield self._payload
+
+    prose = "Sure! I'll use the Terminal Agent to run pwd and report the output."  # no JSON object
+    storage = Storage(tmp_path / "db.sqlite", "test")
+    graph = RuntimeGraph(
+        storage=storage,
+        checkpoint_path=tmp_path / "cp.sqlite",
+        workspace_root=tmp_path / "ws",
+        provider=_DecideProvider(prose),
+    )
+    with pytest.raises(ProviderDecisionError) as excinfo:
+        graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    assert "did not return a JSON object" in str(excinfo.value)
+    assert "Terminal Agent" in excinfo.value.raw_response
+
+
+def test_decide_node_persists_raw_response_on_manager_plan_failure(tmp_path: Path) -> None:
+    """The manager_plan_failed ErrorObservation must include a truncated rawResponse so live
+    structured-output failures can be diagnosed from storage."""
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    prose = "Sure! I'll use the Terminal Agent to run pwd and report the output."
+    provider = SequencedProvider([prose], repeat_last=True)
+    service.provider = provider
+    service.graph.provider = provider
+
+    # Low-risk task so the run reaches the decide/parse path (not the approval gate).
+    run = client.post("/runs", json={"task": "What is the capital of France?"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "failed"
+
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [e["event"]["payload"] for e in events if e["event"]["type"] == "observation.created"]
+    failed = [o for o in observations if o.get("error") == "manager_plan_failed"]
+    assert failed, "expected a manager_plan_failed observation"
+    assert "Terminal Agent" in (failed[0]["structuredOutput"].get("rawResponse") or "")
+
+
 def test_route_after_decide(tmp_path: Path) -> None:
     from yanshi_runtime.graph import RuntimeGraph
     from yanshi_runtime.providers import OpenAICompatibleProvider

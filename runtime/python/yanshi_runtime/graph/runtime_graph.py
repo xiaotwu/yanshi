@@ -48,6 +48,19 @@ class GraphState(TypedDict, total=False):
     next_action: dict[str, Any] | None
 
 
+class ProviderDecisionError(ValueError):
+    """Raised when the provider's next-action response can't be parsed/validated.
+
+    Carries the raw (truncated) provider response so the failure is diagnosable — local models
+    occasionally emit prose or truncated reasoning-mode output with no JSON object, and the raw
+    payload was previously discarded, blocking root-cause analysis of live failures.
+    """
+
+    def __init__(self, message: str, *, raw_response: str = "") -> None:
+        super().__init__(message)
+        self.raw_response = raw_response
+
+
 class AgentExecutionResult(TypedDict, total=False):
     agent_id: str
     task_id: str | None
@@ -416,13 +429,20 @@ class RuntimeGraph:
                 agent_id="agent_manager",
             )
             self.storage.complete_action(action_id, run_id, status="failed", agent_id="agent_manager")
+            # Persist the raw provider response (truncated) on malformed-output failures so live
+            # structured-output failures are diagnosable from storage. Model output, not credentials —
+            # API keys live in headers/SecretStore and are never echoed back into the response.
+            structured: dict[str, Any] = {"missingRequirement": "structured_manager_plan"}
+            raw_response = getattr(exc, "raw_response", "")
+            if raw_response:
+                structured["rawResponse"] = raw_response[:2000]
             self.storage.create_observation(
                 run_id,
                 "ErrorObservation",
                 summary,
                 action_id=action_id,
                 agent_id="agent_manager",
-                structured_output={"missingRequirement": "structured_manager_plan"},
+                structured_output=structured,
                 error="manager_plan_failed",
             )
             return {
@@ -1108,29 +1128,34 @@ class RuntimeGraph:
             ],
             model=mgr_model,
         )
-        payload = self._parse_json_object(response)
-        action = payload.get("action")
-        if action not in {"answer", "assign"}:
-            raise ValueError(f"Provider next_action must have action 'answer' or 'assign', got: {action!r}")
-        if action == "answer":
-            text = payload.get("text")
-            # Local models legitimately answer with a bare scalar — "reply with just the number"
-            # yields {"action":"answer","text":4}. Coerce scalars to str (the sibling 'assign'
-            # branch already str()-coerces 'task'); reject only genuinely-malformed text
-            # (None/missing or a non-scalar dict/list).
-            if isinstance(text, bool) or isinstance(text, (int, float)):
-                text = str(text)
-            if not isinstance(text, str):
-                raise ValueError("Provider next_action 'answer' must include a string 'text' field.")
-            return {"action": "answer", "text": text}
-        # action == "assign"
-        agent_id = payload.get("agentId")
-        assign_task = str(payload.get("task") or "").strip()
-        if agent_id not in self._NEXT_ACTION_AGENT_IDS:
-            raise ValueError(f"Provider next_action 'assign' has invalid agentId: {agent_id!r}")
-        if not assign_task:
-            raise ValueError("Provider next_action 'assign' must include a non-empty 'task' field.")
-        return {"action": "assign", "agentId": agent_id, "task": assign_task}
+        # Parse + validate, re-raising any malformed-output failure as a ProviderDecisionError that
+        # carries the raw (truncated) response so the caller can persist it for diagnosis.
+        try:
+            payload = self._parse_json_object(response)
+            action = payload.get("action")
+            if action not in {"answer", "assign"}:
+                raise ValueError(f"Provider next_action must have action 'answer' or 'assign', got: {action!r}")
+            if action == "answer":
+                text = payload.get("text")
+                # Local models legitimately answer with a bare scalar — "reply with just the number"
+                # yields {"action":"answer","text":4}. Coerce scalars to str (the sibling 'assign'
+                # branch already str()-coerces 'task'); reject only genuinely-malformed text
+                # (None/missing or a non-scalar dict/list).
+                if isinstance(text, bool) or isinstance(text, (int, float)):
+                    text = str(text)
+                if not isinstance(text, str):
+                    raise ValueError("Provider next_action 'answer' must include a string 'text' field.")
+                return {"action": "answer", "text": text}
+            # action == "assign"
+            agent_id = payload.get("agentId")
+            assign_task = str(payload.get("task") or "").strip()
+            if agent_id not in self._NEXT_ACTION_AGENT_IDS:
+                raise ValueError(f"Provider next_action 'assign' has invalid agentId: {agent_id!r}")
+            if not assign_task:
+                raise ValueError("Provider next_action 'assign' must include a non-empty 'task' field.")
+            return {"action": "assign", "agentId": agent_id, "task": assign_task}
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise ProviderDecisionError(str(exc), raw_response=(response or "")[:2000]) from exc
 
     def _parse_json_object(self, content: str) -> dict[str, Any]:
         text = content.strip()
