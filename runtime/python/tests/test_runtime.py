@@ -126,15 +126,21 @@ class SequencedProvider:
     public_base_url = "fixture://provider"
     model = "fixture-model"
 
-    def __init__(self, responses: list[str]) -> None:
-        self.responses = responses
+    def __init__(self, responses: list[str], *, repeat_last: bool = False) -> None:
+        self.responses = list(responses)
+        self._repeat_last = repeat_last
+        self._last: str | None = responses[-1] if responses else None
         self.calls: list[list[dict[str, object]]] = []
 
     def chat_completion(self, messages: list[object], model: str | None = None) -> str:
         self.calls.append([message.model_dump() if hasattr(message, "model_dump") else {"content": str(message)} for message in messages])
-        if not self.responses:
-            raise AssertionError("SequencedProvider received an unexpected chat completion call.")
-        return self.responses.pop(0)
+        if self.responses:
+            response = self.responses.pop(0)
+            self._last = response
+            return response
+        if self._repeat_last and self._last is not None:
+            return self._last
+        raise AssertionError("SequencedProvider received an unexpected chat completion call.")
 
     def stream_chat_completion(self, messages: list[object], model: str | None = None):
         # Stream the next sequenced response as a single chunk (the graph joins chunks).
@@ -3611,3 +3617,46 @@ def test_act_node_appends_observation_and_increments_step(tmp_path: Path) -> Non
     assert isinstance(obs["ok"], bool)
     assert isinstance(obs["summary"], str) and obs["summary"]
     assert result_state["step"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 4: cyclic decide/act loop integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_loop_no_tool_task_answers_in_one_step(tmp_path: Path) -> None:
+    # Manager answers immediately -> 1 provider call, no tool action, completed.
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.provider = SequencedProvider(['{"action":"answer","text":"4"}'])
+    run = client.post("/runs", json={"task": "What is 2+2?"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "completed" and fetched["resultSummary"] == "4"
+
+
+def test_loop_uses_tool_then_answers_with_feedback(tmp_path: Path) -> None:
+    # Step 1 assigns a tool; step 2 (seeing the observation) answers.
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.provider = SequencedProvider([
+        '{"action":"assign","agentId":"agent_file","task":"List the files in the workspace."}',
+        '{"action":"answer","text":"done"}',
+    ])
+    run = client.post("/runs", json={"task": "List files then summarize."}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "completed"
+    # The file agent actually ran (an action recorded for agent_file).
+    tasks = service.storage.list_agent_tasks(run_id=run["id"])
+    assert any(t.agentId == "agent_file" for t in tasks)
+
+
+def test_loop_budget_exhaustion_is_honest(tmp_path: Path) -> None:
+    # A provider that always assigns -> loop hits max_steps and finalizes honestly.
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    client.put("/settings", json={"maxAgentSteps": 2})
+    service.graph.provider = SequencedProvider(['{"action":"assign","agentId":"agent_file","task":"again"}'], repeat_last=True)
+    run = client.post("/runs", json={"task": "loop forever"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+    assert fetched["status"] == "completed"  # best-effort, not failed
+    assert "step limit" in (fetched.get("resultSummary") or "").lower()

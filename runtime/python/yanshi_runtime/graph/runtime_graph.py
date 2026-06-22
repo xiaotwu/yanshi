@@ -159,36 +159,36 @@ class RuntimeGraph:
 
     def _build_graph(self):
         builder = StateGraph(GraphState)
-        builder.add_node("manager", self._manager_node)
+        builder.add_node("decide", self._decide_node)
         builder.add_node("permission_gate", self._permission_gate_node)
-        builder.add_node("execute", self._execute_node)
+        builder.add_node("act", self._act_node)
         builder.add_node("finalizer", self._finalizer_node)
-        builder.add_edge(START, "manager")
+        builder.add_edge(START, "decide")
         builder.add_conditional_edges(
-            "manager",
-            self._route_after_manager,
-            {
-                "permission_gate": "permission_gate",
-                "execute": "execute",
-                "finalizer": "finalizer",
-            },
+            "decide",
+            self._route_after_decide,
+            {"permission_gate": "permission_gate", "act": "act", "finalizer": "finalizer"},
         )
         builder.add_conditional_edges(
             "permission_gate",
             self._route_after_permission,
-            {
-                "execute": "execute",
-                "finalizer": "finalizer",
-            },
+            {"act": "act", "finalizer": "finalizer"},
         )
-        builder.add_edge("execute", "finalizer")
+        builder.add_edge("act", "decide")  # the loop
         builder.add_edge("finalizer", END)
         return builder.compile(checkpointer=self.checkpointer)
 
     def start(
         self, run_id: str, task: str, permission_mode: str, plan_first: bool = False, reasoning: str = "medium"
     ) -> dict[str, Any]:
-        config = {"configurable": {"thread_id": run_id}}
+        # Read max_steps early to size the recursion_limit safety net.  The _decide_node also
+        # reads it on first step; this avoids LangGraph's default-25 limit tripping before the
+        # step >= max_steps guard can route to the finalizer.
+        max_steps = self.storage.get_app_settings().maxAgentSteps
+        config = {
+            "configurable": {"thread_id": run_id},
+            "recursion_limit": max_steps * 2 + 5,
+        }
         state: GraphState = {
             "run_id": run_id,
             "task": task,
@@ -502,7 +502,30 @@ class RuntimeGraph:
             self._cancelled.discard(run_id)
             self._clear_partial(run_id)
             return state
-        summary = state.get("result_summary") or "Run stopped without a final result."
+
+        # --- Budget synthesis: derive summary from how the loop ended ---
+        next_action = state.get("next_action")
+        step = state.get("step", 0)
+        max_steps = state.get("max_steps", 8)
+        if state.get("result_summary"):
+            # Explicit summary already set upstream (provider_failed path, execute_node denial, etc.)
+            summary = state["result_summary"]
+        elif next_action and next_action.get("action") == "answer":
+            # Manager answered: use the answer text directly.
+            summary = next_action.get("text") or "Run stopped without a final result."
+        elif step >= max_steps:
+            # Budget exhausted: synthesize best-effort from observations.
+            observations = state.get("observations") or []
+            obs_lines = [
+                f"{obs.get('agentId', 'agent')}: {obs.get('summary', '')}"
+                for obs in observations
+                if obs.get("summary")
+            ]
+            gathered = " | ".join(obs_lines) if obs_lines else "No observations were gathered."
+            summary = f"Reached the step limit ({step} steps); here is what was gathered: {gathered}"
+        else:
+            summary = "Run stopped without a final result."
+
         # Failure is determined by explicit state flags set upstream — never by keyword-matching
         # the answer text (which misfired when a normal answer happened to contain "needs"/"requires").
         failed = bool(
@@ -637,10 +660,22 @@ class RuntimeGraph:
         """ReAct-loop act node: execute ONE tool assignment from next_action, append a compact
         observation to state["observations"], and increment state["step"].
 
-        Delegates entirely to the existing _execute_tool_assignment — no gating or execution
-        logic is reimplemented here.
+        Enqueues an agent task for the assignment so the task is visible via list_agent_tasks,
+        then delegates execution to _execute_tool_assignment.
         """
-        assignment = state["next_action"]
+        assignment = dict(state["next_action"])
+        run_id = state["run_id"]
+        agent_id = str(assignment.get("agentId") or "")
+        task_text = str(assignment.get("task") or "")
+        # Enqueue the task so it appears in list_agent_tasks and emits agent.task.assigned event.
+        queued = self.storage.enqueue_agent_task(
+            run_id,
+            agent_id,
+            task_text,
+            queue_kind="agent",
+            metadata={"source": "decide_loop"},
+        )
+        assignment["taskId"] = queued.id
         result = self._execute_tool_assignment(state, assignment)
         obs = list(state.get("observations") or [])
         obs.append({
@@ -657,8 +692,10 @@ class RuntimeGraph:
             return "permission_gate"
         return "execute"
 
-    def _route_after_permission(self, state: GraphState) -> Literal["execute", "finalizer"]:
-        return "execute"
+    def _route_after_permission(self, state: GraphState) -> Literal["act", "finalizer"]:
+        if state.get("approved") is False:
+            return "finalizer"
+        return "act"
 
     def _execute_tool_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
         agent_id = str(assignment.get("agentId") or "")
