@@ -1,8 +1,7 @@
 # 2026-06-22 Loop Live Validation Results
 
-Status: partial validation; eval and live file-tool feed-back passed after the scalar-answer fix,
-then validation stopped on a new live-provider structured-output failure during the terminal-disabled
-spot check.
+Status: validated. The live eval is green, the file-tool loop proves observation feed-back, and the
+required honest-failure checks now pass against the real local Ollama setup.
 
 ## Environment
 
@@ -107,6 +106,8 @@ observation=ErrorObservation error=model_not_configured missingRequirement=model
 
 Main runtime setting before the run: `terminalToolEnabled=false`.
 
+#### Previous blocked attempt
+
 Task:
 
 ```json
@@ -135,28 +136,64 @@ Event trace:
 The run failed before `act`, so the terminal hard gate and `tool_disabled` observation were not
 validated. The raw provider response is not persisted in the run/event tables.
 
+#### Rerun after `fab6347`
+
+After `fab6347` (`feat(graph): capture raw provider response on manager decision failures`), the
+same live repro no longer hit `manager_plan_failed`; there was no `rawResponse` to capture because
+the manager produced a valid terminal assignment and the tool gate ran.
+
+Run id: `run_07efd8044ce64c0fbf`.
+
+Result:
+
+```text
+status=failed
+resultSummary=Terminal Tool is turned off in Settings.
+```
+
+Event trace:
+
+1. `agent.task.assigned` (`agent_terminal`)
+2. `observation.created` (`TerminalObservation`, `error=tool_disabled`,
+   `structuredOutput={"setting":"terminalToolEnabled","agentId":"agent_terminal"}`)
+3. `run.failed` with summary `Terminal Tool is turned off in Settings.`
+
+This validates the terminal hard gate and confirms the failure is honest, not a fake execution.
+
 ### Budget Exhaustion
 
-Not run. Validation stopped at the terminal-disabled structured-output failure instead of retrying
-or changing the prompt.
+Temporarily set `maxAgentSteps=1`, then restored the original `maxAgentSteps=8`.
+
+Task:
+
+```json
+{"task":"Use the File Agent to list the workspace files. Then use the File Agent again to verify the count. Do not answer until both file scans are done.","permissionMode":"full_access"}
+```
+
+Run id: `run_54375978da5e43d883`.
+
+Result:
+
+```text
+status=completed
+resultSummary=Reached the step limit (1 steps); here is what was gathered: agent_file: File Agent scanned 1 items.
+```
+
+Event trace:
+
+1. `agent.task.assigned` (`agent_file`)
+2. `observation.created` (`FileObservation`, `File Agent scanned 1 items.`)
+3. `run.completed` with the explicit step-limit summary
+
+This validates the budget-exhaustion path: best-effort completion with an honest step-limit note,
+not a fake success.
 
 ## Conclusion
 
 The scalar-answer fix is validated against the live eval harness (`3/3`), and the live file-tool
-loop validated observation feed-back end to end. Handoff A is still not fully complete because the
-terminal-disabled honest-failure check surfaced a new live-provider structured-output failure before
-the tool gate could run.
-
-Current repro for the new blocker:
-
-```bash
-cd runtime/python
-.venv/bin/yanshi-runtime --host 127.0.0.1 --port 8765
-# in another shell, POST /runs with:
-# {"task":"Use the Terminal Agent to run command `pwd` in the workspace and report the output.","permissionMode":"full_access"}
-```
-
-No code fix was attempted during this resumed validation run.
+loop validated observation feed-back end to end. The no-provider, terminal-disabled, and
+budget-exhaustion honest-failure checks all passed on live API runs. Handoff A is complete. The
+optional cancel check was not run.
 
 ## Resolution (2026-06-22)
 
@@ -172,7 +209,7 @@ Fix: coerce scalar `text` (int/float/bool) to `str`; still reject genuinely-malf
 `math_basic` payload (`{"action":"answer","text":4}` → `{"action":"answer","text":"4"}`). Full suite:
 153 passed.
 
-Follow-ups: the live Ollama eval rerun is now complete and `math_basic` passed end to end. The
-run/event tables still don't persist the raw provider response, which made both malformed-output
-failures harder to diagnose; consider storing a truncated raw payload on `manager_plan_failed`
-ErrorObservations.
+Follow-up completed: the live Ollama eval rerun is green and `math_basic` passed end to end.
+`fab6347` now persists a truncated `rawResponse` on future `manager_plan_failed` observations.
+The terminal-disabled rerun did not exercise that instrumentation because the live provider returned
+a valid terminal assignment and the expected `tool_disabled` gate ran.
