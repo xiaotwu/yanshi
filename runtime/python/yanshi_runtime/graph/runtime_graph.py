@@ -71,6 +71,12 @@ VALID_AGENT_IDS = {
 
 
 class RuntimeGraph:
+    _HARD_TOOL_FAILURE_REQUIREMENTS = {
+        "tool_disabled",
+        "tool_not_in_worker_abilities",
+        "docker_config_invalid",
+    }
+
     def __init__(
         self,
         *,
@@ -563,11 +569,16 @@ class RuntimeGraph:
           - (B+C) if requires_approval (including plan_first on step 0) → create approval record,
             set pending_approval status, route to permission_gate
           - on ProviderCallError or malformed output set provider_failed=True and write
-            the same ErrorObservation that _manager_node writes on plan failure, next_action=None
+            an ErrorObservation, next_action=None
         """
         run_id = state["run_id"]
         task = state["task"]
         permission_mode = state.get("permission_mode", "default")
+
+        # A previous act step hit a hard gate such as a disabled tool or invalid sandbox
+        # settings. Stop here instead of asking the manager to answer past the policy/config block.
+        if state.get("tool_failed"):
+            return state
 
         # --- one-time setup on first step ---
         if not state.get("step"):
@@ -584,8 +595,8 @@ class RuntimeGraph:
             }
 
         # Run policy.decide on the top-level task to check for early-exit conditions
-        # (blocked, approval, missing_model) BEFORE calling the provider.  This mirrors
-        # the old _manager_node ordering: policy first, provider second.
+        # (blocked, approval, missing_model) BEFORE calling the provider: policy first,
+        # provider second.
         decision = self.policy.decide(task, permission_mode)  # type: ignore[arg-type]
 
         # --- A: policy blocked (SAFETY) — task must NOT execute ---
@@ -665,7 +676,7 @@ class RuntimeGraph:
                 },
                 error="model_not_configured",
             )
-            # Emit plan.created so event-listeners see the plan step (mirrors _manager_node)
+            # Emit plan.created so event-listeners see the not-configured planning step.
             plan = self._plan_for_task(task, decision.risk_level)
             self.storage.append_event("plan.created", run_id=run_id, agent_id="agent_manager", payload={"steps": plan})
             self.storage.update_run(run_id, status="running", plan=plan)
@@ -684,7 +695,13 @@ class RuntimeGraph:
         project_id = self._project_id_for(run_id)
 
         try:
-            next_action = self._provider_next_action(task, observations, reasoning, project_id)
+            next_action = self._provider_next_action(
+                task,
+                observations,
+                reasoning,
+                project_id,
+                conversation_history=self._thread_context(run_id),
+            )
         except (ProviderCallError, ValueError, json.JSONDecodeError) as exc:
             summary = f"Manager could not decide next action: {exc}"
             action_id = self.storage.create_action(
@@ -753,6 +770,8 @@ class RuntimeGraph:
             return "finalizer"
         if state.get("provider_failed"):
             return "finalizer"
+        if state.get("tool_failed"):
+            return "finalizer"
         if state.get("approval_required"):
             return "permission_gate"
         next_action = state.get("next_action")
@@ -793,14 +812,16 @@ class RuntimeGraph:
             "ok": result["ok"],
             "summary": result["summary"],
         })
-        return {**state, "observations": obs, "step": state.get("step", 0) + 1}
-
-    def _route_after_manager(self, state: GraphState) -> Literal["permission_gate", "execute", "finalizer"]:
-        if state.get("blocked"):
-            return "finalizer"
-        if state.get("approval_required"):
-            return "permission_gate"
-        return "execute"
+        next_state: GraphState = {**state, "observations": obs, "step": state.get("step", 0) + 1}
+        if not result["ok"] and result.get("missing_requirement") in self._HARD_TOOL_FAILURE_REQUIREMENTS:
+            return {
+                **next_state,
+                "tool_failed": True,
+                "failure_reviewed": True,
+                "result_summary": result["summary"],
+                "next_action": None,
+            }
+        return next_state
 
     def _route_after_permission(self, state: GraphState) -> Literal["decide", "finalizer"]:
         if state.get("approved") is False:
@@ -1601,7 +1622,12 @@ class RuntimeGraph:
     _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal"}
 
     def _provider_next_action(
-        self, task: str, observations: list[dict[str, Any]], reasoning: str, project_id: str | None
+        self,
+        task: str,
+        observations: list[dict[str, Any]],
+        reasoning: str,
+        project_id: str | None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Call the manager to decide the next action in the ReAct loop.
 
@@ -1628,6 +1654,7 @@ class RuntimeGraph:
                         "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal. "
                         "Choose answer when you can reply from available observations. "
                         "Choose assign when you need a tool to gather more information. "
+                        "When conversationHistory is present, keep the answer consistent with prior turns. "
                         + self._reasoning_directive(reasoning)
                     ),
                 ),
@@ -1636,6 +1663,7 @@ class RuntimeGraph:
                     content=json.dumps(
                         {
                             "task": task,
+                            "conversationHistory": conversation_history or [],
                             "observations": obs_payload,
                         },
                         ensure_ascii=False,

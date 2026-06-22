@@ -33,6 +33,7 @@ def make_client(tmp_path: Path) -> TestClient:
 class FakeOpenAIHandler(BaseHTTPRequestHandler):
     received_authorization: str | None = None
     received_payload: dict[str, object] | None = None
+    received_payloads: list[dict[str, object]] = []
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/v1/models":
@@ -47,19 +48,26 @@ class FakeOpenAIHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("content-length", "0"))
         FakeOpenAIHandler.received_authorization = self.headers.get("authorization")
         FakeOpenAIHandler.received_payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        FakeOpenAIHandler.received_payloads.append(FakeOpenAIHandler.received_payload)
         messages = FakeOpenAIHandler.received_payload.get("messages") if FakeOpenAIHandler.received_payload else []
         system_prompt = messages[0].get("content", "") if isinstance(messages, list) and messages else ""
-        if "structured multi-agent plan" in system_prompt:
-            content = json.dumps(
-                {
-                    "steps": ["Understand request", "Assign Manager Agent", "Return verified response"],
-                    "tasks": [{"agentId": "agent_manager", "task": "Produce the response with the configured provider."}],
-                }
-            )
+        user_prompt = messages[-1].get("content", "") if isinstance(messages, list) and messages else ""
+        if "Decide the next action as JSON only" in system_prompt:
+            try:
+                user_payload = json.loads(user_prompt)
+            except json.JSONDecodeError:
+                user_payload = {}
+            task = str(user_payload.get("task") or "")
+            observations = user_payload.get("observations") if isinstance(user_payload, dict) else []
+            if isinstance(observations, list) and observations:
+                content = json.dumps({"action": "answer", "text": "Provider response from fake server."})
+            elif "browser" in task.lower() or "http" in task.lower():
+                content = json.dumps({"action": "assign", "agentId": "agent_browser", "task": task})
+            else:
+                content = json.dumps({"action": "answer", "text": "Provider response from fake server."})
         else:
             content = "Provider response from fake server."
-        # The manager synthesis streams; plan generation does not. Honor the requested mode so the
-        # SSE-parsing path is exercised by tests too.
+        # Honor streaming mode so the SSE-parsing path stays exercised by tests too.
         if FakeOpenAIHandler.received_payload.get("stream"):
             self._sse(content)
             return
@@ -111,6 +119,7 @@ class FakeOpenAIServer:
     def __enter__(self) -> str:
         FakeOpenAIHandler.received_authorization = None
         FakeOpenAIHandler.received_payload = None
+        FakeOpenAIHandler.received_payloads = []
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeOpenAIHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -145,6 +154,22 @@ class SequencedProvider:
     def stream_chat_completion(self, messages: list[object], model: str | None = None):
         # Stream the next sequenced response as a single chunk (the graph joins chunks).
         yield self.chat_completion(messages)
+
+
+def loop_assign(agent_id: str, task: str) -> str:
+    return json.dumps({"action": "assign", "agentId": agent_id, "task": task})
+
+
+def loop_answer(text: str) -> str:
+    return json.dumps({"action": "answer", "text": text})
+
+
+def set_loop_provider(client: TestClient, responses: list[str], *, repeat_last: bool = False) -> SequencedProvider:
+    provider = SequencedProvider(responses, repeat_last=repeat_last)
+    service = client.app.state.runtime_service
+    service.provider = provider
+    service.graph.provider = provider
+    return provider
 
 
 class FakePlaywrightError(Exception):
@@ -419,6 +444,13 @@ def test_file_scan_uses_real_workspace(tmp_path: Path) -> None:
     (workspace / "notes.txt").write_text("hello", encoding="utf-8")
 
     client = make_client(tmp_path)
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List the files in the workspace."),
+            loop_answer("scanned workspace; found notes.txt."),
+        ],
+    )
     created = client.post("/runs", json={"task": "List workspace files"})
     assert created.status_code == 200
     run_id = created.json()["id"]
@@ -476,6 +508,13 @@ def test_browser_run_records_real_action_observation_and_artifact(tmp_path: Path
             )
 
     service.graph.browser_tool = FixtureBrowserTool()
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_browser", "Use browser https://example.test"),
+            loop_answer("Browser Agent loaded fixture page."),
+        ],
+    )
     created = client.post(
         "/runs",
         json={"task": "Use browser https://example.test", "permissionMode": "auto_review"},
@@ -538,7 +577,7 @@ def test_browser_summary_uses_provider_after_real_page_observation(tmp_path: Pat
     assert any(observation["type"] == "BrowserSummaryObservation" for observation in observations)
     assert any(entry["event"]["type"] == "artifact.created" for entry in events)
     assert FakeOpenAIHandler.received_payload is not None
-    assert "Fixture page text to summarize" in json.dumps(FakeOpenAIHandler.received_payload)
+    assert "Fixture page text to summarize" in json.dumps(FakeOpenAIHandler.received_payloads)
 
 
 def test_multi_agent_executor_runs_queued_browser_file_and_manager_synthesis(tmp_path: Path) -> None:
@@ -570,23 +609,14 @@ def test_multi_agent_executor_runs_queued_browser_file_and_manager_synthesis(tmp
 
     provider = SequencedProvider(
         [
-            json.dumps(
-                {
-                    "steps": ["Inspect page", "Scan workspace", "Synthesize final answer"],
-                    "tasks": [
-                        {"agentId": "agent_browser", "task": "Open the requested page and capture page state."},
-                        {"agentId": "agent_file", "task": "Scan workspace files."},
-                        {"agentId": "agent_manager", "task": "Synthesize Browser and File observations."},
-                    ],
-                }
-            ),
-            "Manager synthesized browser and file observations.",
+            loop_assign("agent_browser", "Open https://example.test and capture page state."),
+            loop_assign("agent_file", "Scan workspace files."),
+            loop_answer("Manager synthesized browser and file observations."),
         ]
     )
     service.provider = provider
     service.graph.provider = provider
     service.graph.browser_tool = FixtureBrowserTool()
-    service.graph._direct_assignments_for_task = lambda task: []
 
     created = client.post(
         "/runs",
@@ -605,17 +635,15 @@ def test_multi_agent_executor_runs_queued_browser_file_and_manager_synthesis(tmp
     reviewer_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_reviewer")
     assert [task.status for task in browser_tasks] == ["completed"]
     assert [task.status for task in file_tasks] == ["completed"]
-    assert [task.status for task in manager_tasks] == ["completed", "completed"]
-    assert [task.status for task in reviewer_tasks] == ["completed"]
+    assert manager_tasks == []
+    assert reviewer_tasks == []
 
     events = client.get("/events", params={"runId": run_id}).json()
     event_types = [entry["event"]["type"] for entry in events]
-    assert event_types.count("agent.task.started") >= 5
+    assert event_types.count("agent.task.started") >= 2
     observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
     assert any(observation["type"] == "BrowserObservation" for observation in observations)
     assert any(observation["type"] == "FileObservation" for observation in observations)
-    assert any(observation["type"] == "MessageObservation" for observation in observations)
-    assert any(observation["type"] == "ReviewerObservation" for observation in observations)
     synthesis_payload = json.dumps(provider.calls[-1])
     assert "Browser Agent loaded fixture page." in synthesis_payload
     assert "scanned" in synthesis_payload
@@ -626,21 +654,12 @@ def test_failed_agent_task_is_reviewed_without_fake_success(tmp_path: Path) -> N
     service = client.app.state.runtime_service
     provider = SequencedProvider(
         [
-            json.dumps(
-                {
-                    "steps": ["Try browser inspection", "Synthesize result from observations"],
-                    "tasks": [
-                        {"agentId": "agent_browser", "task": "Open the requested page."},
-                        {"agentId": "agent_manager", "task": "Explain what happened from agent observations."},
-                    ],
-                }
-            ),
-            "Manager synthesized the failed Browser Agent observation.",
+            loop_assign("agent_browser", "Open the requested page."),
+            loop_answer("Browser Agent could not inspect the page because no URL was provided."),
         ]
     )
     service.provider = provider
     service.graph.provider = provider
-    service.graph._direct_assignments_for_task = lambda task: []
 
     created = client.post(
         "/runs",
@@ -650,23 +669,22 @@ def test_failed_agent_task_is_reviewed_without_fake_success(tmp_path: Path) -> N
     assert created.status_code == 200
     run_id = created.json()["id"]
     run = client.get(f"/runs/{run_id}").json()
-    assert run["status"] == "failed"
-    assert run["resultSummary"] == "Manager synthesized the failed Browser Agent observation."
+    assert run["status"] == "completed"
+    assert run["resultSummary"] == "Browser Agent could not inspect the page because no URL was provided."
 
     browser_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_browser")
     manager_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_manager")
     reviewer_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_reviewer")
     assert [task.status for task in browser_tasks] == ["failed"]
-    assert [task.status for task in manager_tasks] == ["completed", "completed"]
-    assert [task.status for task in reviewer_tasks] == ["completed"]
+    assert manager_tasks == []
+    assert reviewer_tasks == []
 
     events = client.get("/events", params={"runId": run_id}).json()
     observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
     browser_observation = next(observation for observation in observations if observation["type"] == "BrowserObservation")
-    reviewer_observation = next(observation for observation in observations if observation["type"] == "ReviewerObservation")
     assert browser_observation["error"] == "browser_url"
-    assert reviewer_observation["structuredOutput"]["qualityPassed"] is False
-    assert reviewer_observation["structuredOutput"]["failedAgentTasks"][0]["agentId"] == "agent_browser"
+    final_decision_payload = json.dumps(provider.calls[-1])
+    assert "Browser Agent needs an http(s) URL to navigate." in final_decision_payload
     assert "fake" not in json.dumps(events).lower()
 
 
@@ -786,6 +804,13 @@ def test_computer_screen_capture_run_records_artifact(tmp_path: Path) -> None:
         probe=StaticPermissionProbe(accessibility="granted", screen_recording="granted"),
         runner=runner,
     )
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_computer", "Take a computer screenshot"),
+            loop_answer("Computer Agent captured the screen."),
+        ],
+    )
 
     created = client.post(
         "/runs",
@@ -818,6 +843,13 @@ def test_computer_click_run_persists_bridge_action_observation(tmp_path: Path) -
     service.graph.computer_tool = ComputerTool(
         probe=StaticPermissionProbe(accessibility="granted", screen_recording="permission_required"),
         bridge=bridge,
+    )
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_computer", "Click 10, 20 on the computer"),
+            loop_answer("Computer bridge clicked."),
+        ],
     )
 
     created = client.post(
@@ -922,6 +954,13 @@ def test_terminal_run_records_action_observation_and_stdout(tmp_path: Path) -> N
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
     client.put("/settings", json={"terminalToolEnabled": True})
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_terminal", "Run command `ls` in terminal"),
+            loop_answer("Terminal command completed: ls."),
+        ],
+    )
 
     created = client.post(
         "/runs",
@@ -1023,6 +1062,13 @@ def test_docker_run_records_terminal_log_artifact(tmp_path: Path) -> None:
     service = client.app.state.runtime_service
     service.graph.terminal_tool = TerminalTool(runner=runner)
     client.put("/settings", json={"terminalToolEnabled": True})
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_terminal", "Run command `echo hi > note.txt` in Docker"),
+            loop_answer("Docker sandbox command completed."),
+        ],
+    )
 
     created = client.post(
         "/runs",
@@ -1113,6 +1159,15 @@ def test_project_run_uses_project_workspace_and_filters_runs(tmp_path: Path) -> 
     project = client.post("/projects", json={"name": "Research"}).json()
     workspace = Path(project["workspacePath"])
     (workspace / "brief.md").write_text("project notes", encoding="utf-8")
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned default workspace."),
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned project workspace."),
+        ],
+    )
 
     standalone = client.post("/runs", json={"task": "List workspace files"})
     assert standalone.status_code == 200
@@ -1141,7 +1196,7 @@ def test_project_run_uses_project_workspace_and_filters_runs(tmp_path: Path) -> 
     assert any(entry["event"]["projectId"] == project["id"] for entry in run_events)
     project_tasks = service.storage.list_agent_tasks(project_id=project["id"])
     file_tasks = service.storage.list_agent_tasks(project_id=project["id"], agent_id="agent_file")
-    assert any(task.agentId == "agent_manager" and task.status == "completed" for task in project_tasks)
+    assert all(task.agentId != "agent_manager" for task in project_tasks)
     assert [task.runId for task in file_tasks] == [run_id]
     assert file_tasks[0].status == "completed"
     api_tasks = client.get("/agent-tasks", params={"projectId": project["id"], "agentId": "agent_file"})
@@ -1623,6 +1678,13 @@ def test_file_upload_copies_into_workspace_and_is_scannable(tmp_path: Path) -> N
     assert uploaded.exists()
     assert uploaded.read_text(encoding="utf-8") == "hello upload"
 
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned uploaded workspace files."),
+        ],
+    )
     run = client.post("/runs", json={"task": "List workspace files"})
     run_id = run.json()["id"]
     events = client.get("/events", params={"runId": run_id}).json()
@@ -1659,6 +1721,13 @@ def test_agent_instances_and_actors_persist_and_update(tmp_path: Path) -> None:
     assert file_actor["station"] == "file"
 
     # A real run drives the File agent and must persist its instance/actor state.
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned workspace files."),
+        ],
+    )
     client.post("/runs", json={"task": "List workspace files"})
     file_instance = next(i for i in service.storage.list_agent_instances(None) if i.profileId == "agent_file")
     assert file_instance.status in {"done", "working", "failed"}
@@ -2039,8 +2108,7 @@ def test_reasoning_level_and_profile_affect_manager_prompt(tmp_path: Path) -> No
     service = client.app.state.runtime_service
     provider = SequencedProvider(
         [
-            json.dumps({"steps": ["Understand", "Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer the question."}]}),
-            "Final answer.",
+            loop_answer("Final answer."),
         ]
     )
     service.provider = provider
@@ -2055,8 +2123,8 @@ def test_reasoning_level_and_profile_affect_manager_prompt(tmp_path: Path) -> No
 
     planning_prompt = json.dumps(provider.calls[0])
     assert "Zephyr-coordinator-signature" in planning_prompt
+    assert "Decide the next action as JSON only" in planning_prompt
     assert "Decompose thoroughly" in planning_prompt
-    assert "extra_high" in planning_prompt
 
 
 def test_agent_profile_persona_in_file_agent_execution_context(tmp_path: Path) -> None:
@@ -2065,6 +2133,13 @@ def test_agent_profile_persona_in_file_agent_execution_context(tmp_path: Path) -
     (workspace / "n.txt").write_text("x", encoding="utf-8")
     client = make_client(tmp_path)
     client.put("/agent-profiles/agent_file", json={"personality": "Tidy-file-signature"})
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned workspace files."),
+        ],
+    )
 
     created = client.post("/runs", json={"task": "List workspace files"})
     run_id = created.json()["id"]
@@ -2081,6 +2156,15 @@ def test_agent_profile_persona_in_terminal_and_computer_context(tmp_path: Path) 
     client.put("/settings", json={"terminalToolEnabled": True})
     client.put("/agent-profiles/agent_terminal", json={"personality": "Precise-terminal-signature"})
     client.put("/agent-profiles/agent_computer", json={"personality": "Steady-computer-signature"})
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_terminal", "Run command `ls` in terminal"),
+            loop_answer("Terminal command completed: ls."),
+            loop_assign("agent_computer", "Take a computer screenshot"),
+            loop_answer("Computer tool reached its current permission state."),
+        ],
+    )
 
     term = client.post("/runs", json={"task": "Run command `ls` in terminal", "permissionMode": "full_access"})
     term_events = client.get("/events", params={"runId": term.json()["id"]}).json()
@@ -2098,8 +2182,7 @@ def test_reasoning_default_comes_from_settings(tmp_path: Path) -> None:
     service = client.app.state.runtime_service
     provider = SequencedProvider(
         [
-            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer."}]}),
-            "Done.",
+            loop_answer("Done."),
         ]
     )
     service.provider = provider
@@ -2207,6 +2290,13 @@ def test_artifacts_endpoint_lists_created_artifacts(tmp_path: Path) -> None:
     workspace.mkdir(parents=True)
     (workspace / "a.txt").write_text("x", encoding="utf-8")
     client = make_client(tmp_path)
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned workspace files."),
+        ],
+    )
 
     created = client.post("/runs", json={"task": "List workspace files"})
     assert created.status_code == 200
@@ -2224,6 +2314,13 @@ def test_automation_crud_and_manual_run(tmp_path: Path) -> None:
     workspace.mkdir(parents=True)
     (workspace / "note.txt").write_text("x", encoding="utf-8")
     client = make_client(tmp_path)
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned workspace files."),
+        ],
+    )
 
     created = client.post("/automations", json={"name": "Nightly scan", "task": "List workspace files"})
     assert created.status_code == 200
@@ -2296,6 +2393,13 @@ def test_plan_first_forces_approval_then_resumes(tmp_path: Path) -> None:
     workspace.mkdir(parents=True)
     (workspace / "notes.txt").write_text("hello", encoding="utf-8")
     client = make_client(tmp_path)
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned workspace files."),
+        ],
+    )
 
     created = client.post("/runs", json={"task": "List workspace files", "planFirst": True})
     assert created.status_code == 200
@@ -2333,6 +2437,7 @@ def test_disabled_terminal_tool_returns_tool_disabled(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
     # terminalToolEnabled defaults to False; leave it off.
+    set_loop_provider(client, [loop_assign("agent_terminal", "Run command `ls` in terminal")])
 
     created = client.post(
         "/runs",
@@ -2356,6 +2461,7 @@ def test_disabled_terminal_tool_returns_tool_disabled(tmp_path: Path) -> None:
 def test_disabled_browser_tool_returns_tool_disabled(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     client.put("/settings", json={"browserToolEnabled": False})
+    set_loop_provider(client, [loop_assign("agent_browser", "Use browser https://example.test")])
 
     created = client.post(
         "/runs",
@@ -2377,6 +2483,7 @@ def test_disabled_browser_tool_returns_tool_disabled(tmp_path: Path) -> None:
 def test_disabled_computer_tool_returns_tool_disabled(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     client.put("/settings", json={"computerToolEnabled": False})
+    set_loop_provider(client, [loop_assign("agent_computer", "Click 10, 20 on the computer")])
 
     created = client.post(
         "/runs",
@@ -2445,6 +2552,13 @@ def test_docker_run_uses_persisted_developer_settings(tmp_path: Path) -> None:
             "dockerPidsLimit": 256,
         },
     )
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_terminal", "Run command `echo hi` in Docker"),
+            loop_answer("Docker sandbox command completed."),
+        ],
+    )
 
     created = client.post(
         "/runs",
@@ -2478,6 +2592,7 @@ def test_docker_run_rejects_invalid_persisted_settings(tmp_path: Path) -> None:
     service = client.app.state.runtime_service
     service.graph.terminal_tool = TerminalTool(runner=runner)
     client.put("/settings", json={"terminalToolEnabled": True, "dockerImage": "bad image name"})
+    set_loop_provider(client, [loop_assign("agent_terminal", "Run command `echo hi` in Docker")])
 
     created = client.post(
         "/runs",
@@ -2583,7 +2698,7 @@ def test_provider_healthcheck_uses_configured_fake_server(tmp_path: Path) -> Non
     assert "secret-key" not in response.text
 
 
-def test_configured_provider_call_creates_message_observation(tmp_path: Path) -> None:
+def test_configured_provider_call_completes_with_answer(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
     with FakeOpenAIServer() as base_url:
@@ -2598,22 +2713,14 @@ def test_configured_provider_call_creates_message_observation(tmp_path: Path) ->
     run = client.get(f"/runs/{run_id}").json()
     assert run["status"] == "completed"
     assert run["resultSummary"] == "Provider response from fake server."
-    assert run["plan"] == ["Understand request", "Assign Manager Agent", "Return verified response"]
     assert FakeOpenAIHandler.received_authorization == "Bearer secret-key"
     assert FakeOpenAIHandler.received_payload is not None
     assert FakeOpenAIHandler.received_payload["model"] == "yanshi-test-model"
 
     events = client.get("/events", params={"runId": run_id}).json()
-    observations = [
-        entry["event"]["payload"]
-        for entry in events
-        if entry["event"]["type"] == "observation.created"
-    ]
-    assert any(observation["type"] == "MessageObservation" for observation in observations)
     assert "secret-key" not in json.dumps(events)
     manager_tasks = service.storage.list_agent_tasks(run_id=run_id, agent_id="agent_manager")
-    assert [task.status for task in manager_tasks] == ["completed", "completed"]
-    assert manager_tasks[1].metadata == {"source": "provider_plan"}
+    assert manager_tasks == []
 
 
 def test_strip_reasoning_handles_paired_and_dangling_think_tags() -> None:
@@ -2945,6 +3052,15 @@ def test_project_run_uses_project_team_persona_in_file_action(tmp_path: Path) ->
     proj_file_profile = service.storage.get_project_agent_profile(project_id, "file")
     assert proj_file_profile is not None
     service.storage.update_agent_profile(proj_file_profile.id, {"personality": "ProjectFile-persona-signature"})
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned project workspace files."),
+            loop_assign("agent_file", "List workspace files."),
+            loop_answer("scanned standalone workspace files."),
+        ],
+    )
 
     # Run in the project — should pick up the project's file-agent persona.
     project_run = client.post("/runs", json={"task": "List workspace files", "projectId": project_id})
@@ -3000,8 +3116,8 @@ class ModelRecordingProvider:
 
 
 def test_per_worker_model_override_manager(tmp_path: Path) -> None:
-    """A manager 偃师 with model='custom-x' causes both the planning call and the synthesis
-    stream call to use model='custom-x'. A 偃师 with empty/None model passes None through
+    """A manager 偃师 with model='custom-x' causes the manager decision call to use
+    model='custom-x'. A 偃师 with empty/None model passes None through
     (inherits the configured provider default — no silent substitution)."""
     client = make_client(tmp_path)
     service = client.app.state.runtime_service
@@ -3020,8 +3136,7 @@ def test_per_worker_model_override_manager(tmp_path: Path) -> None:
 
     provider = ModelRecordingProvider(
         [
-            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer the question."}]}),
-            "Final answer with custom model.",
+            loop_answer("Final answer with custom model."),
         ]
     )
     service.provider = provider
@@ -3033,7 +3148,7 @@ def test_per_worker_model_override_manager(tmp_path: Path) -> None:
     assert run["status"] == "completed"
 
     # All provider calls for this project run should use the manager's custom model.
-    assert len(provider.recorded_calls) >= 2, "Expected at least planning + synthesis calls"
+    assert len(provider.recorded_calls) >= 1, "Expected at least one manager decision call"
     for call in provider.recorded_calls:
         assert call["model"] == "custom-x", (
             f"Expected model='custom-x' but got model={call['model']!r} for {call['kind']} call"
@@ -3049,8 +3164,7 @@ def test_per_worker_model_none_inherits_default(tmp_path: Path) -> None:
     # Standalone run (no project) — global manager profile has no model set by default.
     provider = ModelRecordingProvider(
         [
-            json.dumps({"steps": ["Answer"], "tasks": [{"agentId": "agent_manager", "task": "Answer."}]}),
-            "Done.",
+            loop_answer("Done."),
         ]
     )
     service.provider = provider
@@ -3061,7 +3175,7 @@ def test_per_worker_model_none_inherits_default(tmp_path: Path) -> None:
     run = client.get(f"/runs/{created.json()['id']}").json()
     assert run["status"] == "completed"
 
-    assert len(provider.recorded_calls) >= 2, "Expected at least planning + synthesis calls"
+    assert len(provider.recorded_calls) >= 1, "Expected at least one manager decision call"
     for call in provider.recorded_calls:
         assert call["model"] is None, (
             f"Expected model=None (inherit default) but got model={call['model']!r} for {call['kind']} call"
@@ -3088,6 +3202,7 @@ def test_worker_whitelist_excludes_tool_blocks_with_honest_error(tmp_path: Path)
     proj_terminal_profile = service.storage.get_project_agent_profile(project_id, "terminal")
     assert proj_terminal_profile is not None
     service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": ["docker"]})
+    set_loop_provider(client, [loop_assign("agent_terminal", "Run command `ls` in terminal")])
 
     created = client.post(
         "/runs",
@@ -3126,6 +3241,13 @@ def test_worker_whitelist_empty_inherits_global_toggle(tmp_path: Path) -> None:
     service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": []})
     refreshed = service.storage.get_project_agent_profile(project_id, "terminal")
     assert refreshed is not None and refreshed.defaultTools == [], "defaultTools should be empty after update"
+    set_loop_provider(
+        client,
+        [
+            loop_assign("agent_terminal", "Run command `ls` in terminal"),
+            loop_answer("Terminal command completed: ls."),
+        ],
+    )
 
     # Run; should NOT be blocked by whitelist (falls through to actual execution).
     created = client.post(
@@ -3159,6 +3281,7 @@ def test_global_toggle_off_blocks_regardless_of_whitelist(tmp_path: Path) -> Non
     proj_terminal_profile = service.storage.get_project_agent_profile(project_id, "terminal")
     assert proj_terminal_profile is not None
     service.storage.update_agent_profile(proj_terminal_profile.id, {"defaultTools": ["terminal", "docker"]})
+    set_loop_provider(client, [loop_assign("agent_terminal", "Run command `ls` in terminal")])
 
     created = client.post(
         "/runs",
@@ -3563,6 +3686,8 @@ def test_route_after_decide(tmp_path: Path) -> None:
     assert graph._route_after_decide({**base, "step": 8, "next_action": {"action": "assign", "agentId": "agent_file", "task": "t"}}) == "finalizer"
     # provider_failed → finalizer
     assert graph._route_after_decide({**base, "provider_failed": True, "next_action": None}) == "finalizer"
+    # hard tool failure → finalizer
+    assert graph._route_after_decide({**base, "tool_failed": True, "next_action": None}) == "finalizer"
     # next_action is None → finalizer
     assert graph._route_after_decide({**base, "next_action": None}) == "finalizer"
     # cancelled → finalizer
