@@ -7,9 +7,9 @@ function expressionLayer(expression: MascotExpression) {
     case "neutral":
       return (
         <g data-testid="mascot-expression-neutral" className="yanshi-mascot__expression">
-          <path d="M62 111 Q72 119 82 111" />
-          <path d="M118 111 Q128 119 138 111" />
-          <path className="yanshi-mascot__mouth" d="M93 137 Q100 142 107 137" />
+          <rect className="yanshi-mascot__blank-eye" x="61" y="103" width="15" height="31" rx="4" />
+          <rect className="yanshi-mascot__blank-eye" x="124" y="103" width="15" height="31" rx="4" />
+          <path className="yanshi-mascot__mouth" d="M94 140 Q100 146 106 140" />
         </g>
       );
     case "happy":
@@ -23,11 +23,13 @@ function expressionLayer(expression: MascotExpression) {
     case "thinking":
       return (
         <g data-testid="mascot-expression-thinking" className="yanshi-mascot__expression">
-          <path d="M61 108 Q72 104 83 110" />
-          <path d="M117 112 Q128 108 139 110" />
-          <path className="yanshi-mascot__mouth" d="M94 139 L106 139" />
-          <circle className="yanshi-mascot__thought-dot" cx="151" cy="87" r="4" />
-          <circle className="yanshi-mascot__thought-dot" cx="163" cy="74" r="2.8" />
+          <path d="M59 104 Q69 99 81 105" />
+          <path d="M119 106 Q131 101 141 105" />
+          <rect className="yanshi-mascot__blank-eye" x="62" y="110" width="13" height="25" rx="4" />
+          <rect className="yanshi-mascot__blank-eye" x="125" y="110" width="13" height="25" rx="4" />
+          <path className="yanshi-mascot__mouth" d="M93 143 L107 143" />
+          <circle className="yanshi-mascot__thought-dot" cx="153" cy="84" r="4" />
+          <circle className="yanshi-mascot__thought-dot" cx="165" cy="70" r="2.8" />
         </g>
       );
     case "focused":
@@ -117,23 +119,24 @@ export function MascotRig({
       </g>
 
       <g data-testid="mascot-layer-back-hair" className="yanshi-mascot__layer yanshi-mascot__back-hair">
-        <path d="M100 25 C57 25 34 55 34 94 C34 120 40 144 34 162 L50 154 L56 172 L70 158 L82 174 L100 164 L118 174 L130 158 L144 172 L150 154 L166 162 C160 144 166 120 166 94 C166 55 143 25 100 25 Z" />
+        <path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z" />
       </g>
 
       <g data-testid="mascot-layer-body" className="yanshi-mascot__layer yanshi-mascot__body">
-        <path d="M100 150 C124 150 138 166 141 197 L144 219 C145 230 134 235 100 235 C66 235 55 230 56 219 L59 197 C62 166 76 150 100 150 Z" />
-        <path
-          className="yanshi-mascot__sash"
-          d="M70 161 C86 174 114 174 130 161 L134 176 C116 191 84 191 66 176 Z"
-          fill="var(--ym-accent)"
-          stroke="var(--ym-outline)"
-        />
-        <path className="yanshi-mascot__joint" d="M80 193 C77 199 77 204 80 210" />
-        <path className="yanshi-mascot__joint" d="M120 193 C123 199 123 204 120 210" />
-        <ellipse className="yanshi-mascot__hand" cx="60" cy="196" rx="9" ry="11" />
-        <ellipse className="yanshi-mascot__hand" cx="140" cy="196" rx="9" ry="11" />
-        <rect className="yanshi-mascot__boot" x="73" y="225" width="24" height="11" rx="5.5" />
-        <rect className="yanshi-mascot__boot" x="103" y="225" width="24" height="11" rx="5.5" />
+        <path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z" />
+        <path className="yanshi-mascot__sleeve" d="M70 168 L36 185" />
+        <path className="yanshi-mascot__sleeve" d="M130 168 L164 185" />
+        <ellipse className="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12" />
+        <ellipse className="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12" />
+        <rect className="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4" />
+        <rect className="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4" />
+      </g>
+
+      <g data-testid="mascot-layer-apron-tab" className="yanshi-mascot__layer yanshi-mascot__apron-tab">
+        <path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z" />
+        <path className="yanshi-mascot__apron-stroke" d="M100 167 V210" />
+        <path className="yanshi-mascot__apron-stroke" d="M76 193 H124" />
+        <path className="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z" />
       </g>
 
       <g data-testid="mascot-layer-head" className="yanshi-mascot__layer yanshi-mascot__head">
@@ -149,28 +152,27 @@ export function MascotRig({
       {expressionLayer(expression)}
 
       <g data-testid="mascot-layer-front-hair" className="yanshi-mascot__layer yanshi-mascot__front-hair">
-        <path d="M39 99 C38 57 65 35 100 35 C135 35 162 57 161 99 L149 82 L143 106 L130 76 L121 105 L106 67 L98 109 L83 72 L71 103 L59 78 L48 104 Z" />
-        <path className="yanshi-mascot__hair-shine" d="M62 51 C76 42 92 39 106 39 L99 54 L78 58 Z" />
-        <path className="yanshi-mascot__hair-glint" d="M125 52 C134 62 139 72 139 83 L128 73 Z" />
+        <path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z" />
+        <path className="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z" />
+        <path className="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z" />
+        <path className="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z" />
       </g>
 
-      <g data-testid="mascot-layer-seal-fins" className="yanshi-mascot__layer yanshi-mascot__seal-fins">
-        <path d="M55 55 L28 25 L22 50 L42 61 L35 72 L60 75 Z" />
-        <path className="yanshi-mascot__fin-panel" d="M45 55 L32 37 L29 49 L43 59 Z" />
-        <circle className="yanshi-mascot__seal-dot" cx="35" cy="49" r="3.8" />
-        <path d="M145 55 L172 25 L178 50 L158 61 L165 72 L140 75 Z" />
-        <path className="yanshi-mascot__fin-panel" d="M155 55 L168 37 L171 49 L157 59 Z" />
-        <circle className="yanshi-mascot__seal-dot" cx="165" cy="49" r="3.8" />
+      <g data-testid="mascot-layer-dragon-horns" className="yanshi-mascot__layer yanshi-mascot__dragon-horns">
+        <path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z" />
+        <path className="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11" />
+        <path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z" />
+        <path className="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11" />
       </g>
 
-      <g data-testid="mascot-layer-seal-badge" className="yanshi-mascot__layer yanshi-mascot__seal-badge">
-        <circle cx="136" cy="66" r="8" />
-        <path d="M136 60 L136 72 M130 66 L142 66" />
+      <g data-testid="mascot-layer-talisman-seal" className="yanshi-mascot__layer yanshi-mascot__talisman-seal">
+        <path d="M123 187 L138 196 L130 211 L115 202 Z" />
+        <path d="M122 196 L132 202" />
       </g>
 
       <g data-testid="mascot-layer-prop-slot" className="yanshi-mascot__layer yanshi-mascot__prop-slot">
-        <rect x="158" y="166" width="24" height="30" rx="6" />
-        <path d="M164 177 L176 177 M164 186 L172 186" />
+        <rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)" />
+        <path d="M160 164 L168 164 M160 172 L166 172" />
       </g>
 
       <g

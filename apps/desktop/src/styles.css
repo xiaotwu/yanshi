@@ -60,6 +60,9 @@
   --ym-danger: var(--danger);
   --ym-success: var(--success);
   --ym-muted: var(--text-muted);
+  --ym-horn: color-mix(in srgb, var(--ws-parchment) 72%, var(--ym-trim));
+  --ym-horn-shadow: color-mix(in srgb, var(--ym-horn) 62%, var(--ym-outline));
+  --ym-apron: color-mix(in srgb, var(--ym-accent) 74%, var(--ym-body-light));
 
   /* Type system: a clean sans for the UI, an elegant serif (with CJK serif fallbacks) reserved
      for the hero/wordmark — a touch of Claude-Desktop refinement without a webfont dependency. */
@@ -4848,8 +4851,15 @@ textarea:focus-visible {
 
 .yanshi-mascot__back-hair path,
 .yanshi-mascot__front-hair > path:first-child,
-.yanshi-mascot__seal-fins > path:not(.yanshi-mascot__fin-panel) {
+.yanshi-mascot__front-hair .yanshi-mascot__hair-lock {
   fill: var(--ym-hair);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.yanshi-mascot__dragon-horns > path:not(.yanshi-mascot__horn-panel) {
+  fill: var(--ym-horn);
   stroke: var(--ym-outline);
   stroke-width: 6;
   stroke-linejoin: round;
@@ -4863,13 +4873,10 @@ textarea:focus-visible {
   fill: color-mix(in srgb, var(--ym-hair-shine) 70%, var(--ym-face));
   opacity: 0.8;
 }
-.yanshi-mascot__fin-panel,
 .yanshi-mascot__sash,
-.yanshi-mascot__seal-badge circle,
 .yanshi-mascot__prop-slot rect {
   fill: var(--ym-local-accent);
 }
-.yanshi-mascot__seal-dot,
 .yanshi-mascot__thought-dot,
 .yanshi-mascot__state-accents circle {
   fill: var(--ym-local-state);
@@ -4881,12 +4888,17 @@ textarea:focus-visible {
   stroke-width: 6;
   stroke-linejoin: round;
 }
-.yanshi-mascot__sash,
+.yanshi-mascot__sleeve,
 .yanshi-mascot__hand,
 .yanshi-mascot__boot {
   stroke: var(--ym-outline);
   stroke-width: 4;
   stroke-linejoin: round;
+}
+.yanshi-mascot__sleeve {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
 }
 .yanshi-mascot__hand {
   fill: var(--ym-face);
@@ -4907,6 +4919,26 @@ textarea:focus-visible {
   stroke-width: 6;
   stroke-linejoin: round;
 }
+
+.yanshi-mascot__apron-tab > path:first-child {
+  fill: var(--ym-apron);
+  stroke: var(--ym-outline);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__apron-stroke {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ym-outline) 72%, var(--ym-apron));
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__collar {
+  fill: var(--ym-trim);
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
 .yanshi-mascot__blush {
   fill: color-mix(in srgb, var(--ym-warning) 40%, var(--ym-face));
   opacity: 0.58;
@@ -4918,6 +4950,11 @@ textarea:focus-visible {
   stroke-width: 4.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.yanshi-mascot__blank-eye {
+  fill: var(--ym-face-shadow);
+  stroke: var(--ym-outline);
+  stroke-width: 3.5;
 }
 .yanshi-mascot__expression ellipse,
 .yanshi-mascot__expression circle {
@@ -4942,11 +4979,19 @@ textarea:focus-visible {
   font-size: 15px;
 }
 
-.yanshi-mascot__seal-badge circle {
-  stroke: var(--ym-outline);
-  stroke-width: 3.5;
+.yanshi-mascot__horn-panel {
+  fill: none;
+  stroke: var(--ym-horn-shadow);
+  stroke-width: 4;
+  stroke-linecap: round;
 }
-.yanshi-mascot__seal-badge path,
+.yanshi-mascot__talisman-seal > path:first-child {
+  fill: var(--ym-warning);
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__talisman-seal > path:last-child,
 .yanshi-mascot__prop-slot path,
 .yanshi-mascot__state-accents path {
   fill: none;

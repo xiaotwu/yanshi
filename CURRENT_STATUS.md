@@ -4,10 +4,11 @@ _Last updated: 2026-06-23._
 
 ## What Works
 
-- **Workshop character redesign Direction 2A**: the base tokenized Seal-Fin rig remains implemented and
-  tested, but its visual art direction is superseded. Current work is three original dragon-horn chibi
-  girl preview PNGs for owner pixel selection, preserving the rig engineering, seven-expression system,
-  token theming, reduced-motion/a11y hooks, and honest runtime-derived state contract.
+- **Workshop character redesign Direction 2B**: the owner selected Concept A (Paper-Lantern Dragon
+  Apprentice). The existing tokenized `MascotRig` is reskinned to the selected original dragon-horn chibi
+  girl direction, with seven expressions, token theming, reduced-motion/a11y hooks, and the honest
+  runtime-derived state contract preserved. Role skins and Workshop integration are paused for selected
+  rig visual sign-off.
 - **Bounded ReAct loop** (`graph/runtime_graph.py`): provider decides one `answer` or one tool `assign`; tool observations feed the next decide step; finalizer handles answer / budget-exhaustion / failure / cancel.
 - **Validated live** against a real Ollama provider (not just fakes): eval harness 3/3, multi-step observation feed-back, honest no-provider / tool-disabled / budget-exhaustion failures. See `docs/superpowers/notes/2026-06-22-loop-live-validation-results.md`. Two real robustness bugs found and fixed along the way (scalar-answer coercion `cc61c9d`; raw-response capture `fab6347`).
 - **No-provider shortcuts removed**; missing provider surfaces `model_not_configured`. Disabled tools, worker-whitelist blocks, and invalid Docker settings fail runs honestly with structured observations (hard-gate `tool_failed`).
@@ -20,7 +21,7 @@ _Last updated: 2026-06-23._
 ## Test Status (green)
 
 - Runtime Python: `166 passed` (`cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings`).
-- Desktop: `pnpm --filter @yanshi/desktop test` -> 22 files / 98 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
+- Desktop: `pnpm --filter @yanshi/desktop test` -> 22 files / 99 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
 - Release config: `node --test scripts/write-tauri-release-config.test.mjs` -> 4 passed; dry-run generated-config smoke -> pass; `release.yml` YAML parse -> pass.
 - Tauri Rust: `cargo check` -> pass; `cargo test` -> 12 passed.
 
@@ -38,7 +39,6 @@ _Last updated: 2026-06-23._
 
 ## Current Blockers
 
-- Workshop mascot role-skin and integration work is intentionally blocked on owner selection of one
-  Direction 2A dragon-horn chibi concept, then a second seven-expression visual sign-off after reskinning
-  the product rig.
+- Workshop mascot role-skin and integration work is intentionally blocked on owner visual sign-off of the
+  selected Concept A seven-expression rig preview.
 - Remaining release work is owner-credentialed (above).

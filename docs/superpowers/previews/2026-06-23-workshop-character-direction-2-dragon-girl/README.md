@@ -14,5 +14,11 @@ marks, name, lore, or asset.
 - `concept-b-jade-button-dragon-page.png`
 - `concept-c-cloud-knot-dragon-tinkerer.png`
 - `direction-2a-dragon-girl-contact-sheet.png`
+- `concept-a-selected-rig-seven-expressions.png`
+- `concept-a-selected-rig-seven-expressions.html`
 
 Each concept PNG contains neutral and happy variants for owner pixel selection.
+
+The owner selected Concept A. The selected rig preview is rendered from the React `MascotRig` component
+and contains all seven expressions; it is the next visual sign-off gate before any role skins or Workshop
+integration.

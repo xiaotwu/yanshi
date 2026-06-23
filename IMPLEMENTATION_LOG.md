@@ -1,5 +1,43 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Workshop Character Mascot Redesign Direction 2B
+
+Phase: selected Concept A rig reskin and seven-expression preview.
+
+Files changed:
+- `apps/desktop/src/features/workshop/mascots/MascotRig.tsx`
+- `apps/desktop/src/features/workshop/mascots/MascotRig.test.tsx`
+- `apps/desktop/src/styles.css`
+- `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+- `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`
+- `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- `pnpm --filter @yanshi/desktop exec vitest run src/features/workshop/mascots/MascotRig.test.tsx`
+  - Red: failed to find `mascot-layer-dragon-horns` before implementation.
+  - Green: `5 passed`.
+- Render selected rig preview HTML with a temporary Vitest renderer, then remove the temporary renderer.
+- Render `concept-a-selected-rig-seven-expressions.png` with local Chrome headless.
+- `pnpm --filter @yanshi/desktop test` -> `22 passed`, `99 tests passed`
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`
+- `pnpm --filter @yanshi/desktop typecheck` -> passed
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings
+
+Results:
+- Reskinned the existing `MascotRig` to Concept A Paper-Lantern Dragon Apprentice while keeping the same
+  public props, seven expressions, accessible SVG semantics, reduced-motion hooks, and token-driven CSS.
+- Retired the seal-fin visual layer from the component and replaced it with original dragon horns, a
+  short bob silhouette, workshop apron tab, talisman seal, and small paper prop.
+- Exported the selected rig's seven-expression preview for owner visual sign-off.
+
+Next action:
+- Commit and stop for owner visual sign-off before role skins.
+
 ## 2026-06-23 — Workshop Character Mascot Redesign Direction 2A
 
 Phase: fresh original dragon-horn chibi concept previews for owner pixel selection.

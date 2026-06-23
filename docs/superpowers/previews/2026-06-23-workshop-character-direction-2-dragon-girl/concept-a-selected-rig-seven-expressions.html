@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Concept A selected rig seven-expression preview</title>
+    <style>
+      :root {
+        --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+        --background: oklch(0.97 0.02 83);
+        --surface: oklch(0.94 0.015 83);
+        --surface-elevated: oklch(0.995 0.008 90);
+        --border: oklch(0.84 0.03 86);
+        --text-primary: oklch(0.18 0.03 305);
+        --text-secondary: oklch(0.35 0.04 305);
+        --text-muted: oklch(0.55 0.04 305);
+        --accent: oklch(0.67 0.10 167);
+        --warning: oklch(0.58 0.16 35);
+        --danger: oklch(0.56 0.17 28);
+        --success: oklch(0.62 0.14 147);
+        --ws-edge: oklch(0.35 0.04 305);
+        --ws-panel: oklch(0.94 0.035 88);
+        --ws-brass: oklch(0.72 0.11 79);
+        --ws-parchment: oklch(0.94 0.035 88);
+        --ym-outline: color-mix(in srgb, var(--text-primary) 86%, var(--ws-edge));
+        --ym-face: oklch(0.91 0.045 49);
+        --ym-face-shadow: color-mix(in srgb, var(--ym-face) 74%, var(--ws-edge));
+        --ym-hair: oklch(0.34 0.075 334);
+        --ym-hair-shine: oklch(0.50 0.08 336);
+        --ym-body: color-mix(in srgb, var(--text-primary) 72%, var(--surface));
+        --ym-body-light: color-mix(in srgb, var(--ym-body) 82%, var(--text-primary));
+        --ym-trim: var(--ws-brass);
+        --ym-accent: var(--accent);
+        --ym-state: var(--accent);
+        --ym-horn: color-mix(in srgb, var(--ws-parchment) 72%, var(--ym-trim));
+        --ym-horn-shadow: color-mix(in srgb, var(--ym-horn) 62%, var(--ym-outline));
+        --ym-apron: color-mix(in srgb, var(--ym-accent) 74%, var(--surface-elevated));
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+      }
+      .preview {
+        width: 1440px;
+        min-height: 920px;
+        padding: 44px 52px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 38px;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+      p {
+        margin: 10px 0 28px;
+        color: var(--text-secondary);
+        font-size: 19px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+      }
+      .preview-card {
+        display: grid;
+        justify-items: center;
+        gap: 16px;
+        margin: 0;
+        padding: 24px 18px 18px;
+        min-height: 312px;
+        background: color-mix(in srgb, var(--surface-elevated) 94%, var(--ws-parchment));
+        border: 2px solid var(--border);
+        border-radius: 18px;
+      }
+      .preview-card:first-child {
+        grid-column: span 2;
+      }
+      figcaption {
+        color: var(--text-secondary);
+        font-size: 18px;
+        font-weight: 750;
+      }
+      /* ── Yanshi mascot base rig (tokenized inline SVG) ───────────────────────────── */
+.yanshi-mascot {
+  --ym-local-accent: var(--ym-accent);
+  --ym-local-state: var(--ym-state);
+  display: block;
+  width: 72px;
+  height: auto;
+  overflow: visible;
+  color: var(--ym-outline);
+}
+.yanshi-mascot--rail { width: 40px; }
+.yanshi-mascot--stage { width: 84px; }
+.yanshi-mascot--hero { width: 156px; }
+
+.yanshi-mascot__layer,
+.yanshi-mascot__expression,
+.yanshi-mascot__shadow-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.yanshi-mascot__shadow-ring ellipse:first-child {
+  fill: color-mix(in srgb, var(--ym-outline) 22%, transparent);
+}
+.yanshi-mascot__status-ring {
+  fill: none;
+  stroke: var(--ym-local-state);
+  stroke-width: 3;
+  opacity: 0.4;
+}
+
+.yanshi-mascot__back-hair path,
+.yanshi-mascot__front-hair > path:first-child,
+.yanshi-mascot__front-hair .yanshi-mascot__hair-lock {
+  fill: var(--ym-hair);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.yanshi-mascot__dragon-horns > path:not(.yanshi-mascot__horn-panel) {
+  fill: var(--ym-horn);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.yanshi-mascot__hair-shine {
+  fill: var(--ym-hair-shine);
+  opacity: 0.7;
+}
+.yanshi-mascot__hair-glint {
+  fill: color-mix(in srgb, var(--ym-hair-shine) 70%, var(--ym-face));
+  opacity: 0.8;
+}
+.yanshi-mascot__sash,
+.yanshi-mascot__prop-slot rect {
+  fill: var(--ym-local-accent);
+}
+.yanshi-mascot__thought-dot,
+.yanshi-mascot__state-accents circle {
+  fill: var(--ym-local-state);
+}
+
+.yanshi-mascot__body > path:first-child {
+  fill: var(--ym-body);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__sleeve,
+.yanshi-mascot__hand,
+.yanshi-mascot__boot {
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__sleeve {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.yanshi-mascot__hand {
+  fill: var(--ym-face);
+}
+.yanshi-mascot__boot {
+  fill: var(--ym-body-light);
+}
+.yanshi-mascot__joint {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ym-outline) 70%, var(--ym-local-accent));
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.yanshi-mascot__head > path {
+  fill: var(--ym-face);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.yanshi-mascot__apron-tab > path:first-child {
+  fill: var(--ym-apron);
+  stroke: var(--ym-outline);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__apron-stroke {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ym-outline) 72%, var(--ym-apron));
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__collar {
+  fill: var(--ym-trim);
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__blush {
+  fill: color-mix(in srgb, var(--ym-warning) 40%, var(--ym-face));
+  opacity: 0.58;
+}
+
+.yanshi-mascot__expression path {
+  fill: none;
+  stroke: var(--ym-outline);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__blank-eye {
+  fill: var(--ym-face-shadow);
+  stroke: var(--ym-outline);
+  stroke-width: 3.5;
+}
+.yanshi-mascot__expression ellipse,
+.yanshi-mascot__expression circle {
+  fill: var(--ym-outline);
+}
+.yanshi-mascot__eye-shine {
+  fill: var(--ym-face) !important;
+}
+.yanshi-mascot__mouth--open {
+  fill: var(--ym-outline) !important;
+}
+.yanshi-mascot__sweat {
+  fill: color-mix(in srgb, var(--ym-danger) 45%, var(--ym-face)) !important;
+  stroke: var(--ym-outline);
+  stroke-width: 3;
+}
+.yanshi-mascot__sleep-text {
+  fill: var(--ym-outline);
+  font: 700 22px var(--font-sans);
+}
+.yanshi-mascot__sleep-text--small {
+  font-size: 15px;
+}
+
+.yanshi-mascot__horn-panel {
+  fill: none;
+  stroke: var(--ym-horn-shadow);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.yanshi-mascot__talisman-seal > path:first-child {
+  fill: var(--ym-warning);
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__talisman-seal > path:last-child,
+.yanshi-mascot__prop-slot path,
+.yanshi-mascot__state-accents path {
+  fill: none;
+  stroke: var(--ym-outline);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.yanshi-mascot__prop-slot rect {
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+}
+.yanshi-mascot__state-accents path {
+  stroke: var(--ym-local-state);
+}
+
+.yanshi-mascot--expr-thinking {
+  --ym-local-state: var(--ym-warning);
+}
+.yanshi-mascot--expr-focused {
+  --ym-local-state: var(--ym-accent);
+}
+.yanshi-mascot--expr-happy {
+  --ym-local-state: var(--ym-success);
+}
+.yanshi-mascot--expr-error {
+  --ym-local-state: var(--ym-danger);
+}
+.yanshi-mascot--expr-sleeping {
+  --ym-local-state: var(--ym-muted);
+}
+
+.yanshi-mascot--animated .yanshi-mascot__body {
+  animation: yanshi-mascot-breathe 2.8s ease-in-out infinite;
+}
+.yanshi-mascot--animated .yanshi-mascot__state-accents {
+  animation: yanshi-mascot-accent-drift 3.2s ease-in-out infinite;
+}
+.yanshi-mascot--expr-focused.yanshi-mascot--animated .yanshi-mascot__body {
+  animation-duration: 1.2s;
+}
+.yanshi-mascot--expr-error.yanshi-mascot--animated .yanshi-mascot__body,
+.yanshi-mascot--expr-sleeping.yanshi-mascot--animated .yanshi-mascot__body {
+  animation-duration: 4.8s;
+}
+.yanshi-mascot--reduced-motion .yanshi-mascot__layer,
+.yanshi-mascot--reduced-motion .yanshi-mascot__expression,
+.yanshi-mascot--reduced-motion .yanshi-mascot__shadow-ring,
+.yanshi-mascot--reduced-motion .yanshi-mascot__state-accents {
+  animation: none !important;
+}
+
+@keyframes yanshi-mascot-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes yanshi-mascot-accent-drift {
+  0%, 100% { opacity: 0.64; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yanshi-mascot--animated .yanshi-mascot__layer,
+  .yanshi-mascot--animated .yanshi-mascot__expression,
+  .yanshi-mascot--animated .yanshi-mascot__shadow-ring,
+  .yanshi-mascot--animated .yanshi-mascot__state-accents {
+    animation: none !important;
+  }
+}
+
+    </style>
+  </head>
+  <body>
+    <main class="preview">
+      <h1>Concept A · Paper-Lantern Dragon Apprentice</h1>
+      <p>Selected rig reskin preview from the React MascotRig component. Seven expressions, reduced-motion static render.</p>
+      <section class="grid"><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-neutral yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice neutral" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="neutral" data-size="hero"><title>Paper-Lantern Dragon Apprentice neutral</title><desc>Preview state: neutral</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-neutral" class="yanshi-mascot__expression"><rect class="yanshi-mascot__blank-eye" x="61" y="103" width="15" height="31" rx="4"></rect><rect class="yanshi-mascot__blank-eye" x="124" y="103" width="15" height="31" rx="4"></rect><path class="yanshi-mascot__mouth" d="M94 140 Q100 146 106 140"></path></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>neutral</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-happy yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice happy" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="happy" data-size="hero"><title>Paper-Lantern Dragon Apprentice happy</title><desc>Preview state: happy</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-happy" class="yanshi-mascot__expression"><path d="M61 113 Q72 103 83 113"></path><path d="M117 113 Q128 103 139 113"></path><path class="yanshi-mascot__mouth yanshi-mascot__mouth--open" d="M89 133 Q100 150 111 133 Q100 140 89 133 Z"></path></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>happy</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-thinking yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice thinking" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="thinking" data-size="hero"><title>Paper-Lantern Dragon Apprentice thinking</title><desc>Preview state: thinking</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-thinking" class="yanshi-mascot__expression"><path d="M59 104 Q69 99 81 105"></path><path d="M119 106 Q131 101 141 105"></path><rect class="yanshi-mascot__blank-eye" x="62" y="110" width="13" height="25" rx="4"></rect><rect class="yanshi-mascot__blank-eye" x="125" y="110" width="13" height="25" rx="4"></rect><path class="yanshi-mascot__mouth" d="M93 143 L107 143"></path><circle class="yanshi-mascot__thought-dot" cx="153" cy="84" r="4"></circle><circle class="yanshi-mascot__thought-dot" cx="165" cy="70" r="2.8"></circle></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>thinking</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-focused yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice focused" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="focused" data-size="hero"><title>Paper-Lantern Dragon Apprentice focused</title><desc>Preview state: focused</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-focused" class="yanshi-mascot__expression"><path d="M57 105 Q72 100 87 105"></path><path d="M113 105 Q128 100 143 105"></path><ellipse cx="72" cy="116" rx="7" ry="8"></ellipse><ellipse cx="128" cy="116" rx="7" ry="8"></ellipse><circle class="yanshi-mascot__eye-shine" cx="74" cy="113" r="2"></circle><circle class="yanshi-mascot__eye-shine" cx="130" cy="113" r="2"></circle><path class="yanshi-mascot__mouth" d="M94 140 L106 140"></path></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>focused</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-surprised yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice surprised" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="surprised" data-size="hero"><title>Paper-Lantern Dragon Apprentice surprised</title><desc>Preview state: surprised</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-surprised" class="yanshi-mascot__expression"><circle cx="72" cy="116" r="8"></circle><circle cx="128" cy="116" r="8"></circle><circle class="yanshi-mascot__eye-shine" cx="75" cy="113" r="2.2"></circle><circle class="yanshi-mascot__eye-shine" cx="131" cy="113" r="2.2"></circle><ellipse class="yanshi-mascot__mouth yanshi-mascot__mouth--open" cx="100" cy="140" rx="6" ry="8"></ellipse></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>surprised</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-error yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice error" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="error" data-size="hero"><title>Paper-Lantern Dragon Apprentice error</title><desc>Preview state: error</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-error" class="yanshi-mascot__expression"><path d="M61 106 L82 126"></path><path d="M82 106 L61 126"></path><path d="M118 106 L139 126"></path><path d="M139 106 L118 126"></path><path class="yanshi-mascot__mouth" d="M91 144 Q100 136 109 144"></path><path class="yanshi-mascot__sweat" d="M153 97 C162 107 162 116 153 120 C144 116 144 107 153 97 Z"></path></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>error</figcaption></figure><figure class="preview-card"><svg class="yanshi-mascot yanshi-mascot--hero yanshi-mascot--expr-sleeping yanshi-mascot--reduced-motion" role="img" aria-label="Paper-Lantern Dragon Apprentice sleeping" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" data-expression="sleeping" data-size="hero"><title>Paper-Lantern Dragon Apprentice sleeping</title><desc>Preview state: sleeping</desc><g data-testid="mascot-shadow-ring" class="yanshi-mascot__shadow-ring"><ellipse cx="100" cy="222" rx="45" ry="10"></ellipse><ellipse class="yanshi-mascot__status-ring" cx="100" cy="220" rx="54" ry="14"></ellipse></g><g data-testid="mascot-layer-back-hair" class="yanshi-mascot__layer yanshi-mascot__back-hair"><path d="M100 31 C59 31 37 58 38 95 C20 107 21 136 38 151 C29 160 30 177 40 186 C58 177 73 166 84 153 C93 161 107 161 116 153 C127 166 142 177 160 186 C170 177 171 160 162 151 C179 136 180 107 162 95 C163 58 141 31 100 31 Z"></path></g><g data-testid="mascot-layer-body" class="yanshi-mascot__layer yanshi-mascot__body"><path d="M71 154 H129 L142 218 C126 231 74 231 58 218 Z"></path><path class="yanshi-mascot__sleeve" d="M70 168 L36 185"></path><path class="yanshi-mascot__sleeve" d="M130 168 L164 185"></path><ellipse class="yanshi-mascot__hand" cx="33" cy="188" rx="11" ry="12"></ellipse><ellipse class="yanshi-mascot__hand" cx="167" cy="188" rx="11" ry="12"></ellipse><rect class="yanshi-mascot__boot" x="79" y="219" width="19" height="16" rx="4"></rect><rect class="yanshi-mascot__boot" x="102" y="219" width="19" height="16" rx="4"></rect></g><g data-testid="mascot-layer-apron-tab" class="yanshi-mascot__layer yanshi-mascot__apron-tab"><path d="M77 162 H123 L131 213 C113 221 87 221 69 213 Z"></path><path class="yanshi-mascot__apron-stroke" d="M100 167 V210"></path><path class="yanshi-mascot__apron-stroke" d="M76 193 H124"></path><path class="yanshi-mascot__collar" d="M84 154 H116 L109 169 H91 Z"></path></g><g data-testid="mascot-layer-head" class="yanshi-mascot__layer yanshi-mascot__head"><path d="M100 42 C141 42 162 70 162 103 C162 137 136 158 100 158 C64 158 38 137 38 103 C38 70 59 42 100 42 Z" fill="var(--ym-face)" stroke="var(--ym-outline)"></path><ellipse class="yanshi-mascot__blush" cx="58" cy="128" rx="9" ry="5"></ellipse><ellipse class="yanshi-mascot__blush" cx="142" cy="128" rx="9" ry="5"></ellipse></g><g data-testid="mascot-expression-sleeping" class="yanshi-mascot__expression"><path d="M60 116 L84 116"></path><path d="M116 116 L140 116"></path><path class="yanshi-mascot__mouth" d="M94 141 Q100 138 106 141"></path><text class="yanshi-mascot__sleep-text" x="153" y="88">z</text><text class="yanshi-mascot__sleep-text yanshi-mascot__sleep-text--small" x="168" y="69">z</text></g><g data-testid="mascot-layer-front-hair" class="yanshi-mascot__layer yanshi-mascot__front-hair"><path d="M42 101 C45 62 70 39 101 39 C132 39 156 61 158 101 C145 87 135 87 128 102 C113 95 105 79 101 59 C90 74 82 87 81 105 C69 100 58 88 51 72 C47 82 44 91 42 101 Z"></path><path class="yanshi-mascot__hair-lock" d="M67 62 C82 65 92 74 99 88 C89 82 80 86 75 99 C70 86 66 75 67 62 Z"></path><path class="yanshi-mascot__hair-shine" d="M63 50 C78 42 94 40 108 42 L99 55 L78 58 Z"></path><path class="yanshi-mascot__hair-glint" d="M126 53 C136 62 140 72 139 83 L128 73 Z"></path></g><g data-testid="mascot-layer-dragon-horns" class="yanshi-mascot__layer yanshi-mascot__dragon-horns"><path d="M66 48 C47 27 52 7 72 2 C84 22 82 41 70 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M63 35 C65 25 69 17 74 11"></path><path d="M134 48 C153 27 148 7 128 2 C116 22 118 41 130 56 Z"></path><path class="yanshi-mascot__horn-panel" d="M137 35 C135 25 131 17 126 11"></path></g><g data-testid="mascot-layer-talisman-seal" class="yanshi-mascot__layer yanshi-mascot__talisman-seal"><path d="M123 187 L138 196 L130 211 L115 202 Z"></path><path d="M122 196 L132 202"></path></g><g data-testid="mascot-layer-prop-slot" class="yanshi-mascot__layer yanshi-mascot__prop-slot"><rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)"></rect><path d="M160 164 L168 164 M160 172 L166 172"></path></g><g data-testid="mascot-state-accents" class="yanshi-mascot__layer yanshi-mascot__state-accents" data-reduced-motion="true"><path d="M35 91 L43 87 M38 99 L47 99"></path><path d="M160 88 L168 82 M166 96 L176 96"></path><circle cx="151" cy="155" r="2.6"></circle></g></svg><figcaption>sleeping</figcaption></figure></section>
+    </main>
+  </body>
+</html>

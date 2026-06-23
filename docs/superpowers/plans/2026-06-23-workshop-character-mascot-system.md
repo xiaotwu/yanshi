@@ -1,8 +1,8 @@
 # Workshop Character Mascot System Implementation Plan
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
-> Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. Stop at
-> rendered dragon-horn chibi concept previews until the owner picks one on pixels.
+> Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. The owner picked
+> Concept A; stop at the seven-expression selected-rig preview until the owner visually signs off.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -101,6 +101,36 @@ the six role skins or integrate mascots into Workshop surfaces until that sign-o
 
 **Stop condition after this increment:** owner chooses one concept on pixels. Do not reskin the product
 rig, build role skins, or integrate mascots until the owner picks.
+
+## Increment 2B — Selected Concept A rig reskin preview
+
+**Files:**
+- Modify `apps/desktop/src/features/workshop/mascots/MascotRig.tsx`
+- Modify `apps/desktop/src/features/workshop/mascots/MascotRig.test.tsx`
+- Modify `apps/desktop/src/styles.css`
+- Add selected rig preview under
+  `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+- Update this plan, the spec, and continuation docs.
+
+**TDD steps:**
+- [x] Write a failing component test for the selected Paper-Lantern Dragon Apprentice skin:
+  - Dragon horn layer exists.
+  - Apron tab layer exists.
+  - Talisman seal layer exists.
+  - Superseded seal-fin layer is gone.
+- [x] Confirm the focused test fails before implementation.
+- [x] Reskin the existing `MascotRig` to Concept A while keeping:
+  - same public component API
+  - same seven-expression system
+  - accessible name/status
+  - reduced-motion hooks
+  - token-driven CSS variables
+- [x] Render a full seven-expression preview PNG from the React component.
+- [x] Run the requested gates.
+- [x] Commit this selected rig preview increment with the required trailer.
+
+**Stop condition after this increment:** owner visually signs off the selected Concept A seven-expression
+rig preview. Do not build role skins or integrate mascots into Workshop surfaces until that sign-off.
 
 ## Increment 3 — Honest mascot state selector + reduced motion
 

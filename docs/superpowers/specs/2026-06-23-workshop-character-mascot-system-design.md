@@ -3,7 +3,8 @@
 - Date: 2026-06-23
 - Status: original key decisions were signed off by the user on 2026-06-23, with two amendments:
   Manager thinking covers every ReAct decide phase, and increment 2 stops for visual sign-off before role
-  skins. Direction 2A now supersedes the prior art direction and is pending owner pixel-pick.
+  skins. Direction 2A supersedes the prior art direction; the owner picked Concept A, and the selected
+  rig reskin is pending visual sign-off before role skins.
 - Brief: `docs/superpowers/plans/2026-06-23-workshop-character-redesign-brief.md`
 - Brainstorm: `docs/superpowers/notes/2026-06-23-workshop-character-redesign-brainstorm.md`
 - Direction 2A brainstorm:
@@ -54,8 +55,8 @@ Yanshi-original replacements:
 ## 4. Current visual direction
 
 Direction 2A supersedes the prior **Seal-Fin Automaton Artificers** art direction. The implemented rig
-engineering remains valid, but the visual skin should be replaced only after the owner chooses one of
-the rendered dragon-horn chibi previews.
+engineering remains valid. On 2026-06-23, the owner chose **Concept A: Paper-Lantern Dragon
+Apprentice** from the rendered dragon-horn chibi previews.
 
 Current owner revision:
 - Keep the final supplied chibi image's Q-version abstraction: two-head proportions, thick line weight,
@@ -63,12 +64,16 @@ Current owner revision:
 - Design an original dragon-horn girl mascot for Yanshi.
 - Avoid the reference character's identity: no copied horn silhouette, long-hair waterfall, tactical
   outfit, teal/crimson identity, floating marks, name, lore, or asset.
-- Preview three concepts as PNGs with neutral + happy variants and stop for pixel selection before
-  building anything.
+- Reskin the existing rig to Concept A, render all seven expressions, and stop for visual sign-off before
+  building role skins or replacing Workshop surfaces.
 
 Rendered preview directory:
 
 `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+
+Selected rig preview:
+
+`docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/concept-a-selected-rig-seven-expressions.png`
 
 ## 4a. Superseded concept candidate
 
@@ -195,7 +200,6 @@ The user signed off the following on 2026-06-23, before rejecting the seal-fin v
 - Honesty contract: derive state from real runtime/store signals only.
 - Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
-Direction 2A changes the visual sign-off gate: first choose one of the rendered original dragon-horn
-chibi concepts, then reskin the existing rig to the chosen concept and render all seven expressions for
-a second visual check. Do not build the six role skins or replace Workshop surfaces before that second
-visual sign-off.
+Direction 2A has reached the second visual sign-off gate: Concept A is selected and the product rig has
+been reskinned/rendered in all seven expressions. Do not build the six role skins or replace Workshop
+surfaces before the owner signs off this selected rig preview.

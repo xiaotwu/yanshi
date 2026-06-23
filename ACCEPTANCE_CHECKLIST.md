@@ -58,7 +58,19 @@
 - [x] Three concept PNGs render with neutral + happy variants.
 - [x] Requested desktop and runtime gates pass for this preview increment.
 - [x] Commit created on `main` with the required co-author trailer.
-- [ ] Owner chooses one concept before any product rig reskin, role skin, or Workshop integration.
+- [x] Owner chooses one concept before any product rig reskin, role skin, or Workshop integration.
+
+## Workshop Character Mascot Redesign — Direction 2B Selected Rig Preview
+
+- [x] Owner selected Concept A: Paper-Lantern Dragon Apprentice.
+- [x] Focused TDD test went red on the old seal-fin visual layer, then green after the reskin.
+- [x] Existing `MascotRig` keeps the same public props, seven-expression system, accessible SVG semantics,
+  reduced-motion hooks, and token-driven styling.
+- [x] Seal-fin visual layer is retired from the component.
+- [x] Concept A selected rig preview renders all seven expressions from the React component.
+- [x] Requested desktop and runtime gates pass for this selected rig increment.
+- [x] Commit created on `main` with the required co-author trailer.
+- [ ] Owner visually signs off selected rig before role skins or Workshop integration.
 
 ## Product-Wide Acceptance Still Pending Outside This Task
 

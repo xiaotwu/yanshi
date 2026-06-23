@@ -40,6 +40,15 @@ describe("MascotRig", () => {
     expect(svg?.outerHTML).toContain("var(--ym-accent)");
   });
 
+  it("renders the selected paper-lantern dragon apprentice skin", () => {
+    render(<MascotRig accessibleName="Lantern apprentice" expression="neutral" statusText="Idle" />);
+
+    expect(screen.getByTestId("mascot-layer-dragon-horns")).toBeInTheDocument();
+    expect(screen.getByTestId("mascot-layer-apron-tab")).toBeInTheDocument();
+    expect(screen.getByTestId("mascot-layer-talisman-seal")).toBeInTheDocument();
+    expect(screen.queryByTestId("mascot-layer-seal-fins")).not.toBeInTheDocument();
+  });
+
   it("exposes reduced-motion-safe static hooks", () => {
     render(<MascotRig accessibleName="Still mascot" expression="sleeping" statusText="Offline" reducedMotion />);
 
