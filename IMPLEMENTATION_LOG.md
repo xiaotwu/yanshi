@@ -1,5 +1,42 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Workshop Character Mascot Redesign Increment 2
+
+Phase: base layered-SVG rig, expression set, theme tokens, and visual sign-off checkpoint.
+
+Files changed:
+- `apps/desktop/src/features/workshop/mascots/types.ts`
+- `apps/desktop/src/features/workshop/mascots/MascotRig.tsx`
+- `apps/desktop/src/features/workshop/mascots/MascotRig.test.tsx`
+- `apps/desktop/src/styles.css`
+- `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`
+- `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- `pnpm --filter @yanshi/desktop exec vitest run src/features/workshop/mascots/MascotRig.test.tsx`
+  - Red: failed to resolve `./MascotRig` before implementation.
+  - Green: `4 passed`.
+- `pnpm --filter @yanshi/desktop test` -> `22 passed`, `98 tests passed`
+- `pnpm --filter @yanshi/desktop typecheck` -> passed
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings
+
+Results:
+- Updated the signed-off spec with the two user amendments: Manager thinking covers every ReAct decide
+  phase, and work stops after increment 2 for visual sign-off.
+- Added `MascotRig`, a reusable base Seal-Fin Automaton inline SVG component with accessible name/status
+  text, seven expression layers, a prop slot, state accents, and size variants.
+- Added token bindings in `styles.css` using `--ym-*` variables derived from theme/workshop tokens.
+- Added reduced-motion-safe class/data hooks; no role skins or Workshop integration were started.
+
+Next action:
+- Visual sign-off on the base rig. Do not build role skins until approved.
+
 ## 2026-06-23 — Workshop Character Mascot Redesign Increment 1
 
 Phase: superpowers brainstorm, sign-off spec, and TDD implementation plan for original Workshop mascots.

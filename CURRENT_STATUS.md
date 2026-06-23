@@ -4,8 +4,9 @@ _Last updated: 2026-06-23._
 
 ## What Works
 
-- **Workshop character redesign increment 1**: brainstorm/spec/plan artifacts now define an original
-  tokenized chibi 偃师 mascot direction and stop before mass-producing role variants pending user sign-off.
+- **Workshop character redesign increments 1-2**: spec decisions are signed off with amendments, and the
+  base tokenized Seal-Fin mascot rig now renders as accessible inline SVG with seven expressions and
+  reduced-motion-safe hooks. Role skins and Workshop integration are intentionally paused for visual sign-off.
 - **Bounded ReAct loop** (`graph/runtime_graph.py`): provider decides one `answer` or one tool `assign`; tool observations feed the next decide step; finalizer handles answer / budget-exhaustion / failure / cancel.
 - **Validated live** against a real Ollama provider (not just fakes): eval harness 3/3, multi-step observation feed-back, honest no-provider / tool-disabled / budget-exhaustion failures. See `docs/superpowers/notes/2026-06-22-loop-live-validation-results.md`. Two real robustness bugs found and fixed along the way (scalar-answer coercion `cc61c9d`; raw-response capture `fab6347`).
 - **No-provider shortcuts removed**; missing provider surfaces `model_not_configured`. Disabled tools, worker-whitelist blocks, and invalid Docker settings fail runs honestly with structured observations (hard-gate `tool_failed`).
@@ -18,7 +19,7 @@ _Last updated: 2026-06-23._
 ## Test Status (green)
 
 - Runtime Python: `166 passed` (`cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings`).
-- Desktop: `pnpm --filter @yanshi/desktop test` -> 21 files / 94 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
+- Desktop: `pnpm --filter @yanshi/desktop test` -> 22 files / 98 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
 - Release config: `node --test scripts/write-tauri-release-config.test.mjs` -> 4 passed; dry-run generated-config smoke -> pass; `release.yml` YAML parse -> pass.
 - Tauri Rust: `cargo check` -> pass; `cargo test` -> 12 passed.
 
@@ -36,5 +37,6 @@ _Last updated: 2026-06-23._
 
 ## Current Blockers
 
-- Workshop mascot implementation is intentionally blocked on user sign-off of the key spec decisions.
+- Workshop mascot role-skin and integration work is intentionally blocked on visual sign-off of the base
+  rig delivered in increment 2.
 - Remaining release work is owner-credentialed (above).

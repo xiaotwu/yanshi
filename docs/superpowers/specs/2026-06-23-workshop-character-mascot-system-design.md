@@ -1,8 +1,8 @@
 # 偃师工坊角色重设计 · Chibi Mascot System Spec
 
 - Date: 2026-06-23
-- Status: **pending user sign-off for key decisions**. Do not mass-produce role variants or replace
-  existing worker art until this spec is approved.
+- Status: key decisions signed off by the user on 2026-06-23, with two amendments: Manager thinking
+  covers every ReAct decide phase, and increment 2 stops for visual sign-off before role skins.
 - Brief: `docs/superpowers/plans/2026-06-23-workshop-character-redesign-brief.md`
 - Brainstorm: `docs/superpowers/notes/2026-06-23-workshop-character-redesign-brainstorm.md`
 
@@ -105,6 +105,7 @@ covered by unit tests. It may read real runtime/UI state but must not synthesize
 |---|---|---|
 | No active run for the worker | `idle` | Gentle neutral/static life state only; no working props. |
 | Active run started, no assigned worker/action yet | `thinking` on Manager only | Pensive expression; other workers remain idle. |
+| ReAct loop is in any decide phase between tool/act steps | `thinking` on Manager only | Manager reads as deciding/planning between real actions; do not show worker/tool activity until the next real assignment/action event. |
 | `agent.task.started`, `action.created`, `action.started`, or `tool.call.started` for that worker | `working` | Role-specific focused gesture. |
 | Partial answer text is present for active run | `talking` on Manager | Mouth/face shifts only while real partial text exists. |
 | `approval.requested` or run status `pending_approval` | `awaitingApproval` | Expectant paused pose; reviewer may show raised stamp. |
@@ -157,13 +158,15 @@ Required before implementation claims completion:
 - Existing Workshop tests remain green.
 - Requested gates: `pnpm --filter @yanshi/desktop test`, `typecheck`, `build`, plus runtime pytest.
 
-## 10. Sign-off gate
+## 10. Sign-off gates
 
-Before increment 2 starts, the user should approve or edit these choices:
+The user signed off the following on 2026-06-23:
 - Base silhouette: Concept A Seal-Fin Automaton Artificers.
 - Variant strategy: Concept C props/crests on one shared rig.
 - State accent strategy: Concept B thread/halo only as a subtle state accent.
 - Rendering/asset strategy: inline SVG components in the Workshop DOM/SVG overlay.
 - Honesty contract: derive state from real runtime/store signals only.
+- Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
-Until sign-off, do not create the full role-skin set or replace existing mascot rendering.
+After increment 2 renders the base layered-SVG rig, stop for visual sign-off before building the six
+role skins or replacing existing mascot rendering in Workshop surfaces.

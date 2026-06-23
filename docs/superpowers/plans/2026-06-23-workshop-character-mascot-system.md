@@ -1,7 +1,7 @@
 # Workshop Character Mascot System Implementation Plan
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
-> This plan is blocked after increment 1 until the user signs off the spec's key decisions.
+> Increment 1 sign-off is complete. Increment 2 must stop for visual sign-off before role skins.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -22,6 +22,8 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 - Reduced motion must preserve state readability without continuous motion.
 - Animations must map to real `liveAgents`, `events`, `runs`, `approvals`, provider health, and partial
   answer state. Never fake a worker as busy.
+- Manager thinking covers every real ReAct decide phase, including between act/tool steps; worker/tool
+  activity still waits for real assignment/action/tool events.
 - Keep drag/edit behavior in `AtelierPreview` intact.
 - Keep gates green:
   - `pnpm --filter @yanshi/desktop test`
@@ -35,14 +37,16 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 - [x] Write the brainstorm note with 2-3 original silhouette concepts.
 - [x] Write the sign-off spec under `docs/superpowers/specs/`.
 - [x] Write this implementation plan.
-- [ ] Get user sign-off for:
+- [x] Get user sign-off for:
   - Concept A Seal-Fin Automaton Artificers as base silhouette.
   - Concept C role props/crests as skin details.
   - Concept B thread/halo motif as state accent only.
   - Inline SVG + DOM/SVG Workshop overlay rendering.
   - Honest runtime-derived state contract.
+  - Amendment: Manager thinking during every ReAct decide phase.
+  - Amendment: stop after increment 2 for visual sign-off.
 
-**Stop condition:** do not start increment 2 until the sign-off box above is resolved.
+**Stop condition:** resolved on 2026-06-23.
 
 ## Increment 2 — Base tokenized SVG rig + expression set
 
@@ -53,20 +57,23 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 - Modify `apps/desktop/src/styles.css`
 
 **TDD steps:**
-- [ ] Write failing tests that render a neutral mascot and assert:
+- [x] Write failing tests that render a neutral mascot and assert:
   - `role="img"` / accessible name exists.
   - expression layers switch for `neutral`, `happy`, `thinking`, `focused`, `surprised`, `error`,
     and `sleeping`.
   - no `fill="#` / `stroke="#` hard-coded colors appear in rendered SVG markup.
   - CSS class hooks expose reduced-motion-safe state names.
-- [ ] Run the focused test and confirm it fails because the rig does not exist.
-- [ ] Implement the base rig as layered inline SVG parts:
+- [x] Run the focused test and confirm it fails because the rig does not exist.
+- [x] Implement the base rig as layered inline SVG parts:
   - shadow/ring, back hair/hood, body, head, face, front hair/hood, seal-fins, prop slot, accents.
   - All colors are `var(--ym-*)`, `currentColor`, or inherited CSS variables.
-- [ ] Add CSS token bindings for `.yanshi-mascot` and size variants (`rail`, `stage`, `hero`), deriving
+- [x] Add CSS token bindings for `.yanshi-mascot` and size variants (`rail`, `stage`, `hero`), deriving
   defaults from `--ws-*`, `--accent`, `--warning`, `--danger`, `--success`, and text tokens.
-- [ ] Re-run focused tests to green.
-- [ ] Commit: `feat(workshop): add tokenized base mascot SVG rig`
+- [x] Re-run focused tests to green.
+- [x] Commit: `feat(workshop): add tokenized base mascot SVG rig`
+
+**Stop condition after this increment:** show the rendered base rig for visual sign-off. Do not build
+the six role skins or integrate mascots into Workshop surfaces until that sign-off happens.
 
 ## Increment 3 — Honest mascot state selector + reduced motion
 
@@ -79,6 +86,7 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 - [ ] Write failing table tests for `deriveMascotState`:
   - no active run -> `idle`
   - run started before assignment -> Manager `thinking`, others `idle`
+  - each ReAct decide phase between act steps -> Manager `thinking`
   - worker action/tool started -> that worker `working`
   - partial answer text -> Manager `talking`
   - pending approval -> `awaitingApproval`

@@ -46,6 +46,20 @@
   --ws-parchment-ink: color-mix(in srgb, var(--text-primary) 86%, #5a4a30);
   --ws-text: var(--text-primary);
   --ws-text-dim: var(--text-secondary);
+  --ym-outline: color-mix(in srgb, var(--text-primary) 86%, var(--ws-edge));
+  --ym-face: color-mix(in srgb, var(--surface-elevated) 82%, var(--ws-parchment));
+  --ym-face-shadow: color-mix(in srgb, var(--ym-face) 74%, var(--ws-edge));
+  --ym-hair: color-mix(in srgb, var(--text-primary) 78%, var(--surface));
+  --ym-hair-shine: color-mix(in srgb, var(--ym-hair) 72%, var(--accent));
+  --ym-body: color-mix(in srgb, var(--ws-panel) 72%, var(--surface));
+  --ym-body-light: color-mix(in srgb, var(--ym-body) 72%, var(--surface-elevated));
+  --ym-trim: var(--ws-brass);
+  --ym-accent: var(--accent);
+  --ym-state: var(--accent);
+  --ym-warning: var(--warning);
+  --ym-danger: var(--danger);
+  --ym-success: var(--success);
+  --ym-muted: var(--text-muted);
 
   /* Type system: a clean sans for the UI, an elegant serif (with CJK serif fallbacks) reserved
      for the hero/wordmark — a touch of Claude-Desktop refinement without a webfont dependency. */
@@ -80,6 +94,13 @@
   --ws-edge: color-mix(in srgb, var(--border) 60%, #3a2e22);
   --ws-parchment: color-mix(in srgb, var(--surface-elevated) 70%, #6b5a3a);
   --ws-parchment-ink: color-mix(in srgb, var(--text-primary) 90%, #e8dcc0);
+  --ym-outline: color-mix(in srgb, var(--text-primary) 80%, var(--ws-edge));
+  --ym-face: color-mix(in srgb, var(--surface-elevated) 82%, var(--ws-parchment));
+  --ym-face-shadow: color-mix(in srgb, var(--ym-face) 72%, var(--background));
+  --ym-hair: color-mix(in srgb, var(--text-primary) 58%, var(--surface));
+  --ym-hair-shine: color-mix(in srgb, var(--ym-hair) 72%, var(--accent));
+  --ym-body: color-mix(in srgb, var(--ws-panel) 82%, var(--background));
+  --ym-body-light: color-mix(in srgb, var(--ym-body) 66%, var(--text-secondary));
   --on-accent: #07120d;
   --danger: #e3716e;
   --danger-soft: #34201f;
@@ -4792,4 +4813,206 @@ textarea:focus-visible {
   color: var(--ws-text-dim);
   border: 1px solid var(--ws-edge);
   opacity: 0.65;
+}
+
+/* ── Yanshi mascot base rig (tokenized inline SVG) ───────────────────────────── */
+.yanshi-mascot {
+  --ym-local-accent: var(--ym-accent);
+  --ym-local-state: var(--ym-state);
+  display: block;
+  width: 72px;
+  height: auto;
+  overflow: visible;
+  color: var(--ym-outline);
+}
+.yanshi-mascot--rail { width: 40px; }
+.yanshi-mascot--stage { width: 84px; }
+.yanshi-mascot--hero { width: 156px; }
+
+.yanshi-mascot__layer,
+.yanshi-mascot__expression,
+.yanshi-mascot__shadow-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.yanshi-mascot__shadow-ring ellipse:first-child {
+  fill: color-mix(in srgb, var(--ym-outline) 22%, transparent);
+}
+.yanshi-mascot__status-ring {
+  fill: none;
+  stroke: var(--ym-local-state);
+  stroke-width: 3;
+  opacity: 0.4;
+}
+
+.yanshi-mascot__back-hair path,
+.yanshi-mascot__front-hair > path:first-child,
+.yanshi-mascot__seal-fins > path:not(.yanshi-mascot__fin-panel) {
+  fill: var(--ym-hair);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.yanshi-mascot__hair-shine {
+  fill: var(--ym-hair-shine);
+  opacity: 0.7;
+}
+.yanshi-mascot__hair-glint {
+  fill: color-mix(in srgb, var(--ym-hair-shine) 70%, var(--ym-face));
+  opacity: 0.8;
+}
+.yanshi-mascot__fin-panel,
+.yanshi-mascot__sash,
+.yanshi-mascot__seal-badge circle,
+.yanshi-mascot__prop-slot rect {
+  fill: var(--ym-local-accent);
+}
+.yanshi-mascot__seal-dot,
+.yanshi-mascot__thought-dot,
+.yanshi-mascot__state-accents circle {
+  fill: var(--ym-local-state);
+}
+
+.yanshi-mascot__body > path:first-child {
+  fill: var(--ym-body);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__sash,
+.yanshi-mascot__hand,
+.yanshi-mascot__boot {
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__hand {
+  fill: var(--ym-face);
+}
+.yanshi-mascot__boot {
+  fill: var(--ym-body-light);
+}
+.yanshi-mascot__joint {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ym-outline) 70%, var(--ym-local-accent));
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.yanshi-mascot__head > path {
+  fill: var(--ym-face);
+  stroke: var(--ym-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__blush {
+  fill: color-mix(in srgb, var(--ym-warning) 40%, var(--ym-face));
+  opacity: 0.58;
+}
+
+.yanshi-mascot__expression path {
+  fill: none;
+  stroke: var(--ym-outline);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__expression ellipse,
+.yanshi-mascot__expression circle {
+  fill: var(--ym-outline);
+}
+.yanshi-mascot__eye-shine {
+  fill: var(--ym-face) !important;
+}
+.yanshi-mascot__mouth--open {
+  fill: var(--ym-outline) !important;
+}
+.yanshi-mascot__sweat {
+  fill: color-mix(in srgb, var(--ym-danger) 45%, var(--ym-face)) !important;
+  stroke: var(--ym-outline);
+  stroke-width: 3;
+}
+.yanshi-mascot__sleep-text {
+  fill: var(--ym-outline);
+  font: 700 22px var(--font-sans);
+}
+.yanshi-mascot__sleep-text--small {
+  font-size: 15px;
+}
+
+.yanshi-mascot__seal-badge circle {
+  stroke: var(--ym-outline);
+  stroke-width: 3.5;
+}
+.yanshi-mascot__seal-badge path,
+.yanshi-mascot__prop-slot path,
+.yanshi-mascot__state-accents path {
+  fill: none;
+  stroke: var(--ym-outline);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.yanshi-mascot__prop-slot rect {
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+}
+.yanshi-mascot__state-accents path {
+  stroke: var(--ym-local-state);
+}
+
+.yanshi-mascot--expr-thinking {
+  --ym-local-state: var(--ym-warning);
+}
+.yanshi-mascot--expr-focused {
+  --ym-local-state: var(--ym-accent);
+}
+.yanshi-mascot--expr-happy {
+  --ym-local-state: var(--ym-success);
+}
+.yanshi-mascot--expr-error {
+  --ym-local-state: var(--ym-danger);
+}
+.yanshi-mascot--expr-sleeping {
+  --ym-local-state: var(--ym-muted);
+}
+
+.yanshi-mascot--animated .yanshi-mascot__body {
+  animation: yanshi-mascot-breathe 2.8s ease-in-out infinite;
+}
+.yanshi-mascot--animated .yanshi-mascot__state-accents {
+  animation: yanshi-mascot-accent-drift 3.2s ease-in-out infinite;
+}
+.yanshi-mascot--expr-focused.yanshi-mascot--animated .yanshi-mascot__body {
+  animation-duration: 1.2s;
+}
+.yanshi-mascot--expr-error.yanshi-mascot--animated .yanshi-mascot__body,
+.yanshi-mascot--expr-sleeping.yanshi-mascot--animated .yanshi-mascot__body {
+  animation-duration: 4.8s;
+}
+.yanshi-mascot--reduced-motion .yanshi-mascot__layer,
+.yanshi-mascot--reduced-motion .yanshi-mascot__expression,
+.yanshi-mascot--reduced-motion .yanshi-mascot__shadow-ring,
+.yanshi-mascot--reduced-motion .yanshi-mascot__state-accents {
+  animation: none !important;
+}
+
+@keyframes yanshi-mascot-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes yanshi-mascot-accent-drift {
+  0%, 100% { opacity: 0.64; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yanshi-mascot--animated .yanshi-mascot__layer,
+  .yanshi-mascot--animated .yanshi-mascot__expression,
+  .yanshi-mascot--animated .yanshi-mascot__shadow-ring,
+  .yanshi-mascot--animated .yanshi-mascot__state-accents {
+    animation: none !important;
+  }
 }

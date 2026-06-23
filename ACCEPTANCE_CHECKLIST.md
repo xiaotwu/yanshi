@@ -32,8 +32,20 @@
 - [x] Spec under `docs/superpowers/specs/` records key decisions for sign-off.
 - [x] Plan under `docs/superpowers/plans/` decomposes post-sign-off implementation into TDD commits.
 - [x] No Arknights asset, name, or likeness is shipped.
-- [ ] User has signed off the key decisions before role variants are mass-produced.
+- [x] User has signed off the key decisions before role variants are mass-produced.
 - [x] Requested desktop and runtime gates pass for this increment.
+
+## Workshop Character Mascot Redesign — Increment 2
+
+- [x] Spec updated with amendments: Manager thinking during every ReAct decide phase; stop after base rig
+  for visual sign-off.
+- [x] Base layered SVG rig exists under `apps/desktop/src/features/workshop/mascots/`.
+- [x] Expression set covers `neutral`, `happy`, `thinking`, `focused`, `surprised`, `error`, and `sleeping`.
+- [x] SVG presentation uses CSS variables rather than hard-coded mascot brand colors.
+- [x] Reduced-motion-safe hooks are present.
+- [x] Focused TDD test went red, then green.
+- [x] Requested desktop and runtime gates pass for this increment.
+- [ ] Visual sign-off received before role skins are built.
 
 ## Product-Wide Acceptance Still Pending Outside This Task
 

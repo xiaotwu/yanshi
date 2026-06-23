@@ -24,12 +24,13 @@ _Last updated: 2026-06-23._
 
 ## Workshop mascot redesign
 
-- [ ] User sign-off required: approve/edit the key decisions in
+- [x] User signed off the key decisions in
   `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`.
-- [ ] After sign-off, start increment 2 from
+- [x] Increment 2 from
   `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`: tokenized SVG rig + tests.
-- [ ] Continue with honest runtime-derived mascot state, role skins, Workshop integration, reduced-motion,
-  zh/en a11y, and full gates.
+- [ ] Visual sign-off required on the base rig before building the six role skins.
+- [ ] After visual sign-off, continue with honest runtime-derived mascot state, role skins, Workshop
+  integration, reduced-motion, zh/en a11y, and full gates.
 
 ## Optional / deferred (nice-to-have, not blocking)
 
