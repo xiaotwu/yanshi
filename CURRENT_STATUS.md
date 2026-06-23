@@ -4,9 +4,10 @@ _Last updated: 2026-06-23._
 
 ## What Works
 
-- **Workshop character redesign increments 1-2**: spec decisions are signed off with amendments, and the
-  base tokenized Seal-Fin mascot rig now renders as accessible inline SVG with seven expressions and
-  reduced-motion-safe hooks. Role skins and Workshop integration are intentionally paused for visual sign-off.
+- **Workshop character redesign Direction 2A**: the base tokenized Seal-Fin rig remains implemented and
+  tested, but its visual art direction is superseded. Current work is three original dragon-horn chibi
+  girl preview PNGs for owner pixel selection, preserving the rig engineering, seven-expression system,
+  token theming, reduced-motion/a11y hooks, and honest runtime-derived state contract.
 - **Bounded ReAct loop** (`graph/runtime_graph.py`): provider decides one `answer` or one tool `assign`; tool observations feed the next decide step; finalizer handles answer / budget-exhaustion / failure / cancel.
 - **Validated live** against a real Ollama provider (not just fakes): eval harness 3/3, multi-step observation feed-back, honest no-provider / tool-disabled / budget-exhaustion failures. See `docs/superpowers/notes/2026-06-22-loop-live-validation-results.md`. Two real robustness bugs found and fixed along the way (scalar-answer coercion `cc61c9d`; raw-response capture `fab6347`).
 - **No-provider shortcuts removed**; missing provider surfaces `model_not_configured`. Disabled tools, worker-whitelist blocks, and invalid Docker settings fail runs honestly with structured observations (hard-gate `tool_failed`).
@@ -37,6 +38,7 @@ _Last updated: 2026-06-23._
 
 ## Current Blockers
 
-- Workshop mascot role-skin and integration work is intentionally blocked on visual sign-off of the base
-  rig delivered in increment 2.
+- Workshop mascot role-skin and integration work is intentionally blocked on owner selection of one
+  Direction 2A dragon-horn chibi concept, then a second seven-expression visual sign-off after reskinning
+  the product rig.
 - Remaining release work is owner-credentialed (above).

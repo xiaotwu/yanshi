@@ -28,9 +28,13 @@ _Last updated: 2026-06-23._
   `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`.
 - [x] Increment 2 from
   `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`: tokenized SVG rig + tests.
-- [ ] Visual sign-off required on the base rig before building the six role skins.
-- [ ] After visual sign-off, continue with honest runtime-derived mascot state, role skins, Workshop
-  integration, reduced-motion, zh/en a11y, and full gates.
+- [x] Direction 2A recorded: discard the seal-fin art direction and prepare original dragon-horn chibi
+  girl concepts while keeping rig engineering and the honest state contract.
+- [ ] Owner must pick one of the rendered Direction 2A concept PNGs on pixels before product reskinning.
+- [ ] After concept selection, reskin the existing rig to the chosen concept, render all seven expressions,
+  and stop again for visual sign-off before role skins.
+- [ ] After the second visual sign-off, continue with honest runtime-derived mascot state, role skins,
+  Workshop integration, reduced-motion, zh/en a11y, and full gates.
 
 ## Optional / deferred (nice-to-have, not blocking)
 

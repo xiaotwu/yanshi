@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" role="img" aria-labelledby="title desc">
+  <title id="title">Direction 2A dragon-horn chibi concept contact sheet</title>
+  <desc id="desc">Contact sheet showing three original dragon-horn chibi girl concepts for Yanshi.</desc>
+  <style>
+    :root {
+      --bg: oklch(0.96 0.018 92);
+      --panel: oklch(0.995 0.008 90);
+      --line: oklch(0.82 0.03 90);
+      --ink: oklch(0.18 0.03 280);
+      --muted: oklch(0.42 0.04 270);
+    }
+    .bg { fill: var(--bg); }
+    .title { font: 750 38px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--ink); letter-spacing: 0; }
+    .note { font: 500 19px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); letter-spacing: 0; }
+    .frame { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+  </style>
+  <rect class="bg" width="1440" height="960"/>
+  <text class="title" x="56" y="66">Direction 2A · Original Dragon-Horn Chibi Girl Concepts</text>
+  <text class="note" x="56" y="100">Pick one on pixels. Each concept shows neutral + happy. Product rig/skins are not changed yet.</text>
+  <g transform="translate(56 132)">
+    <rect class="frame" width="1328" height="248" rx="22"/>
+    <image href="concept-a-paper-lantern-dragon-apprentice.svg" x="14" y="14" width="1300" height="220" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+  <g transform="translate(56 398)">
+    <rect class="frame" width="1328" height="248" rx="22"/>
+    <image href="concept-b-jade-button-dragon-page.svg" x="14" y="14" width="1300" height="220" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+  <g transform="translate(56 664)">
+    <rect class="frame" width="1328" height="248" rx="22"/>
+    <image href="concept-c-cloud-knot-dragon-tinkerer.svg" x="14" y="14" width="1300" height="220" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+</svg>

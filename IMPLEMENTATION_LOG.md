@@ -1,5 +1,42 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Workshop Character Mascot Redesign Direction 2A
+
+Phase: fresh original dragon-horn chibi concept previews for owner pixel selection.
+
+Files changed:
+- `docs/superpowers/notes/2026-06-23-workshop-character-direction-2-dragon-girl-brainstorm.md`
+- `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+- `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`
+- `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- Render previews with local Chrome headless:
+  - `concept-a-paper-lantern-dragon-apprentice.png`
+  - `concept-b-jade-button-dragon-page.png`
+  - `concept-c-cloud-knot-dragon-tinkerer.png`
+  - `direction-2a-dragon-girl-contact-sheet.png`
+- `pnpm --filter @yanshi/desktop test` -> `22 passed`, `98 tests passed`
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`
+- `pnpm --filter @yanshi/desktop typecheck` -> passed
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings
+
+Results:
+- Captured the owner revision: use the final supplied chibi image only for Q-version proportions,
+  thick outline, blank-cute expression, happy face, and simplified standing pose.
+- Allowed dragon horns only as an original Yanshi dragon-girl premise; copied reference horn silhouette,
+  long-hair waterfall, tactical outfit, copied palette, floating marks, name, lore, and assets remain
+  forbidden.
+- Rendered three preview concepts for owner pixel selection before any product rig reskin.
+
+Next action:
+- Commit and stop for owner concept choice.
+
 ## 2026-06-23 — Workshop Character Mascot Redesign Increment 2
 
 Phase: base layered-SVG rig, expression set, theme tokens, and visual sign-off checkpoint.

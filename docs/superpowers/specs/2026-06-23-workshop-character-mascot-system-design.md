@@ -1,10 +1,13 @@
 # 偃师工坊角色重设计 · Chibi Mascot System Spec
 
 - Date: 2026-06-23
-- Status: key decisions signed off by the user on 2026-06-23, with two amendments: Manager thinking
-  covers every ReAct decide phase, and increment 2 stops for visual sign-off before role skins.
+- Status: original key decisions were signed off by the user on 2026-06-23, with two amendments:
+  Manager thinking covers every ReAct decide phase, and increment 2 stops for visual sign-off before role
+  skins. Direction 2A now supersedes the prior art direction and is pending owner pixel-pick.
 - Brief: `docs/superpowers/plans/2026-06-23-workshop-character-redesign-brief.md`
 - Brainstorm: `docs/superpowers/notes/2026-06-23-workshop-character-redesign-brainstorm.md`
+- Direction 2A brainstorm:
+  `docs/superpowers/notes/2026-06-23-workshop-character-direction-2-dragon-girl-brainstorm.md`
 
 ## 1. Goal
 
@@ -28,7 +31,9 @@ Allowed style extraction:
 - Floating state accents.
 
 Yanshi-original replacements:
-- Dragon horns become folded mechanical seal-fins.
+- The prior seal-fin replacement is discarded by Direction 2A. Dragon horns are permitted only as a new,
+  original Yanshi dragon-girl premise; copied horn silhouette, palette, likeness, outfit, marks, name, or
+  lore from the reference remains forbidden.
 - Tactical fantasy outfit becomes artificer smock, talisman sash, seal badge, and small tool props.
 - Floating cross marks become seal ticks, gear pips, talisman strokes, or approval stamps.
 - Long hair waterfall becomes compact hair/hood shapes that keep the head readable without copying.
@@ -46,9 +51,31 @@ Yanshi-original replacements:
 | Variant language | **Concept C role props as skin details** | Differentiates six roles without fragmenting the family identity. |
 | Thread/halo motif | **Secondary state accent only** | Useful for approval/sleep/offline, but too visually noisy as the base silhouette. |
 
-## 4. Signed-off concept candidate
+## 4. Current visual direction
+
+Direction 2A supersedes the prior **Seal-Fin Automaton Artificers** art direction. The implemented rig
+engineering remains valid, but the visual skin should be replaced only after the owner chooses one of
+the rendered dragon-horn chibi previews.
+
+Current owner revision:
+- Keep the final supplied chibi image's Q-version abstraction: two-head proportions, thick line weight,
+  blank-cute neutral face, happy face, and simplified standing pose.
+- Design an original dragon-horn girl mascot for Yanshi.
+- Avoid the reference character's identity: no copied horn silhouette, long-hair waterfall, tactical
+  outfit, teal/crimson identity, floating marks, name, lore, or asset.
+- Preview three concepts as PNGs with neutral + happy variants and stop for pixel selection before
+  building anything.
+
+Rendered preview directory:
+
+`docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+
+## 4a. Superseded concept candidate
 
 Recommended base: **Seal-Fin Automaton Artificers**.
+
+This concept is no longer the active art direction. It is retained here as historical context for the
+already-implemented rig increment, not as the future visual target.
 
 Shape:
 - About two heads tall.
@@ -160,7 +187,7 @@ Required before implementation claims completion:
 
 ## 10. Sign-off gates
 
-The user signed off the following on 2026-06-23:
+The user signed off the following on 2026-06-23, before rejecting the seal-fin visual direction:
 - Base silhouette: Concept A Seal-Fin Automaton Artificers.
 - Variant strategy: Concept C props/crests on one shared rig.
 - State accent strategy: Concept B thread/halo only as a subtle state accent.
@@ -168,5 +195,7 @@ The user signed off the following on 2026-06-23:
 - Honesty contract: derive state from real runtime/store signals only.
 - Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
-After increment 2 renders the base layered-SVG rig, stop for visual sign-off before building the six
-role skins or replacing existing mascot rendering in Workshop surfaces.
+Direction 2A changes the visual sign-off gate: first choose one of the rendered original dragon-horn
+chibi concepts, then reskin the existing rig to the chosen concept and render all seven expressions for
+a second visual check. Do not build the six role skins or replace Workshop surfaces before that second
+visual sign-off.

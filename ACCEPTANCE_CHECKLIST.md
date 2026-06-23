@@ -47,6 +47,19 @@
 - [x] Requested desktop and runtime gates pass for this increment.
 - [ ] Visual sign-off received before role skins are built.
 
+## Workshop Character Mascot Redesign — Direction 2A Concept Preview
+
+- [x] Seal-fin visual art direction marked superseded; rig engineering remains reusable.
+- [x] Owner revision captured: Q-version proportions, thick outline, blank-cute expression, happy face,
+  simplified standing pose, and an original dragon-horn girl.
+- [x] Originality guardrail retained: no copied reference asset, name, likeness, horn silhouette, long-hair
+  waterfall, tactical outfit, copied palette identity, or marks.
+- [x] Three distinct dragon-horn chibi concepts are documented.
+- [x] Three concept PNGs render with neutral + happy variants.
+- [x] Requested desktop and runtime gates pass for this preview increment.
+- [x] Commit created on `main` with the required co-author trailer.
+- [ ] Owner chooses one concept before any product rig reskin, role skin, or Workshop integration.
+
 ## Product-Wide Acceptance Still Pending Outside This Task
 
 - [ ] App starts end to end.

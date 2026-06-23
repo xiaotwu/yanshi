@@ -1,7 +1,8 @@
 # Workshop Character Mascot System Implementation Plan
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
-> Increment 1 sign-off is complete. Increment 2 must stop for visual sign-off before role skins.
+> Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. Stop at
+> rendered dragon-horn chibi concept previews until the owner picks one on pixels.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -15,7 +16,9 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 
 ## Global constraints
 
-- No Arknights / 陈千语 asset, name, likeness, horn silhouette, outfit, or copied palette identity.
+- No Arknights / 陈千语 asset, name, likeness, reference horn silhouette, outfit, or copied palette
+  identity. Direction 2A allows an original dragon-horn Yanshi girl premise only when the horn shape,
+  hair, outfit, palette, marks, and thumbnail are clearly original.
 - All mascot colors come from CSS custom properties bound to existing theme/workshop tokens or explicit
   user profile accent values. No hard-coded brand colors in mascot components.
 - All visible copy and accessible labels go through `i18n/en.ts` and `i18n/zh.ts`.
@@ -74,6 +77,30 @@ mascots whose expressions and animations are driven only by real runtime/agent s
 
 **Stop condition after this increment:** show the rendered base rig for visual sign-off. Do not build
 the six role skins or integrate mascots into Workshop surfaces until that sign-off happens.
+
+## Increment 2A — Fresh dragon-horn chibi concept previews
+
+**Files:**
+- Create `docs/superpowers/notes/2026-06-23-workshop-character-direction-2-dragon-girl-brainstorm.md`
+- Create PNG/SVG previews under
+  `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/`
+- Update this plan, the spec, and continuation docs.
+
+**Steps:**
+- [x] Record the owner revision: Q-version proportions, thick outline, blank-cute face, simplified
+  standing pose, and an original dragon-horn girl.
+- [x] Preserve the originality guardrail: no copied reference horn silhouette, long-hair waterfall,
+  tactical outfit, copied palette, floating marks, name, lore, or asset.
+- [x] Brainstorm three distinct original concepts:
+  - Paper-Lantern Dragon Apprentice
+  - Jade-Button Dragon Page
+  - Cloud-Knot Dragon Tinkerer
+- [x] Render each concept as an actual PNG with neutral + happy variants.
+- [x] Run the requested gates.
+- [x] Commit this preview increment with the required trailer.
+
+**Stop condition after this increment:** owner chooses one concept on pixels. Do not reskin the product
+rig, build role skins, or integrate mascots until the owner picks.
 
 ## Increment 3 — Honest mascot state selector + reduced motion
 
