@@ -203,7 +203,7 @@ sandbox); Apple Developer ID is needed only for public signing/notarization.
 | Area | Honest state |
 | --- | --- |
 | Public macOS release | Pending Developer ID signing, notarization, stapling, and Gatekeeper second-machine verification. |
-| ACP External Agents | A whole run can be routed to a connected stdio agent (`session/new` + `session/prompt`, streaming its reply). Tool/permission call-back, multi-turn sessions, and custom protocol are planned. |
+| ACP External Agents | A whole run can be routed to a connected stdio agent (`session/new` + `session/prompt`), and connected ACP agents can be called as ReAct-loop sub-steps with their replies fed back as observations. Tool/permission call-back, multi-turn sessions, and custom protocol are planned. |
 | MCP Servers | Stdio MCP servers connect, discover tools live (`initialize` + `tools/list`), and callable discovered tools can run inside the ReAct loop via `tools/call`. HTTP/SSE transport is planned. |
 | Browser tool | Requires Playwright Chromium provisioning when missing. |
 | Computer Use | Requires macOS Accessibility / Screen Recording for full control and screenshots. |

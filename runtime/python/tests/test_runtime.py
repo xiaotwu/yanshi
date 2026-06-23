@@ -172,6 +172,17 @@ def loop_assign_mcp(tool_id: str, task: str, arguments: dict | None = None) -> s
     )
 
 
+def loop_assign_acp(external_agent_id: str, task: str) -> str:
+    return json.dumps(
+        {
+            "action": "assign",
+            "agentId": "agent_acp",
+            "externalAgentId": external_agent_id,
+            "task": task,
+        }
+    )
+
+
 def loop_answer(text: str) -> str:
     return json.dumps({"action": "answer", "text": text})
 
@@ -208,6 +219,35 @@ class _FakeMcpManager:
 
     def live_state(self, server_id: str):
         return self._by_id.get(server_id)
+
+
+class _FakeAcpConnection:
+    def __init__(self, answer: str = "agent result", status: str = "connected", fail: str | None = None) -> None:
+        self.answer = answer
+        self.status = status
+        self.fail = fail
+        self.sessions: list[tuple[float, str | None]] = []
+        self.prompts: list[tuple[str, str, float]] = []
+
+    def new_session(self, timeout: float, cwd: str | None = None) -> str:
+        self.sessions.append((timeout, cwd))
+        if self.fail == "session":
+            raise ConnectionError("session failed")
+        return "sess_1"
+
+    def prompt(self, session_id: str, text: str, timeout: float) -> str:
+        self.prompts.append((session_id, text, timeout))
+        if self.fail == "prompt":
+            raise TimeoutError("prompt timed out")
+        return self.answer
+
+
+class _FakeAcpManager:
+    def __init__(self, by_id: dict[str, _FakeAcpConnection]) -> None:
+        self._by_id = by_id
+
+    def live_state(self, agent_id: str):
+        return self._by_id.get(agent_id)
 
 
 class FakePlaywrightError(Exception):
@@ -4058,6 +4098,101 @@ def test_mcp_prompt_advertisement_is_honest(tmp_path: Path) -> None:
     service.graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
     system_prompt = provider.calls[0][0]["content"]
     assert "agent_mcp toolId=srv/search: Search docs" in system_prompt
+
+
+def test_loop_can_call_acp_agent_then_answer(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    connection = _FakeAcpConnection(answer="specialist says yes")
+    service.graph.acp = _FakeAcpManager({"ea": connection})
+    set_loop_provider(
+        client,
+        [
+            loop_assign_acp("ea", "ask the specialist"),
+            loop_answer("done from observation"),
+        ],
+    )
+
+    run = client.post("/runs", json={"task": "Ask specialist then summarize."}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "completed"
+    assert fetched["resultSummary"] == "done from observation"
+    assert connection.sessions and connection.sessions[0][0] == 30.0
+    assert connection.sessions[0][1] and Path(connection.sessions[0][1]).exists()
+    assert connection.prompts == [("sess_1", "ask the specialist", 300.0)]
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    acp_obs = [obs for obs in observations if obs["type"] == "AcpObservation"]
+    assert len(acp_obs) == 1
+    assert acp_obs[0]["summary"] == "specialist says yes"
+    assert acp_obs[0]["structuredOutput"]["externalAgentId"] == "ea"
+    assert acp_obs[0]["structuredOutput"]["sessionId"] == "sess_1"
+
+
+def test_loop_fails_honestly_when_acp_agent_unavailable(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.acp = _FakeAcpManager({})
+    set_loop_provider(client, [loop_assign_acp("ea", "ask the specialist")])
+
+    run = client.post("/runs", json={"task": "Ask specialist."}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "failed"
+    assert "unavailable" in (fetched.get("resultSummary") or "").lower()
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    acp_obs = [obs for obs in observations if obs["type"] == "AcpObservation"]
+    assert len(acp_obs) == 1
+    assert acp_obs[0]["error"] == "acp_agent_unavailable"
+    assert acp_obs[0]["structuredOutput"]["externalAgentId"] == "ea"
+
+
+def test_loop_fails_honestly_when_acp_prompt_fails(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.acp = _FakeAcpManager({"ea": _FakeAcpConnection(fail="prompt")})
+    set_loop_provider(client, [loop_assign_acp("ea", "ask the specialist")])
+
+    run = client.post("/runs", json={"task": "Ask specialist."}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "failed"
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    acp_obs = [obs for obs in observations if obs["type"] == "AcpObservation"]
+    assert len(acp_obs) == 1
+    assert acp_obs[0]["error"] == "acp_agent_unavailable"
+    assert "prompt timed out" in acp_obs[0]["summary"]
+
+
+def test_acp_prompt_advertisement_is_honest(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    client.put(
+        "/settings/integrations",
+        json={
+            "externalAgents": [
+                {"id": "ea", "name": "Specialist", "protocol": "acp", "command": "fake", "enabled": True},
+            ],
+        },
+    )
+    provider = set_loop_provider(client, [loop_answer("ok")])
+    service.graph.acp = _FakeAcpManager({})
+    assert service.graph._available_acp_agents() == []
+    service.graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    system_prompt = provider.calls[0][0]["content"]
+    assert "agent_acp" not in system_prompt
+
+    provider = set_loop_provider(client, [loop_assign_acp("ea", "ask the specialist")])
+    service.graph.acp = _FakeAcpManager({"ea": _FakeAcpConnection(answer="ready")})
+    assert service.graph._available_acp_agents() == [("ea", "Specialist")]
+    service.graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    system_prompt = provider.calls[0][0]["content"]
+    assert "agent_acp externalAgentId=ea: Specialist" in system_prompt
+    assert 'For ACP assignments include "externalAgentId".' in system_prompt
 
 
 def test_loop_budget_exhaustion_is_honest(tmp_path: Path) -> None:

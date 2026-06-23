@@ -78,6 +78,7 @@ class RuntimeGraph:
         "tool_not_in_worker_abilities",
         "docker_config_invalid",
         "mcp_tool_unavailable",
+        "acp_agent_unavailable",
     }
 
     def __init__(
@@ -88,6 +89,7 @@ class RuntimeGraph:
         workspace_root: Path,
         provider: OpenAICompatibleProvider,
         mcp: Any | None = None,
+        acp: Any | None = None,
     ) -> None:
         self.storage = storage
         self.policy = PermissionPolicy()
@@ -97,6 +99,7 @@ class RuntimeGraph:
         self.terminal_tool = TerminalTool()
         self.provider = provider
         self.mcp = mcp
+        self.acp = acp
         # In-memory partial-answer buffer for streaming the final answer to the UI without
         # persisting every token to the event log. Keyed by run_id; read by the /partial endpoint.
         self._partials: dict[str, dict[str, Any]] = {}
@@ -604,6 +607,8 @@ class RuntimeGraph:
             result = self._execute_terminal_assignment(state, assignment)
         elif agent_id == "agent_mcp":
             result = self._execute_mcp_assignment(state, assignment)
+        elif agent_id == "agent_acp":
+            result = self._execute_acp_assignment(state, assignment)
         else:
             result = {
                 "agent_id": agent_id,
@@ -634,6 +639,7 @@ class RuntimeGraph:
         "agent_terminal": "TerminalObservation",
         "agent_file": "FileObservation",
         "agent_mcp": "McpObservation",
+        "agent_acp": "AcpObservation",
     }
 
     _TOOL_LABEL: dict[str, str] = {
@@ -642,6 +648,7 @@ class RuntimeGraph:
         "agent_terminal": "Terminal Tool",
         "agent_file": "File Tool",
         "agent_mcp": "MCP Tool",
+        "agent_acp": "ACP Agent",
     }
 
     def _worker_tool_allowed(self, run_id: str, agent_id: str) -> bool:
@@ -692,7 +699,7 @@ class RuntimeGraph:
 
         # Per-偃师 whitelist check (only subtracts; never enables globally-disabled tools).
         if (
-            agent_id != "agent_mcp"
+            agent_id not in {"agent_mcp", "agent_acp"}
             and agent_id in self._TOOL_OBSERVATION_TYPE
             and not self._worker_tool_allowed(state["run_id"], agent_id)
         ):
@@ -1174,6 +1181,123 @@ class RuntimeGraph:
             output,
         )
 
+    def _execute_acp_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
+        run_id = state["run_id"]
+        raw_agent_id = assignment.get("externalAgentId")
+        external_agent_id = raw_agent_id.strip() if isinstance(raw_agent_id, str) else str(raw_agent_id or "").strip()
+        task_text = str(assignment.get("task") or "").strip()
+        action_id = self.storage.create_action(
+            run_id,
+            "AcpAction",
+            state.get("risk_level", "medium"),
+            {"externalAgentId": external_agent_id, "task": task_text},
+            "agent_acp",
+        )
+        if not external_agent_id:
+            return self._acp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                external_agent_id,
+                None,
+                "ACP Agent is unavailable: externalAgentId is required.",
+            )
+
+        conn = self.acp.live_state(external_agent_id) if self.acp is not None else None
+        status = getattr(conn, "status", None)
+        if conn is None or status not in {"connected", "ready"}:
+            return self._acp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                external_agent_id,
+                None,
+                f"ACP Agent is unavailable: {external_agent_id}.",
+            )
+
+        session_id: str | None = None
+        try:
+            session_id = conn.new_session(timeout=30.0, cwd=str(self._workspace_for_run(run_id)))
+            answer = conn.prompt(session_id, task_text, timeout=300.0)
+        except (ConnectionError, TimeoutError, ValueError, OSError) as exc:
+            return self._acp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                external_agent_id,
+                session_id,
+                f"ACP Agent is unavailable: {exc}",
+            )
+
+        summary = answer.strip() if isinstance(answer, str) else ""
+        if not summary:
+            return self._acp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                external_agent_id,
+                session_id,
+                "ACP Agent is unavailable: the agent returned an empty response.",
+            )
+
+        output = {
+            "externalAgentId": external_agent_id,
+            "sessionId": session_id,
+            "response": summary,
+        }
+        self.storage.complete_action(action_id, run_id, status="completed", agent_id="agent_acp")
+        self.storage.create_observation(
+            run_id,
+            "AcpObservation",
+            summary,
+            action_id=action_id,
+            agent_id="agent_acp",
+            structured_output=output,
+        )
+        return self._agent_execution_result(
+            "agent_acp",
+            assignment,
+            True,
+            summary,
+            "AcpObservation",
+            None,
+            output,
+        )
+
+    def _acp_unavailable_result(
+        self,
+        run_id: str,
+        action_id: str,
+        assignment: dict[str, Any],
+        external_agent_id: str,
+        session_id: str | None,
+        summary: str,
+    ) -> AgentExecutionResult:
+        output = {
+            "externalAgentId": external_agent_id,
+            "sessionId": session_id,
+            "missingRequirement": "acp_agent_unavailable",
+        }
+        self.storage.complete_action(action_id, run_id, status="failed", agent_id="agent_acp")
+        self.storage.create_observation(
+            run_id,
+            "AcpObservation",
+            summary,
+            action_id=action_id,
+            agent_id="agent_acp",
+            structured_output=output,
+            error="acp_agent_unavailable",
+        )
+        return self._agent_execution_result(
+            "agent_acp",
+            assignment,
+            False,
+            summary,
+            "AcpObservation",
+            "acp_agent_unavailable",
+            output,
+        )
+
     def _write_terminal_log_artifact(self, run_id: str, action_id: str, result) -> None:
         log_path = self._workspace_for_run(run_id) / "terminal" / "docker-log.txt"
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1241,7 +1365,7 @@ class RuntimeGraph:
         assignment_task = str(assignment.get("task") or "")
         return f"{assignment_task}\n\nOriginal request: {state['task']}"
 
-    _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal", "agent_mcp"}
+    _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal", "agent_mcp", "agent_acp"}
 
     def _available_mcp_tools(self) -> list[tuple[str, str]]:
         if self.mcp is None:
@@ -1263,20 +1387,52 @@ class RuntimeGraph:
                 tools.append((f"{server.id}/{name}", str(description)))
         return tools
 
+    def _available_acp_agents(self) -> list[tuple[str, str]]:
+        if self.acp is None:
+            return []
+        try:
+            agents = self.storage.get_ai_integrations().externalAgents
+        except Exception:  # noqa: BLE001 - prompt construction must not crash the manager loop
+            return []
+        available: list[tuple[str, str]] = []
+        for agent in agents:
+            if agent.protocol != "acp" or not agent.enabled:
+                continue
+            conn = self.acp.live_state(agent.id)
+            if conn is None or getattr(conn, "status", None) not in {"connected", "ready"}:
+                continue
+            available.append((agent.id, agent.name))
+        return available
+
     def _agent_choice_instruction(self) -> str:
         base = "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal."
         mcp_tools = self._available_mcp_tools()
-        if not mcp_tools:
+        acp_agents = self._available_acp_agents()
+        if not mcp_tools and not acp_agents:
             return base
-        tool_lines = [
-            f"agent_mcp toolId={tool_id}: {description or 'No description.'}"
-            for tool_id, description in mcp_tools
-        ]
-        return (
-            "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal, agent_mcp. "
-            "Available MCP tools: " + " ".join(tool_lines) + " "
-            'For MCP assignments include "toolId" and object "arguments".'
-        )
+        dynamic_agents = []
+        if mcp_tools:
+            dynamic_agents.append("agent_mcp")
+        if acp_agents:
+            dynamic_agents.append("agent_acp")
+        ids = ", ".join(["agent_file", "agent_browser", "agent_computer", "agent_terminal", *dynamic_agents])
+        details = [f"agentId must be one of: {ids}."]
+        if mcp_tools:
+            tool_lines = [
+                f"agent_mcp toolId={tool_id}: {description or 'No description.'}"
+                for tool_id, description in mcp_tools
+            ]
+            details.append(
+                "Available MCP tools: " + " ".join(tool_lines) + " "
+                'For MCP assignments include "toolId" and object "arguments".'
+            )
+        if acp_agents:
+            agent_lines = [f"agent_acp externalAgentId={agent_id}: {name}" for agent_id, name in acp_agents]
+            details.append(
+                "Available ACP agents: " + " ".join(agent_lines) + " "
+                'For ACP assignments include "externalAgentId".'
+            )
+        return " ".join(details)
 
     def _provider_next_action(
         self,
@@ -1368,6 +1524,16 @@ class RuntimeGraph:
                     "agentId": agent_id,
                     "toolId": tool_id.strip(),
                     "arguments": arguments,
+                    "task": assign_task,
+                }
+            if agent_id == "agent_acp":
+                external_agent_id = payload.get("externalAgentId")
+                if not isinstance(external_agent_id, str) or not external_agent_id.strip():
+                    raise ValueError("Provider next_action 'assign' for agent_acp must include externalAgentId.")
+                return {
+                    "action": "assign",
+                    "agentId": agent_id,
+                    "externalAgentId": external_agent_id.strip(),
                     "task": assign_task,
                 }
             return {"action": "assign", "agentId": agent_id, "task": assign_task}

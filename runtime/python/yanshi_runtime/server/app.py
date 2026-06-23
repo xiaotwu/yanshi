@@ -109,6 +109,7 @@ class RuntimeService:
         self.pack_validator = WorkshopPackValidator()
         self.acp = AcpManager()
         self.mcp = McpManager()
+        self.graph.acp = self.acp
         self.graph.mcp = self.mcp
         self.max_workshop_upload_bytes = MAX_WORKSHOP_UPLOAD_BYTES
         # Short-lived, scoped tickets for the header-less callers (WS, <img> preview, download links)
