@@ -160,6 +160,18 @@ def loop_assign(agent_id: str, task: str) -> str:
     return json.dumps({"action": "assign", "agentId": agent_id, "task": task})
 
 
+def loop_assign_mcp(tool_id: str, task: str, arguments: dict | None = None) -> str:
+    return json.dumps(
+        {
+            "action": "assign",
+            "agentId": "agent_mcp",
+            "toolId": tool_id,
+            "arguments": arguments or {},
+            "task": task,
+        }
+    )
+
+
 def loop_answer(text: str) -> str:
     return json.dumps({"action": "answer", "text": text})
 
@@ -170,6 +182,32 @@ def set_loop_provider(client: TestClient, responses: list[str], *, repeat_last: 
     service.provider = provider
     service.graph.provider = provider
     return provider
+
+
+class _FakeMcpTool:
+    def __init__(self, name: str, description: str = "") -> None:
+        self.name = name
+        self.description = description
+
+
+class _FakeMcpConnection:
+    def __init__(self, tools: list[_FakeMcpTool], responder, status: str = "ready") -> None:
+        self.tools = tools
+        self.status = status
+        self.requests: list[tuple[str, dict, float]] = []
+        self._responder = responder
+
+    def request(self, method: str, params: dict, timeout: float) -> dict:
+        self.requests.append((method, params, timeout))
+        return self._responder(method, params)
+
+
+class _FakeMcpManager:
+    def __init__(self, by_id: dict[str, _FakeMcpConnection]) -> None:
+        self._by_id = by_id
+
+    def live_state(self, server_id: str):
+        return self._by_id.get(server_id)
 
 
 class FakePlaywrightError(Exception):
@@ -3905,6 +3943,121 @@ def test_loop_uses_tool_then_answers_with_feedback(tmp_path: Path) -> None:
     # The file agent actually ran (an action recorded for agent_file).
     tasks = service.storage.list_agent_tasks(run_id=run["id"])
     assert any(t.agentId == "agent_file" for t in tasks)
+
+
+def test_loop_can_call_mcp_tool_then_answer(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    calls: list[tuple[str, dict]] = []
+
+    def responder(method: str, params: dict) -> dict:
+        calls.append((method, params))
+        return {"content": [{"type": "text", "text": "hit"}]}
+
+    service.graph.mcp = _FakeMcpManager({"srv": _FakeMcpConnection([_FakeMcpTool("search")], responder)})
+    set_loop_provider(
+        client,
+        [
+            loop_assign_mcp("srv/search", "search the docs", {"q": "x"}),
+            loop_answer("found it"),
+        ],
+    )
+
+    run = client.post("/runs", json={"task": "Find the docs"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "completed"
+    assert fetched["resultSummary"] == "found it"
+    assert calls == [("tools/call", {"name": "search", "arguments": {"q": "x"}})]
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    mcp_obs = [obs for obs in observations if obs["type"] == "McpObservation"]
+    assert len(mcp_obs) == 1
+    assert mcp_obs[0]["summary"] == "hit"
+    assert mcp_obs[0]["structuredOutput"]["toolId"] == "srv/search"
+
+
+def test_loop_fails_honestly_when_mcp_tool_unavailable(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+    service.graph.mcp = _FakeMcpManager({})
+    set_loop_provider(client, [loop_assign_mcp("srv/search", "search the docs")])
+
+    run = client.post("/runs", json={"task": "Find the docs"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "failed"
+    assert "unavailable" in (fetched.get("resultSummary") or "").lower()
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    mcp_obs = [obs for obs in observations if obs["type"] == "McpObservation"]
+    assert len(mcp_obs) == 1
+    assert mcp_obs[0]["error"] == "mcp_tool_unavailable"
+    assert mcp_obs[0]["structuredOutput"]["toolId"] == "srv/search"
+
+
+def test_loop_treats_mcp_tool_error_as_soft_feedback(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    def responder(method: str, params: dict) -> dict:
+        return {"content": [{"type": "text", "text": "remote tool error"}], "isError": True}
+
+    service.graph.mcp = _FakeMcpManager({"srv": _FakeMcpConnection([_FakeMcpTool("search")], responder)})
+    set_loop_provider(
+        client,
+        [
+            loop_assign_mcp("srv/search", "search the docs"),
+            loop_answer("The MCP tool reported an error, so I stopped there."),
+        ],
+    )
+
+    run = client.post("/runs", json={"task": "Find the docs"}).json()
+    fetched = client.get(f"/runs/{run['id']}").json()
+
+    assert fetched["status"] == "completed"
+    assert "reported an error" in fetched["resultSummary"]
+    events = client.get("/events", params={"runId": run["id"]}).json()
+    observations = [entry["event"]["payload"] for entry in events if entry["event"]["type"] == "observation.created"]
+    mcp_obs = [obs for obs in observations if obs["type"] == "McpObservation"]
+    assert len(mcp_obs) == 1
+    assert mcp_obs[0]["summary"] == "remote tool error"
+    assert mcp_obs[0]["structuredOutput"]["isError"] is True
+
+
+def test_mcp_prompt_advertisement_is_honest(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    service = client.app.state.runtime_service
+
+    provider = set_loop_provider(client, [loop_answer("ok")])
+    service.graph.mcp = None
+    assert service.graph._available_mcp_tools() == []
+    service.graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    system_prompt = provider.calls[0][0]["content"]
+    assert "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal." in system_prompt
+    assert "agent_mcp" not in system_prompt
+
+    client.put(
+        "/settings/integrations",
+        json={
+            "mcpServers": [
+                {"id": "srv", "name": "Docs", "transport": "stdio", "command": "fake", "enabled": True},
+            ],
+        },
+    )
+    provider = set_loop_provider(client, [loop_assign_mcp("srv/search", "search the docs")])
+    service.graph.mcp = _FakeMcpManager(
+        {
+            "srv": _FakeMcpConnection(
+                [_FakeMcpTool("search", "Search docs")],
+                lambda method, params: {"content": [{"type": "text", "text": "hit"}]},
+            )
+        }
+    )
+    assert service.graph._available_mcp_tools() == [("srv/search", "Search docs")]
+    service.graph._provider_next_action("q", observations=[], reasoning="medium", project_id=None)
+    system_prompt = provider.calls[0][0]["content"]
+    assert "agent_mcp toolId=srv/search: Search docs" in system_prompt
 
 
 def test_loop_budget_exhaustion_is_honest(tmp_path: Path) -> None:

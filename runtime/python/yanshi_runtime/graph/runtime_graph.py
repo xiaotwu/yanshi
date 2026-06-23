@@ -77,6 +77,7 @@ class RuntimeGraph:
         "tool_disabled",
         "tool_not_in_worker_abilities",
         "docker_config_invalid",
+        "mcp_tool_unavailable",
     }
 
     def __init__(
@@ -86,6 +87,7 @@ class RuntimeGraph:
         checkpoint_path: Path,
         workspace_root: Path,
         provider: OpenAICompatibleProvider,
+        mcp: Any | None = None,
     ) -> None:
         self.storage = storage
         self.policy = PermissionPolicy()
@@ -94,6 +96,7 @@ class RuntimeGraph:
         self.computer_tool = ComputerTool()
         self.terminal_tool = TerminalTool()
         self.provider = provider
+        self.mcp = mcp
         # In-memory partial-answer buffer for streaming the final answer to the UI without
         # persisting every token to the event log. Keyed by run_id; read by the /partial endpoint.
         self._partials: dict[str, dict[str, Any]] = {}
@@ -599,6 +602,8 @@ class RuntimeGraph:
             result = self._execute_computer_assignment(state, assignment)
         elif agent_id == "agent_terminal":
             result = self._execute_terminal_assignment(state, assignment)
+        elif agent_id == "agent_mcp":
+            result = self._execute_mcp_assignment(state, assignment)
         else:
             result = {
                 "agent_id": agent_id,
@@ -628,6 +633,7 @@ class RuntimeGraph:
         "agent_computer": "ComputerObservation",
         "agent_terminal": "TerminalObservation",
         "agent_file": "FileObservation",
+        "agent_mcp": "McpObservation",
     }
 
     _TOOL_LABEL: dict[str, str] = {
@@ -635,6 +641,7 @@ class RuntimeGraph:
         "agent_computer": "Computer Tool",
         "agent_terminal": "Terminal Tool",
         "agent_file": "File Tool",
+        "agent_mcp": "MCP Tool",
     }
 
     def _worker_tool_allowed(self, run_id: str, agent_id: str) -> bool:
@@ -684,7 +691,11 @@ class RuntimeGraph:
                 return self._agent_execution_result(agent_id, assignment, False, summary, observation_type, "tool_disabled", output)
 
         # Per-偃师 whitelist check (only subtracts; never enables globally-disabled tools).
-        if agent_id in self._TOOL_OBSERVATION_TYPE and not self._worker_tool_allowed(state["run_id"], agent_id):
+        if (
+            agent_id != "agent_mcp"
+            and agent_id in self._TOOL_OBSERVATION_TYPE
+            and not self._worker_tool_allowed(state["run_id"], agent_id)
+        ):
             role = agent_id.removeprefix("agent_")
             observation_type = self._TOOL_OBSERVATION_TYPE[agent_id]
             tool_label = self._TOOL_LABEL[agent_id]
@@ -1034,6 +1045,135 @@ class RuntimeGraph:
             result.structuredOutput,
         )
 
+    def _execute_mcp_assignment(self, state: GraphState, assignment: dict[str, Any]) -> AgentExecutionResult:
+        run_id = state["run_id"]
+        raw_tool_id = assignment.get("toolId")
+        tool_id = raw_tool_id.strip() if isinstance(raw_tool_id, str) else str(raw_tool_id or "").strip()
+        arguments = assignment.get("arguments")
+        if not isinstance(arguments, dict):
+            arguments = {}
+        action_id = self.storage.create_action(
+            run_id,
+            "McpAction",
+            state.get("risk_level", "medium"),
+            {"toolId": tool_id, "arguments": arguments, "task": str(assignment.get("task") or "")},
+            "agent_mcp",
+        )
+
+        parts = self._split_mcp_tool_id(tool_id)
+        if parts is None:
+            return self._mcp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                tool_id,
+                arguments,
+                "MCP Tool is unavailable: toolId must be in the form server_id/tool_name.",
+            )
+        server_id, tool_name = parts
+        conn = self.mcp.live_state(server_id) if self.mcp is not None else None
+        status = getattr(conn, "status", None)
+        tools = getattr(conn, "tools", []) if conn is not None else []
+        tool_names = {getattr(tool, "name", "") for tool in tools}
+        if conn is None or status not in {"connected", "ready"} or tool_name not in tool_names:
+            return self._mcp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                tool_id,
+                arguments,
+                f"MCP Tool is unavailable: {tool_id}.",
+            )
+
+        try:
+            result = conn.request(
+                "tools/call",
+                {"name": tool_name, "arguments": arguments},
+                timeout=30.0,
+            )
+        except (ConnectionError, TimeoutError, ValueError) as exc:
+            return self._mcp_unavailable_result(
+                run_id,
+                action_id,
+                assignment,
+                tool_id,
+                arguments,
+                f"MCP Tool is unavailable: {exc}",
+            )
+
+        content = result.get("content") if isinstance(result, dict) else None
+        text_parts: list[str] = []
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
+                    text_parts.append(item["text"])
+        summary = "\n".join(text_parts).strip() or "MCP Tool returned no text content."
+        is_error = bool(result.get("isError")) if isinstance(result, dict) else False
+        output = {
+            "toolId": tool_id,
+            "serverId": server_id,
+            "toolName": tool_name,
+            "arguments": arguments,
+            "isError": is_error,
+            "content": content if isinstance(content, list) else [],
+        }
+        self.storage.complete_action(action_id, run_id, status="failed" if is_error else "completed", agent_id="agent_mcp")
+        self.storage.create_observation(
+            run_id,
+            "McpObservation",
+            summary,
+            action_id=action_id,
+            agent_id="agent_mcp",
+            structured_output=output,
+            error="mcp_tool_error" if is_error else None,
+        )
+        return self._agent_execution_result(
+            "agent_mcp",
+            assignment,
+            not is_error,
+            summary,
+            "McpObservation",
+            None,
+            output,
+        )
+
+    @staticmethod
+    def _split_mcp_tool_id(tool_id: str) -> tuple[str, str] | None:
+        server_id, sep, tool_name = tool_id.partition("/")
+        if not sep or not server_id.strip() or not tool_name.strip():
+            return None
+        return server_id.strip(), tool_name.strip()
+
+    def _mcp_unavailable_result(
+        self,
+        run_id: str,
+        action_id: str,
+        assignment: dict[str, Any],
+        tool_id: str,
+        arguments: dict[str, Any],
+        summary: str,
+    ) -> AgentExecutionResult:
+        output = {"toolId": tool_id, "arguments": arguments, "missingRequirement": "mcp_tool_unavailable"}
+        self.storage.complete_action(action_id, run_id, status="failed", agent_id="agent_mcp")
+        self.storage.create_observation(
+            run_id,
+            "McpObservation",
+            summary,
+            action_id=action_id,
+            agent_id="agent_mcp",
+            structured_output=output,
+            error="mcp_tool_unavailable",
+        )
+        return self._agent_execution_result(
+            "agent_mcp",
+            assignment,
+            False,
+            summary,
+            "McpObservation",
+            "mcp_tool_unavailable",
+            output,
+        )
+
     def _write_terminal_log_artifact(self, run_id: str, action_id: str, result) -> None:
         log_path = self._workspace_for_run(run_id) / "terminal" / "docker-log.txt"
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1101,7 +1241,42 @@ class RuntimeGraph:
         assignment_task = str(assignment.get("task") or "")
         return f"{assignment_task}\n\nOriginal request: {state['task']}"
 
-    _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal"}
+    _NEXT_ACTION_AGENT_IDS = {"agent_file", "agent_browser", "agent_computer", "agent_terminal", "agent_mcp"}
+
+    def _available_mcp_tools(self) -> list[tuple[str, str]]:
+        if self.mcp is None:
+            return []
+        try:
+            servers = self.storage.get_ai_integrations().mcpServers
+        except Exception:  # noqa: BLE001 - prompt construction must not crash the manager loop
+            return []
+        tools: list[tuple[str, str]] = []
+        for server in servers:
+            conn = self.mcp.live_state(server.id)
+            if conn is None or getattr(conn, "status", None) not in {"connected", "ready"}:
+                continue
+            for tool in getattr(conn, "tools", []):
+                name = getattr(tool, "name", None)
+                if not isinstance(name, str) or not name:
+                    continue
+                description = getattr(tool, "description", "") or ""
+                tools.append((f"{server.id}/{name}", str(description)))
+        return tools
+
+    def _agent_choice_instruction(self) -> str:
+        base = "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal."
+        mcp_tools = self._available_mcp_tools()
+        if not mcp_tools:
+            return base
+        tool_lines = [
+            f"agent_mcp toolId={tool_id}: {description or 'No description.'}"
+            for tool_id, description in mcp_tools
+        ]
+        return (
+            "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal, agent_mcp. "
+            "Available MCP tools: " + " ".join(tool_lines) + " "
+            'For MCP assignments include "toolId" and object "arguments".'
+        )
 
     def _provider_next_action(
         self,
@@ -1133,7 +1308,7 @@ class RuntimeGraph:
                         "Decide the next action as JSON only. "
                         'Reply with EXACTLY ONE of: {"action":"answer","text":"<final answer>"} '
                         'or {"action":"assign","agentId":"<id>","task":"<task>"}. '
-                        "agentId must be one of: agent_file, agent_browser, agent_computer, agent_terminal. "
+                        + self._agent_choice_instruction() + " "
                         "Choose answer when you can reply from available observations. "
                         "Choose assign when you need a tool to gather more information. "
                         "When conversationHistory is present, keep the answer consistent with prior turns. "
@@ -1179,6 +1354,22 @@ class RuntimeGraph:
                 raise ValueError(f"Provider next_action 'assign' has invalid agentId: {agent_id!r}")
             if not assign_task:
                 raise ValueError("Provider next_action 'assign' must include a non-empty 'task' field.")
+            if agent_id == "agent_mcp":
+                tool_id = payload.get("toolId")
+                if not isinstance(tool_id, str) or self._split_mcp_tool_id(tool_id.strip()) is None:
+                    raise ValueError("Provider next_action 'assign' for agent_mcp must include toolId 'server_id/tool_name'.")
+                arguments = payload.get("arguments", {})
+                if arguments is None:
+                    arguments = {}
+                if not isinstance(arguments, dict):
+                    raise ValueError("Provider next_action 'assign' for agent_mcp must include object arguments.")
+                return {
+                    "action": "assign",
+                    "agentId": agent_id,
+                    "toolId": tool_id.strip(),
+                    "arguments": arguments,
+                    "task": assign_task,
+                }
             return {"action": "assign", "agentId": agent_id, "task": assign_task}
         except (ValueError, json.JSONDecodeError) as exc:
             raise ProviderDecisionError(str(exc), raw_response=(response or "")[:2000]) from exc
