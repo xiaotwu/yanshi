@@ -1,19 +1,23 @@
 name: Release (signed macOS bundle)
 
 # Builds the distributable, code-signed + notarized macOS bundle (.app + .dmg)
-# on a version tag, or on manual dispatch. Signing/notarization happen ONLY when
-# the Apple secrets below are configured (see docs/BUILD_AND_RELEASE.md →
-# "Signed release via GitHub Actions"). Without them the build still runs but is
-# UNSIGNED (not for distribution). The Apple Developer ID assets are the
-# repository owner's to provide — they are never committed.
+# on a version tag, or on manual dispatch. This workflow intentionally fails
+# before building if the Apple signing/notarization secrets are absent; public
+# release artifacts must never be silently unsigned. The Apple Developer ID
+# assets are the repository owner's to provide — they are never committed.
 #
 # Required repo secrets for a real signed release:
 #   APPLE_CERTIFICATE           base64 of the exported "Developer ID Application" .p12
 #   APPLE_CERTIFICATE_PASSWORD  the .p12 export password
 #   APPLE_SIGNING_IDENTITY      e.g. "Developer ID Application: Your Name (TEAMID)"
 #   APPLE_ID                    your Apple ID email
-#   APPLE_PASSWORD              an app-specific password (appleid.apple.com)
+#   APPLE_APP_SPECIFIC_PASSWORD an app-specific password (appleid.apple.com)
 #   APPLE_TEAM_ID               your 10-char Apple Team ID
+#
+# Optional updater env:
+#   vars.YANSHI_UPDATER_ENDPOINT     public update feed URL
+#   vars.YANSHI_UPDATER_PUBLIC_KEY   public updater verification key
+#   secrets.TAURI_SIGNING_PRIVATE_KEY updater artifact signing key
 
 on:
   push:
@@ -32,6 +36,28 @@ jobs:
       contents: write # create/attach the GitHub release
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require Apple signing and notarization secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing required release secret(s): ${missing[*]}" >&2
+            echo "This workflow refuses to produce unsigned public release artifacts." >&2
+            echo "Add the owner-held Apple Developer ID certificate, app-specific password, and Team ID as repo secrets." >&2
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@v4
         with:
@@ -52,6 +78,15 @@ jobs:
       - name: Build runtime sidecar
         run: pnpm sidecar:build
 
+      - name: Generate release Tauri config
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          YANSHI_UPDATER_ENDPOINT: ${{ vars.YANSHI_UPDATER_ENDPOINT }}
+          YANSHI_UPDATER_PUBLIC_KEY: ${{ vars.YANSHI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/write-tauri-release-config.mjs
+
       # tauri-action imports APPLE_CERTIFICATE into a temporary keychain, builds
       # with the sidecar overlay config, and (when APPLE_ID/APPLE_PASSWORD/
       # APPLE_TEAM_ID are present) codesigns → notarizes → staples the bundle,
@@ -64,12 +99,15 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_YANSHI_CRASH_REPORT_DSN: ${{ vars.YANSHI_CRASH_REPORT_DSN }}
         with:
           projectPath: apps/desktop
-          # Bundle the embedded sidecar (the overlay config used by `pnpm desktop:release`).
-          args: --config src-tauri/tauri.sidecar.conf.json
+          # Bundle the embedded sidecar plus owner-supplied signing/updater config.
+          args: --config src-tauri/tauri.generated-release.conf.json
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.run_number) }}
           releaseName: "Yanshi __VERSION__"
           releaseDraft: true

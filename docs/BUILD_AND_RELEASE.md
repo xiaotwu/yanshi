@@ -164,10 +164,10 @@ build exists; a signed/notarized public release remains pending.
 
 ## Signed release via GitHub Actions (`.github/workflows/release.yml`)
 
-`release.yml` automates the distributable build (sidecar + `--config src-tauri/tauri.sidecar.conf.json`)
-and, **when the Apple secrets are configured**, codesigns → notarizes → staples it via Tauri's
-bundler (through `tauri-apps/tauri-action`) and attaches `.app`/`.dmg` to a draft GitHub release.
-Without the secrets it still runs but produces an **unsigned** build (not for distribution).
+`release.yml` automates the distributable build (sidecar + generated Tauri release config) and
+codesigns → notarizes → staples it via Tauri's bundler (through `tauri-apps/tauri-action`) before
+attaching `.app`/`.dmg` to a draft GitHub release. The workflow now **fails before building** if the
+Apple signing/notarization secrets are missing; it must not silently publish unsigned artifacts.
 
 These Apple Developer ID assets are **yours to provide** — they are never committed to the repo.
 The signing/notarization step (and obtaining the cert) is the human-owned part; once the secrets are
@@ -180,7 +180,7 @@ variables → Actions):
 | `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting the `.p12`. |
 | `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` (exact string from `security find-identity -p codesigning -v`). |
 | `APPLE_ID` | Your Apple ID email. |
-| `APPLE_PASSWORD` | An app-specific password from appleid.apple.com (not your Apple ID password). |
+| `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password from appleid.apple.com (not your Apple ID password). The legacy `APPLE_PASSWORD` secret is still accepted by the workflow fallback. |
 | `APPLE_TEAM_ID` | Your 10-character Apple Team ID. |
 
 **Trigger:** push a `vX.Y.Z` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`), or run the
@@ -196,6 +196,55 @@ xcrun stapler validate Yanshi.app        # → "The validate action worked!"
 
 This is the automated counterpart to the manual "Codesign & Notarization" commands above; either
 path produces the same signed/notarized artifact.
+
+## Updater and Crash Reporting Scaffolding
+
+Updater and crash reporting are disabled until the owner configures the external services and keys.
+No private service token should be committed or embedded in the app.
+
+### Auto-update
+
+The release workflow generates `apps/desktop/src-tauri/tauri.generated-release.conf.json` from env
+and passes it to Tauri. That generated file is gitignored. It always contains the sidecar resource
+and `bundle.macOS.signingIdentity`; it adds Tauri updater config only when all updater env is present:
+
+| Env / secret | Purpose |
+| --- | --- |
+| `YANSHI_UPDATER_ENDPOINT` (repo variable) | Public Tauri update feed URL, for example a GitHub Releases `latest.json`. |
+| `YANSHI_UPDATER_PUBLIC_KEY` (repo variable) | Public updater verification key shipped in the app. |
+| `TAURI_SIGNING_PRIVATE_KEY` (repo secret) | Private updater artifact signing key, used by CI only. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (repo secret, optional) | Password for the updater signing key if the key is encrypted. |
+
+If any updater env is partially configured, `scripts/write-tauri-release-config.mjs` fails loudly
+instead of building a half-configured updater. When the updater env is absent, updater artifacts are
+not created and Settings → Runtime shows Updates as not configured. The in-app "Check updates"
+button is manual and disabled until an owner-built app has updater config.
+
+Owner steps:
+
+1. Pick the update host and publish format.
+2. Generate the Tauri updater keypair; keep the private key only in GitHub Secrets or your local
+   release environment.
+3. Add the public key and feed URL as repo variables, and the private key as a repo secret.
+4. Trigger `release.yml`; it generates updater artifacts when the updater env is complete.
+
+### Crash reporting
+
+The desktop UI initializes a small crash reporter only when `VITE_YANSHI_CRASH_REPORT_DSN` is present
+at build time. Without that env, crash reporting is a no-op and Settings → Runtime shows it as off.
+Crash payloads are scrubbed before sending: secret-like keys, bearer/API-key-looking strings, and
+email-like values are redacted. The reporter is intentionally generic; use a public client DSN or a
+collector endpoint that does not require embedding private service tokens in the app.
+
+Owner steps:
+
+1. Pick the crash reporting service or collector endpoint.
+2. Confirm its client-side DSN/endpoint is safe to embed in a desktop app. Do not use private API
+   tokens in `VITE_` env.
+3. Set `YANSHI_CRASH_REPORT_DSN` as a repo variable for CI, or `VITE_YANSHI_CRASH_REPORT_DSN` in a
+   local release build environment.
+4. Verify a test crash arrives with scrubbed payload fields and no provider keys, bearer tokens,
+   cookies, email addresses, or raw stack traces.
 
 ## Provider API Key Storage
 

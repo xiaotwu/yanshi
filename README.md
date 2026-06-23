@@ -54,8 +54,8 @@ Yanshi is a **v0.1 Local Final Candidate**.
 ✅ Documentation site validated and ready
 ✅ Error toast system accepted
 ✅ No active P0/P1/P2 issues from the latest review
-⚠️ Public distribution still requires Apple Developer ID signing, notarization, stapling, and
-Gatekeeper verification on a second Mac
+⚠️ Public distribution still requires owner-provided Apple Developer ID signing/notarization
+secrets and Gatekeeper verification on a second Mac
 ⚠️ Some tools require external setup (Chromium) or macOS permissions (Accessibility / Screen
 Recording)
 
@@ -95,11 +95,10 @@ apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app
 apps/desktop/src-tauri/target/release/bundle/dmg/Yanshi_0.1.0_aarch64.dmg
 ```
 
-The bundle is functionally self-contained for local use (the runtime is embedded), but it is
-**unsigned and un-notarized** — Gatekeeper will warn on another Mac. Right-click → **Open**, or
-`xattr -dr com.apple.quarantine Yanshi.app`. Public distribution requires a Developer ID
-certificate, codesigning, notarization + stapling, and a second-machine Gatekeeper check — see
-[docs/BUILD_AND_RELEASE.md](docs/BUILD_AND_RELEASE.md).
+The bundle is functionally self-contained for local use (the runtime is embedded), but a public
+release requires the owner-provided Developer ID secrets, codesigning, notarization + stapling, and
+a second-machine Gatekeeper check. The release workflow now fails loudly if those secrets are
+missing — see [docs/BUILD_AND_RELEASE.md](docs/BUILD_AND_RELEASE.md).
 
 ## Architecture
 
@@ -202,7 +201,7 @@ sandbox); Apple Developer ID is needed only for public signing/notarization.
 
 | Area | Honest state |
 | --- | --- |
-| Public macOS release | Pending Developer ID signing, notarization, stapling, and Gatekeeper second-machine verification. |
+| Public macOS release | CI is wired for owner-provided Developer ID signing/notarization secrets and fails loudly if they are absent; Gatekeeper second-machine verification remains owner-run. |
 | ACP External Agents | A whole run can be routed to a connected stdio agent (`session/new` + `session/prompt`), and connected ACP agents can be called as ReAct-loop sub-steps with their replies fed back as observations. Tool/permission call-back, multi-turn sessions, and custom protocol are planned. |
 | MCP Servers | Stdio MCP servers connect, discover tools live (`initialize` + `tools/list`), and callable discovered tools can run inside the ReAct loop via `tools/call`. HTTP/SSE transport is planned. |
 | Browser tool | Requires Playwright Chromium provisioning when missing. |

@@ -6,18 +6,77 @@ use runtime::{
     pop_out_live_office, quit_app, restart_runtime, reveal_path, runtime_status, runtime_token,
     show_main_window, start_runtime, stop_runtime, update_active_runs, RuntimeState,
 };
+use serde::Serialize;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_updater::UpdaterExt;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateCheckResult {
+    status: &'static str,
+    version: Option<String>,
+    current_version: Option<String>,
+    error: Option<String>,
+}
+
+fn updater_enabled_at_build() -> bool {
+    matches!(
+        option_env!("YANSHI_UPDATER_ENABLED"),
+        Some("1" | "true" | "TRUE" | "yes" | "YES")
+    )
+}
+
+#[tauri::command]
+async fn check_for_updates(app: tauri::AppHandle) -> UpdateCheckResult {
+    if !updater_enabled_at_build() {
+        return UpdateCheckResult {
+            status: "not_configured",
+            version: None,
+            current_version: None,
+            error: None,
+        };
+    }
+    match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => UpdateCheckResult {
+                status: "available",
+                version: Some(update.version),
+                current_version: Some(update.current_version),
+                error: None,
+            },
+            Ok(None) => UpdateCheckResult {
+                status: "up_to_date",
+                version: None,
+                current_version: None,
+                error: None,
+            },
+            Err(error) => UpdateCheckResult {
+                status: "error",
+                version: None,
+                current_version: None,
+                error: Some(error.to_string()),
+            },
+        },
+        Err(error) => UpdateCheckResult {
+            status: "error",
+            version: None,
+            current_version: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -50,7 +109,8 @@ pub fn run() {
             reveal_path,
             update_active_runs,
             hide_main_window,
-            quit_app
+            quit_app,
+            check_for_updates
         ])
         .setup(|app| {
             let shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyY);

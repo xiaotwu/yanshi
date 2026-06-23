@@ -2,13 +2,14 @@ import { RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import appIconUrl from "../../../../icon.png";
-import { openDesktopRuntimeLogs } from "../api/desktop";
+import { checkForUpdates, openDesktopRuntimeLogs, updaterConfigured, type UpdateCheckResult } from "../api/desktop";
 import { releaseWebglContext } from "../components/error-boundary";
 import { Modal } from "../components/modal";
 import { Switch } from "../components/switch";
 import { useT } from "../i18n";
 import type { TKey } from "../i18n/en";
 import { ACCENTS, getAccent, setAccent } from "../lib/accent";
+import { crashReporterStatus } from "../lib/crash-reporter";
 import { permissionLabel } from "../lib/shared";
 import type { PermissionMode } from "../lib/shared";
 import { useRuntimeStore } from "../stores/runtimeStore";
@@ -297,6 +298,8 @@ function ProfileSettings() {
 
 export function SettingsSectionView({ section }: { section: SettingsSection }) {
   const { t } = useT();
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const {
     status,
     desktopStatus,
@@ -447,6 +450,18 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
       );
     case "runtime": {
       const gl = webglInfo();
+      const updateConfigured = updaterConfigured();
+      const updateStatus =
+        updateCheck?.status === "available" && updateCheck.version
+          ? t("settings.runtime.updateAvailable", { version: updateCheck.version })
+          : updateCheck?.status === "up_to_date"
+            ? t("settings.runtime.updateUpToDate")
+            : updateCheck?.status === "error"
+              ? t("settings.runtime.updateError")
+              : updateConfigured
+                ? t("settings.runtime.updateConfigured")
+                : t("settings.runtime.updateNotConfigured");
+      const crashStatus = crashReporterStatus() === "configured" ? t("settings.runtime.crashConfigured") : t("settings.runtime.crashNotConfigured");
       return (
         <div className="settings-panel">
           <h3>{t("settings.section.runtime")}</h3>
@@ -464,6 +479,10 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
             <dd>{t(`stream.${eventStreamStatus}` as TKey)}</dd>
             <dt>WebGL</dt>
             <dd>{gl.available ? `${t("settings.runtime.webglAvailable")} · ${gl.renderer}` : t("common.notAvailable")}</dd>
+            <dt>{t("settings.runtime.updates")}</dt>
+            <dd>{checkingUpdates ? t("settings.runtime.updateChecking") : updateStatus}</dd>
+            <dt>{t("settings.runtime.crashReporter")}</dt>
+            <dd>{crashStatus}</dd>
           </dl>
           <div className="settings-actions">
             <button onClick={() => void restartRuntime()} disabled={loading}>
@@ -471,6 +490,19 @@ export function SettingsSectionView({ section }: { section: SettingsSection }) {
             </button>
             <button onClick={() => void openDesktopRuntimeLogs()} disabled={!desktopStatus?.logPath}>
               {t("settings.runtime.logs")}
+            </button>
+            <button
+              onClick={async () => {
+                setCheckingUpdates(true);
+                try {
+                  setUpdateCheck(await checkForUpdates());
+                } finally {
+                  setCheckingUpdates(false);
+                }
+              }}
+              disabled={!updateConfigured || checkingUpdates}
+            >
+              {t("settings.runtime.checkUpdates")}
             </button>
           </div>
         </div>

@@ -25,6 +25,7 @@ yanshi-ui-run-smoke.png
 runtime/python/build/
 runtime/python/dist/
 apps/desktop/src-tauri/resources/yanshi-runtime-sidecar
+apps/desktop/src-tauri/tauri.generated-release.conf.json
 
 # VitePress docs build output
 apps/docs/.vitepress/dist/

@@ -9,6 +9,7 @@
 import { create } from "zustand";
 
 import type { TKey } from "../i18n/en";
+import { captureCrashReport } from "./crash-reporter";
 
 export type YanshiErrorCode = string;
 
@@ -119,5 +120,11 @@ export function reportError(code: YanshiErrorCode | null | undefined, detail?: u
   const definition = resolveError(code);
   // Structured diagnostics for Developer Mode / console logs (no stack traces in the UI).
   console.error(`[yanshi] ${definition.code} (${definition.area}/${definition.severity})`, detail ?? "");
+  captureCrashReport({
+    code: definition.code,
+    area: definition.area,
+    severity: definition.severity,
+    detail,
+  });
   useErrorToasts.getState().push(definition.code);
 }
