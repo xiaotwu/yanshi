@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const outRelative = "apps/desktop/src-tauri/tauri.generated-release.conf.json";
-const outPath = join(root, outRelative);
 
 function env(name) {
   return (process.env[name] || "").trim();
@@ -15,8 +13,11 @@ function fail(message) {
   process.exit(1);
 }
 
+const outRelative = env("YANSHI_RELEASE_CONFIG_OUT") || "apps/desktop/src-tauri/tauri.generated-release.conf.json";
+const outPath = isAbsolute(outRelative) ? outRelative : join(root, outRelative);
+const dryRun = /^(1|true|yes)$/i.test(env("YANSHI_RELEASE_DRY_RUN"));
 const signingIdentity = env("APPLE_SIGNING_IDENTITY");
-if (!signingIdentity) {
+if (!signingIdentity && !dryRun) {
   fail("APPLE_SIGNING_IDENTITY is required to generate a signed release Tauri config.");
 }
 
@@ -29,11 +30,13 @@ const hasUpdaterConfig = Boolean(updaterPublicKey || updaterEndpoint || updaterP
 const config = {
   bundle: {
     resources: ["resources/yanshi-runtime-sidecar"],
-    macOS: {
-      signingIdentity,
-    },
   },
 };
+if (signingIdentity) {
+  config.bundle.macOS = {
+    signingIdentity,
+  };
+}
 
 let updaterEnabled = false;
 if (hasUpdaterConfig) {

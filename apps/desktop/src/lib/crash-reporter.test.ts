@@ -1,10 +1,31 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { crashReporterStatus, scrubCrashPayload } from "./crash-reporter";
+import { captureCrashReport, crashReporterStatus, initCrashReporter, scrubCrashPayload } from "./crash-reporter";
 
 describe("crash reporter", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("is disabled until a crash-report DSN is configured", () => {
     expect(crashReporterStatus()).toBe("not_configured");
+  });
+
+  it("does not attach handlers or send payloads while unconfigured", () => {
+    const addEventListener = vi.spyOn(window, "addEventListener");
+    const fetch = vi.fn();
+    const sendBeacon = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    Object.defineProperty(navigator, "sendBeacon", { value: sendBeacon, configurable: true });
+
+    initCrashReporter();
+    captureCrashReport({ code: "YANSHI_TEST_001", detail: { token: "not-a-real-token" } });
+
+    expect(addEventListener).not.toHaveBeenCalled();
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("scrubs secrets and email-like PII before sending", () => {

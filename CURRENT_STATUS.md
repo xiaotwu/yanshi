@@ -10,25 +10,27 @@ _Last updated: 2026-06-23._
 - **Per-action approval/blocked defense-in-depth** (`8859b4b`): the manager's actual assigned sub-action is risk-gated, not just the top-level task; escalation under a benign task is caught; `approved` is consumed per action.
 - **MCP tools callable inside the loop** (`bfa3e7b`): `agent_mcp` assignments call `tools/call`; only live connected/ready tools are advertised; unavailable tool/transport = hard fail, MCP `isError` = soft (manager adapts).
 - **ACP agents callable inside the loop** (`aefdd1f`): `agent_acp` delegates one sub-step via `new_session`/`prompt`; hard-gates on unavailable/transport/empty response. The existing whole-task external-agent route is untouched.
-- **Release/owner plumbing scaffolded** (`48bac53`): release CI fails loudly without Apple signing/notarization secrets; updater check + crash reporter are present but **disabled until configured**, with payload scrubbing. No credentials stored.
+- **Release/owner plumbing scaffolded**: release CI fails loudly without Apple signing/notarization secrets for signed/tagged releases; manual `workflow_dispatch dry_run=true` builds and validates unsigned Tauri release config without credentials; updater check + crash reporter are present but **disabled until configured**, with payload scrubbing. No credentials stored.
 - Follow-up runs pass conversation history into the manager decision.
 
 ## Test Status (green)
 
 - Runtime Python: `166 passed` (`cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings`).
-- Desktop: `pnpm --filter @yanshi/desktop test` → 92 passed; `typecheck` → pass; `build` → pass (existing Vite chunk-size warning); `cargo check`/`cargo test` (src-tauri) → pass / 12 passed.
+- Desktop: `pnpm --filter @yanshi/desktop test` -> 21 files / 94 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
+- Release config: `node --test scripts/write-tauri-release-config.test.mjs` -> 4 passed; dry-run generated-config smoke -> pass; `release.yml` YAML parse -> pass.
+- Tauri Rust: `cargo check` -> pass; `cargo test` -> 12 passed.
 
 ## What Does Not Work / Not Yet Done
 
 - **Owner-credentialed runs only** (cannot be done by an agent — require the owner's secrets):
-  - Apple Developer ID signing + notarization release run (scaffold + runbook ready in `release.yml` / `docs/BUILD_AND_RELEASE.md`).
+  - Apple Developer ID signing + notarization release run (scaffold + dry-run path + runbook ready in `release.yml` / `docs/BUILD_AND_RELEASE.md`).
   - Auto-update feed + updater keypair, and crash-reporting DSN — supply these to activate the scaffolded features.
 - Deferred (out of scope, noted): per-偃师 MCP/ACP tool whitelist.
 - Watch-item (no repro, instrumented): a `ReadTimeout` truncating long reasoning-model decisions can yield "Provider did not return a JSON object" — the captured `rawResponse` will reveal it if it recurs; the real fix would be on the provider timeout/streaming side.
 
 ## Current Branch
 
-- `main`, ahead of `origin/main` (~71 commits), **not pushed** (per owner instruction).
+- `main`, ahead of `origin/main`, **not pushed** (per owner instruction).
 
 ## Current Blockers
 

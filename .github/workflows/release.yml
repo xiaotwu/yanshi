@@ -24,13 +24,19 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Unsigned smoke test: build sidecar + Tauri bundle without Apple secrets or GitHub release"
+        required: true
+        default: true
+        type: boolean
 
 # No untrusted event input is used in any run step; tag name flows only into the
 # tauri-action release inputs, never into a shell command.
 
 jobs:
   release-macos:
-    name: Build signed macOS bundle
+    name: Build macOS bundle
     runs-on: macos-14
     permissions:
       contents: write # create/attach the GitHub release
@@ -38,6 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Require Apple signing and notarization secrets
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -78,7 +85,20 @@ jobs:
       - name: Build runtime sidecar
         run: pnpm sidecar:build
 
-      - name: Generate release Tauri config
+      - name: Generate unsigned dry-run Tauri config
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        env:
+          YANSHI_RELEASE_DRY_RUN: "true"
+        run: node scripts/write-tauri-release-config.mjs
+
+      - name: Validate unsigned dry-run Tauri config
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          node --test scripts/write-tauri-release-config.test.mjs
+          node -e 'const fs=require("node:fs"); const cfg=JSON.parse(fs.readFileSync("apps/desktop/src-tauri/tauri.generated-release.conf.json","utf8")); if (!cfg.bundle?.resources?.includes("resources/yanshi-runtime-sidecar")) throw new Error("sidecar resource missing"); if (cfg.bundle?.macOS?.signingIdentity) throw new Error("dry-run config must not include signingIdentity");'
+
+      - name: Generate signed release Tauri config
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           YANSHI_UPDATER_ENDPOINT: ${{ vars.YANSHI_UPDATER_ENDPOINT }}
@@ -87,11 +107,18 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: node scripts/write-tauri-release-config.mjs
 
+      - name: Dry-run unsigned Tauri build
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        env:
+          VITE_YANSHI_CRASH_REPORT_DSN: ""
+        run: pnpm --filter @yanshi/desktop tauri build --config src-tauri/tauri.generated-release.conf.json
+
       # tauri-action imports APPLE_CERTIFICATE into a temporary keychain, builds
       # with the sidecar overlay config, and (when APPLE_ID/APPLE_PASSWORD/
       # APPLE_TEAM_ID are present) codesigns → notarizes → staples the bundle,
       # then attaches the artifacts to a GitHub release.
       - name: Build, sign, notarize, and release
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

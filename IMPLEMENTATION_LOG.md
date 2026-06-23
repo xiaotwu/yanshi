@@ -1,5 +1,45 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Handoff D Non-Credentialed Release Prep
+
+Phase: release workflow, updater/crash config, owner handoff docs.
+
+Files changed:
+- `.github/workflows/release.yml`
+- `scripts/write-tauri-release-config.mjs`
+- `scripts/write-tauri-release-config.test.mjs`
+- `apps/desktop/src/api/desktop.test.ts`
+- `apps/desktop/src/lib/crash-reporter.test.ts`
+- `docs/BUILD_AND_RELEASE.md`
+- `PR_DESCRIPTION.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- `node --test scripts/write-tauri-release-config.test.mjs` -> `4 passed`
+- `YANSHI_RELEASE_DRY_RUN=true YANSHI_RELEASE_CONFIG_OUT=/tmp/yanshi-dry-run-tauri.conf.json node scripts/write-tauri-release-config.mjs` + JSON validation -> passed
+- `ruby -e 'require "psych"; Psych.load_file(".github/workflows/release.yml"); puts "release.yml yaml ok"'` -> passed
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`
+- `pnpm --filter @yanshi/desktop test` -> `21 passed`, `94 tests passed`
+- `pnpm --filter @yanshi/desktop typecheck` -> passed
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings
+- `cd apps/desktop/src-tauri && cargo check` -> passed
+- `cd apps/desktop/src-tauri && cargo test` -> `12 passed`
+
+Results:
+- Added a `workflow_dispatch` `dry_run=true` path that builds the sidecar, writes/validates unsigned generated Tauri config, and runs an unsigned Tauri build without Apple secrets or release creation.
+- Preserved the signed-release fail-loud guard for tag pushes and manual `dry_run=false` runs.
+- Added release config generator tests for dry-run, required signing identity, complete updater env, partial updater failure, and private-key non-persistence.
+- Added desktop tests proving update checks and crash reporting are inert while unconfigured.
+- Expanded the owner checklist for Apple secrets, `.p12` base64 export, app-specific password creation, updater keypair generation, updater feed/public-key slots, private-key boundary, and crash DSN slot.
+- Added `PR_DESCRIPTION.md` for owner push/PR prep.
+
+Next action:
+- Commit Handoff D prep on `main` with the required co-author trailer; do not push.
+
 ## 2026-06-22 — Task 5 ReAct Loop Test Reconciliation
 
 Phase: runtime graph and tests.

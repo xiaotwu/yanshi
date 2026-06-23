@@ -171,20 +171,42 @@ Apple signing/notarization secrets are missing; it must not silently publish uns
 
 These Apple Developer ID assets are **yours to provide** — they are never committed to the repo.
 The signing/notarization step (and obtaining the cert) is the human-owned part; once the secrets are
-set, pushing a tag does the rest. Add these as **repository secrets** (Settings → Secrets and
-variables → Actions):
+set, pushing a tag does the rest.
+
+### Manual dry run before adding Apple secrets
+
+Use the workflow's manual dry run to smoke-test CI without exposing owner credentials:
+
+1. GitHub → Actions → **Release (signed macOS bundle)** → **Run workflow**.
+2. Leave `dry_run` set to `true` (the default).
+3. The job builds the runtime sidecar, writes an unsigned generated Tauri config, validates that config,
+   and runs `tauri build` without signing, notarizing, stapling, or creating a GitHub release.
+
+The dry run intentionally skips the Apple secret guard. Tag pushes and manual runs with `dry_run=false`
+still run the guard before any build step. The guard checks these required values and fails loudly if any
+are absent: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD` (or the legacy fallback `APPLE_PASSWORD`), and `APPLE_TEAM_ID`.
+
+### Owner secret setup checklist
+
+Add these as **repository secrets** in GitHub → Settings → Secrets and variables → Actions → Repository
+secrets:
 
 | Secret | How to obtain |
 | --- | --- |
-| `APPLE_CERTIFICATE` | Export your "Developer ID Application" cert from Keychain as a `.p12`, then `base64 -i cert.p12 | pbcopy` and paste. |
-| `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting the `.p12`. |
-| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` (exact string from `security find-identity -p codesigning -v`). |
-| `APPLE_ID` | Your Apple ID email. |
-| `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password from appleid.apple.com (not your Apple ID password). The legacy `APPLE_PASSWORD` secret is still accepted by the workflow fallback. |
-| `APPLE_TEAM_ID` | Your 10-character Apple Team ID. |
+| `APPLE_CERTIFICATE` | Base64 of the exported Developer ID Application `.p12`. In Keychain Access, open **login** → **My Certificates**, select the `Developer ID Application: ...` identity that includes its private key, choose **File → Export Items...**, format **Personal Information Exchange (.p12)**, save it outside the repo, then run `base64 -i /path/to/DeveloperIDApplication.p12 | pbcopy` and paste the clipboard into this secret. On GNU base64, use `base64 -w 0 /path/to/DeveloperIDApplication.p12`. |
+| `APPLE_CERTIFICATE_PASSWORD` | The strong password you set during the `.p12` export. Store it in your password manager and paste only into this GitHub secret. |
+| `APPLE_SIGNING_IDENTITY` | The exact codesigning identity, for example `Developer ID Application: Your Name (TEAMID)`. Confirm locally with `security find-identity -p codesigning -v | grep "Developer ID Application"`. |
+| `APPLE_ID` | The Apple Account email used for notarization. |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarization. Create it at `account.apple.com` → **Sign-In and Security** → **App-Specific Passwords** → **Generate**, label it `Yanshi GitHub Notary`, and paste the one-time value here. Do not use your normal Apple Account password. |
+| `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID from Apple Developer account membership details. |
+
+Do not add Apple credentials to repository variables, docs, commits, shell history snippets, or local
+`.env` files. The legacy `APPLE_PASSWORD` secret is accepted only as a compatibility fallback; prefer
+`APPLE_APP_SPECIFIC_PASSWORD`.
 
 **Trigger:** push a `vX.Y.Z` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`), or run the
-workflow manually (Actions → Release → Run workflow). The job runs on `macos-14`.
+workflow manually with `dry_run=false` (Actions → Release → Run workflow). The job runs on `macos-14`.
 
 **After it produces a signed bundle**, complete the human verification step that CI cannot do —
 Gatekeeper acceptance on a *second* Mac:
@@ -223,9 +245,17 @@ button is manual and disabled until an owner-built app has updater config.
 Owner steps:
 
 1. Pick the update host and publish format.
-2. Generate the Tauri updater keypair; keep the private key only in GitHub Secrets or your local
-   release environment.
-3. Add the public key and feed URL as repo variables, and the private key as a repo secret.
+2. Generate the Tauri updater keypair locally:
+   ```bash
+   mkdir -p "$HOME/.tauri"
+   pnpm --filter @yanshi/desktop tauri signer generate -w "$HOME/.tauri/yanshi-updater.key"
+   ```
+   Copy the printed public key into the single public-key slot: repository variable
+   `YANSHI_UPDATER_PUBLIC_KEY`. Copy the private key file contents into the owner-managed repository
+   secret `TAURI_SIGNING_PRIVATE_KEY`; if you set a password, put it in
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The private key must never be committed, logged, pasted into
+   docs, or added to CI except as this owner-managed secret.
+3. Add the feed URL to the single feed slot: repository variable `YANSHI_UPDATER_ENDPOINT`.
 4. Trigger `release.yml`; it generates updater artifacts when the updater env is complete.
 
 ### Crash reporting
@@ -241,8 +271,8 @@ Owner steps:
 1. Pick the crash reporting service or collector endpoint.
 2. Confirm its client-side DSN/endpoint is safe to embed in a desktop app. Do not use private API
    tokens in `VITE_` env.
-3. Set `YANSHI_CRASH_REPORT_DSN` as a repo variable for CI, or `VITE_YANSHI_CRASH_REPORT_DSN` in a
-   local release build environment.
+3. Paste the DSN into the single CI slot: repository variable `YANSHI_CRASH_REPORT_DSN`. For local
+   release testing only, use `VITE_YANSHI_CRASH_REPORT_DSN` in the build environment.
 4. Verify a test crash arrives with scrubbed payload fields and no provider keys, bearer tokens,
    cookies, email addresses, or raw stack traces.
 

@@ -14,6 +14,17 @@
 - [x] Dead linear graph helpers are removed.
 - [x] Runtime test suite passes after cleanup.
 
+## Handoff D Release Prep
+
+- [x] Signed release workflow fails loudly before build when required Apple secrets are absent.
+- [x] Manual workflow dry run builds and validates unsigned release config without Apple signing/notarization secrets.
+- [x] Generated release config reads updater public key/feed from env and fails on partial updater setup.
+- [x] Updater private key is never written to generated config or repo files.
+- [x] Crash reporter remains disabled/inert when no DSN is configured.
+- [x] Owner checklist documents each GitHub secret/variable slot, `.p12` base64 export, app-specific password creation, updater keypair generation, and DSN setup.
+- [x] PR description is prepared locally; no push/PR opened.
+- [x] Requested runtime, desktop, and Rust gates pass.
+
 ## Product-Wide Acceptance Still Pending Outside This Task
 
 - [ ] App starts end to end.
