@@ -56,6 +56,13 @@ describe("WorkerInspector", () => {
     expect(nameInput.tagName).toBe("INPUT");
   });
 
+  it("renders the selected worker identity as the shared mascot rig", () => {
+    render(<WorkerInspector profile={fakeProfile} />);
+
+    expect(screen.getByRole("img", { name: "mascot.accessibleName" })).toBeInTheDocument();
+    expect(screen.getByTestId("mascot-role-prop-manager")).toBeInTheDocument();
+  });
+
   it("renders the four icon tab controls by aria-label", () => {
     render(<WorkerInspector profile={fakeProfile} />);
     expect(screen.getByRole("button", { name: "workshop.temperament" })).toBeInTheDocument();

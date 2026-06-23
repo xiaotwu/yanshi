@@ -58,4 +58,20 @@ describe("WorkerRail", () => {
     );
     expect(screen.getByRole("button", { name: "workshop.forgeWorker" })).toBeInTheDocument();
   });
+
+  it("renders each worker as a role-skinned mascot rig, not a plain icon", () => {
+    render(
+      <WorkerRail
+        profiles={fakeProfiles}
+        liveAgents={[]}
+        selectedId="p1"
+        onSelect={vi.fn()}
+        onForge={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("img", { name: "mascot.accessibleName" })).toHaveLength(2);
+    expect(screen.getByTestId("mascot-role-prop-manager")).toBeInTheDocument();
+    expect(screen.getByTestId("mascot-role-prop-browser")).toBeInTheDocument();
+  });
 });

@@ -98,6 +98,20 @@
 - [x] Requested desktop and runtime gates pass for this increment.
 - [x] Commit created on `main` with the required co-author trailer.
 
+## Workshop Character Mascot Redesign — Increments 5/6 Workshop Integration + Polish
+
+- [x] Focused TDD tests went red on missing Workshop mascot integration, then green.
+- [x] `WorkerRail` renders role-skinned mascot avatars while preserving button names and selected state.
+- [x] `WorkerInspector` renders the selected worker through the shared mascot rig.
+- [x] `AtelierPreview` renders station mascots at existing `worldToSvg` positions while preserving
+  station marker test ids and drag/edit handlers.
+- [x] Workshop hides 3D worker standees behind the SVG/DOM mascot layer, keeping the stage as room/furniture
+  backdrop only.
+- [x] Mascot view-models are derived from real runtime/store signals, not local fake progress.
+- [x] zh/en accessible names and status labels exist and are covered by i18n parity/tests.
+- [x] Reduced motion and hidden-document states collapse mascot loop motion while preserving expression/status.
+- [x] Requested desktop and runtime gates pass for this increment.
+
 ## Product-Wide Acceptance Still Pending Outside This Task
 
 - [ ] App starts end to end.

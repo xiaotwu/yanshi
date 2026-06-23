@@ -284,6 +284,20 @@ export const en = {
   "agentState.failed": "Failed",
   "agentState.busy": "Busy",
 
+  // Workshop mascot states
+  "mascot.accessibleName": "{name}, {role} mascot, {status}",
+  "mascot.stationAccessibleName": "{role} station mascot, {status}",
+  "mascot.status.idle": "Idle",
+  "mascot.status.thinking": "Thinking",
+  "mascot.status.working": "Working",
+  "mascot.status.talking": "Speaking",
+  "mascot.status.awaitingApproval": "Awaiting approval",
+  "mascot.status.success": "Step complete",
+  "mascot.status.completed": "Chat complete",
+  "mascot.status.failed": "Needs attention",
+  "mascot.status.stopped": "Stopped",
+  "mascot.status.offline": "Provider not configured",
+
   // Recognized blocker (model provider not configured) — localized + actionable
   "chat.blocker.modelProvider": "Connect a model provider before Yanshi can run this chat.",
   "chat.blocker.configureProvider": "Configure provider",

@@ -69,7 +69,7 @@ function AtelierFallback({ onRetry, onSimplified }: { onRetry?: () => void; onSi
  * contains it and shows a fallback (retry / simplified view). When WebGL is unavailable the
  * fallback shows immediately instead of letting the canvas throw.
  */
-export function AtelierStage({ compact }: { compact: boolean }) {
+export function AtelierStage({ compact, showWorkers = true }: { compact: boolean; showWorkers?: boolean }) {
   const { liveAgents, officeState, appSettings } = useRuntimeStore();
   const { t } = useT();
   const [simplified, setSimplified] = useState(false);
@@ -106,7 +106,7 @@ export function AtelierStage({ compact }: { compact: boolean }) {
         <Suspense fallback={<div className="scene-loading">{t("atelier.loading")}</div>}>
           <LiveOfficeScene
             key={viewKey}
-            agents={liveAgents}
+            agents={showWorkers ? liveAgents : []}
             compact={compact}
             cameraMode={officeState?.cameraMode ?? "rear"}
             stationLayout={officeState?.stationLayout ?? {}}

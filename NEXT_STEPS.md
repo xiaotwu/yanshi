@@ -40,8 +40,10 @@ _Last updated: 2026-06-23._
 - [x] Finish Increment 3 full gates and commit.
 - [x] Increment 4 focused TDD: add six shared-rig role skins with tokenized role props.
 - [x] Finish Increment 4 full gates and commit.
-- [ ] After Increment 4 is committed, continue with Workshop integration, reduced-motion, zh/en a11y,
-  and full gates.
+- [x] Increment 5 focused TDD: integrate the mascot rig into WorkerRail, WorkerInspector, and
+  AtelierPreview while preserving drag/edit behavior and avoiding duplicated 3D workers.
+- [x] Increment 6 polish: runtime-derived view-model, zh/en accessible labels, reduced-motion /
+  hidden-document static state, docs, and full gates.
 
 ## Optional / deferred (nice-to-have, not blocking)
 

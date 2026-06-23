@@ -3,11 +3,10 @@
 _Created 2026-06-11 (Worker Character Design System pass). Owner doc for everything about the
 little workers in the Atelier. English UI says "Yanshi"; Chinese normal-mode UI says 偃师 / 偃师工坊._
 
-> 2026-06-23 note: the Workshop character redesign is being re-specified before new mascot art is
-> mass-produced. The active sign-off spec is
-> `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`. Until approved, the
-> implemented v2 puppet system below is current behavior, not the final target for the new Workshop
-> mascot pass.
+> 2026-06-23 note: the Workshop character redesign is implemented for the Workshop overlay as the
+> original Paper-Lantern Dragon Apprentice mascot system. The active sign-off/spec record is
+> `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`. The older v2 puppet
+> system below remains the Live Office renderer until that surface migrates.
 
 ---
 
@@ -158,6 +157,24 @@ Workshop packs may eventually replace: character appearance (per-role asset over
 registry), role props, idle-animation sets, motion packs, office themes. The pack format already
 carries office layout + agent profiles; **asset replacement is future work — there is no
 marketplace and the UI claims none.**
+
+## Workshop mascot overlay (2026-06-23)
+
+The Workshop now uses the original Concept A Paper-Lantern Dragon Apprentice mascot rig:
+
+- Shared inline SVG rig in `apps/desktop/src/features/workshop/mascots/` with seven expressions,
+  six role skins, localized accessible labels, and token-driven styling.
+- `deriveMascotState` maps real runtime/store signals to mascot presentation: active run, run events,
+  approvals, provider health, worker identity, partial answer text, reduced motion, and document
+  visibility. It never invents worker activity.
+- `WorkerRail`, `WorkerInspector`, and `AtelierPreview` render the shared rig. `AtelierPreview` keeps
+  existing station drag/edit handlers and uses the 3D stage as room/furniture backdrop only, avoiding
+  duplicate visible workers.
+- Motion remains CSS transform/opacity based and collapses to static expression/ring states under
+  `prefers-reduced-motion` or hidden document state.
+
+Live Office still uses the v2 puppet standee renderer described below. A future migration may reuse the
+Workshop SVG mascot art there, but no richer asset pipeline is claimed today.
 
 ---
 

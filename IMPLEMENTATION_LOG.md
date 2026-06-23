@@ -1,5 +1,59 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Workshop Character Mascot Redesign Increments 5/6
+
+Phase: Workshop integration, honest view-model, a11y/i18n, reduced-motion polish, and final gates.
+
+Files changed:
+- `apps/desktop/src/features/workshop/AtelierPreview.tsx`
+- `apps/desktop/src/features/workshop/AtelierPreview.test.tsx`
+- `apps/desktop/src/features/workshop/WorkerRail.tsx`
+- `apps/desktop/src/features/workshop/WorkerRail.test.tsx`
+- `apps/desktop/src/features/workshop/WorkerInspector.tsx`
+- `apps/desktop/src/features/workshop/WorkerInspector.test.tsx`
+- `apps/desktop/src/features/workshop/WorkshopWorkspace.tsx`
+- `apps/desktop/src/features/workshop/WorkshopWorkspace.test.tsx`
+- `apps/desktop/src/features/workshop/mascots/viewModel.ts`
+- `apps/desktop/src/features/workshop/mascots/viewModel.test.ts`
+- `apps/desktop/src/features/live-office.tsx`
+- `apps/desktop/src/i18n/en.ts`
+- `apps/desktop/src/i18n/zh.ts`
+- `apps/desktop/src/styles.css`
+- `docs/YANSHI_ATELIER_WORKER_DESIGN.md`
+- `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`
+- `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- `pnpm --filter @yanshi/desktop test -- WorkerRail.test.tsx WorkerInspector.test.tsx AtelierPreview.test.tsx`
+  - Red: failed to find mascot `role="img"` instances before integration.
+  - Green: `24 passed`, `114 tests passed`.
+- `pnpm --filter @yanshi/desktop exec vitest run src/features/workshop/mascots/viewModel.test.ts src/i18n/i18n.test.ts`
+  -> `2 passed`, `7 tests passed`.
+- `pnpm --filter @yanshi/desktop test` -> `25 passed`, `117 tests passed`.
+- `pnpm --filter @yanshi/desktop typecheck` -> passed.
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings.
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`.
+
+Results:
+- Added a `MascotViewModel` builder that localizes accessible names/status text and derives expression,
+  busy/static state from the existing `deriveMascotState` selector.
+- Wired Workshop mascot inputs from real store slices: active run id, runs, approvals, events,
+  provider health, reduced-motion preference, and document visibility.
+- Replaced lucide-only rail/inspector identity art with the shared role-skinned mascot rig.
+- Replaced editable preview station circles with mascot markers while preserving existing station marker
+  ids and drag handlers.
+- Added `AtelierStage.showWorkers`; Workshop preview uses the 3D scene as room/furniture backdrop only,
+  avoiding duplicate old standee workers behind the mascot overlay.
+- Added zh/en mascot accessible names and status labels, covered by i18n parity and view-model tests.
+
+Next action:
+- Commit this final mascot integration increment. Remaining release work is owner-credentialed only.
+
 ## 2026-06-23 — Workshop Character Mascot Redesign Increment 4
 
 Phase: six role skins on the signed-off Concept A shared rig.

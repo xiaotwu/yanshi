@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Stub AtelierStage so we don't pull in WebGL / three.js in jsdom.
+const mockAtelierStage = vi.fn();
 vi.mock("../live-office", () => ({
-  AtelierStage: () => <div data-testid="stub-stage" />,
+  AtelierStage: (props: { compact: boolean; showWorkers?: boolean }) => {
+    mockAtelierStage(props);
+    return <div data-testid="stub-stage" />;
+  },
 }));
 
 // Stub i18n so t() returns the key as a plain string.
@@ -41,6 +45,11 @@ const fakeOfficeState: LiveOfficeStateSummary = {
 };
 
 describe("AtelierPreview", () => {
+  afterEach(() => {
+    cleanup();
+    mockAtelierStage.mockClear();
+  });
+
   it("renders the four toolbar controls by accessible name", () => {
     render(
       <AtelierPreview
@@ -73,6 +82,20 @@ describe("AtelierPreview", () => {
     expect(markers.some((m) => m.getAttribute("aria-selected") === "true")).toBe(true);
   });
 
+  it("renders station markers as mascot rigs with role props", () => {
+    render(
+      <AtelierPreview
+        officeState={fakeOfficeState}
+        activeProjectId="proj-1"
+        selectedId="manager"
+      />,
+    );
+
+    expect(screen.getAllByRole("img", { name: "mascot.stationAccessibleName" }).length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByTestId("mascot-role-prop-manager")).toBeInTheDocument();
+    expect(screen.getByTestId("mascot-role-prop-terminal")).toBeInTheDocument();
+  });
+
   it("renders the AtelierStage backdrop", () => {
     render(
       <AtelierPreview
@@ -83,6 +106,18 @@ describe("AtelierPreview", () => {
     );
     const stages = screen.getAllByTestId("stub-stage");
     expect(stages.length).toBeGreaterThan(0);
+  });
+
+  it("uses the 3D stage as room backdrop only so mascot workers are not duplicated", () => {
+    render(
+      <AtelierPreview
+        officeState={fakeOfficeState}
+        activeProjectId="proj-1"
+        selectedId={null}
+      />,
+    );
+
+    expect(mockAtelierStage).toHaveBeenCalledWith(expect.objectContaining({ compact: false, showWorkers: false }));
   });
 
   it("renders without crashing when officeState is null (no render loop)", () => {

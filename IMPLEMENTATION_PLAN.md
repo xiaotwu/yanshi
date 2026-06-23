@@ -2,12 +2,12 @@
 
 ## Current Milestone
 
-Workshop character mascot redesign — Increment 4 role skins checkpoint.
+Workshop character mascot redesign — Increments 5/6 Workshop integration and polish complete.
 
-Scope: the owner picked Concept A (Paper-Lantern Dragon Apprentice) and visually signed off the selected
-seven-expression rig preview. Increment 3 added the pure `deriveMascotState` selector. The current task
-is to add the six role skins as shared-rig variants only.
-Do **not** integrate mascots into Workshop surfaces until Increment 5.
+Scope: the owner picked Concept A (Paper-Lantern Dragon Apprentice), visually signed off the selected
+seven-expression rig preview, and then asked to complete the remaining mascot work. The Workshop now
+hosts the shared mascot rig in the rail, inspector, and editable preview, with role skins and honest
+runtime-derived state.
 
 ## Completed Milestones
 
@@ -31,20 +31,22 @@ Do **not** integrate mascots into Workshop surfaces until Increment 5.
 - Added the Increment 3 TDD tests and implementation for `deriveMascotState`.
 - Added Increment 4 focused TDD for six role skins, each using the shared rig with a role-specific
   tokenized prop/crest.
+- Integrated the shared mascot rig into Workshop surfaces, with localized accessible labels, reduced
+  motion/hidden-document static state, and no duplicated 3D workers behind the overlay.
 
 ## Pending Milestones
 
 - Optional defense-in-depth: evaluate approval/policy checks on provider-assigned sub-actions, not only on the top-level task.
 - Owner-only credentialed release execution: add Apple Developer ID secrets, updater key/feed, crash DSN, then run the signed workflow and verify Gatekeeper/staple on a second Mac.
 - Owner-only push/PR creation after reviewing `PR_DESCRIPTION.md`.
-- Workshop mascot redesign Increment 5+: after role skins are green/committed, continue with Workshop
-  integration and motion/a11y polish through TDD.
 - Broader product acceptance remains tracked by the feature checklist and release docs.
 
 ## Acceptance Criteria For This Milestone
 
-- Six role skins render through the shared Concept A `MascotRig`.
-- Every skin exposes a role-specific prop/crest without hard-coded SVG colors.
-- Role skin lookup falls back to manager for unknown/custom stations instead of inventing a new skin.
-- No Workshop integration is started in this increment.
+- Workshop rail, inspector, and preview render the shared Concept A `MascotRig`.
+- State/expression/status is derived from real runtime/store signals.
+- Existing Workshop drag/edit behavior remains intact.
+- 3D stage workers are hidden in Workshop preview to avoid duplicate mascots.
+- zh/en accessible labels and status text are complete.
+- Mascot motion respects reduced-motion and hidden-document state.
 - Requested desktop and runtime gates pass.

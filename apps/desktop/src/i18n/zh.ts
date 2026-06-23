@@ -286,6 +286,20 @@ export const zh: Record<TKey, string> = {
   "agentState.failed": "已失败",
   "agentState.busy": "忙碌",
 
+  // 工坊角色状态
+  "mascot.accessibleName": "{name}，{role} Q版角色，{status}",
+  "mascot.stationAccessibleName": "{role}工位 Q版角色，{status}",
+  "mascot.status.idle": "空闲",
+  "mascot.status.thinking": "思考中",
+  "mascot.status.working": "工作中",
+  "mascot.status.talking": "回应中",
+  "mascot.status.awaitingApproval": "等待审批",
+  "mascot.status.success": "步骤完成",
+  "mascot.status.completed": "对话完成",
+  "mascot.status.failed": "需要处理",
+  "mascot.status.stopped": "已停止",
+  "mascot.status.offline": "模型服务未配置",
+
   // 已识别的阻塞（未配置模型供应商）——本地化且可操作
   "chat.blocker.modelProvider": "请先连接一个模型供应商，偃师才能运行这个对话。",
   "chat.blocker.configureProvider": "配置供应商",

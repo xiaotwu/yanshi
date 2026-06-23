@@ -1,10 +1,10 @@
 # 偃师工坊角色重设计 · Chibi Mascot System Spec
 
 - Date: 2026-06-23
-- Status: original key decisions were signed off by the user on 2026-06-23, with two amendments:
-  Manager thinking covers every ReAct decide phase, and increment 2 stops for visual sign-off before role
-  skins. Direction 2A supersedes the prior art direction; the owner picked Concept A, and the selected
-  rig reskin was visually signed off before Increment 3.
+- Status: implemented through Workshop integration on 2026-06-23. Original key decisions were signed
+  off by the user, with two amendments: Manager thinking covers every ReAct decide phase, and increment
+  2 stopped for visual sign-off before role skins. Direction 2A superseded the prior art direction; the
+  owner picked Concept A, and the selected rig reskin was visually signed off before Increment 3.
 - Brief: `docs/superpowers/plans/2026-06-23-workshop-character-redesign-brief.md`
 - Brainstorm: `docs/superpowers/notes/2026-06-23-workshop-character-redesign-brainstorm.md`
 - Direction 2A brainstorm:
@@ -167,6 +167,18 @@ The 3D `AtelierStage` behind Workshop should either render room/furniture only o
 there is one visible mascot source in the Workshop. A later Live Office pass can reuse the same SVG art
 as sprites/standees, but the Workshop implementation should not depend on WebGL.
 
+Implemented result:
+- `WorkerRail` uses the shared `MascotSkin` rig for small role avatars while preserving button
+  selection semantics.
+- `WorkerInspector` shows the selected worker as a larger shared-rig mascot with localized accessible
+  status.
+- `AtelierPreview` renders SVG/DOM station mascot markers at existing `worldToSvg` positions and keeps
+  the existing station drag handlers and hit targets.
+- Workshop passes real `runs`, `events`, `approvals`, `providerHealth`, active run id, reduced-motion,
+  and document visibility into a mascot view-model before rendering.
+- Workshop runs `AtelierStage` with workers hidden, so the 3D layer remains room/furniture backdrop and
+  does not duplicate mascot characters.
+
 ## 8. Accessibility, i18n, and reduced motion
 
 - Every mascot instance has an accessible name and localized status text.
@@ -176,6 +188,8 @@ as sprites/standees, but the Workshop implementation should not depend on WebGL.
   must not shrink the current station interaction area.
 - `prefers-reduced-motion` and Yanshi's reduced/GPU settings collapse loops into static expression
   changes. State remains legible via face, pose, ring, and text.
+- Workshop also collapses mascot loop motion while the document is hidden, keeping background/off-screen
+  mascot state static.
 - New copy must exist in zh-CN and en-US, with zh terminology using 偃师 / 偃师工坊.
 
 ## 9. Testing strategy
@@ -201,5 +215,6 @@ The user signed off the following on 2026-06-23, before rejecting the seal-fin v
 - Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
 Direction 2A's second visual sign-off gate is resolved: Concept A is selected and the product rig has
-been reskinned/rendered in all seven expressions. Increment 3 committed the honest state selector.
-Increment 4 may add the six role skins, but Workshop surfaces must not be replaced until Increment 5.
+been reskinned/rendered in all seven expressions. Increment 3 committed the honest state selector,
+Increment 4 added the six role skins, and Increments 5/6 integrated the mascots into Workshop with
+localized accessible labels, reduced-motion handling, and full verification.

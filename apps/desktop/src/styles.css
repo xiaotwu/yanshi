@@ -3704,6 +3704,22 @@ textarea:focus-visible {
 .atelier-preview-overlay .office-station.dragging,
 .atelier-preview-overlay .office-furniture.dragging { cursor: grabbing; }
 .atelier-preview-overlay .office-station circle { transition: r 0.12s; }
+.atelier-preview-overlay .office-station-ring {
+  opacity: 0.22;
+}
+.office-station-mascot {
+  overflow: visible;
+}
+.office-station-mascot-frame {
+  width: 56px;
+  height: 76px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.office-station-mascot-frame .yanshi-mascot {
+  width: 44px;
+}
 /* Floating toolbar pill */
 .atelier-preview-toolbar {
   position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
@@ -3767,6 +3783,11 @@ textarea:focus-visible {
 }
 .worker-avatar:hover { color: var(--ws-text); box-shadow: 0 0 0 2px var(--avatar-accent, var(--ws-brass)), 0 0 8px var(--ws-lamp); }
 .worker-avatar.active { color: var(--ws-text); box-shadow: 0 0 0 2px var(--avatar-accent, var(--ws-brass)), 0 0 12px var(--ws-lamp); background: color-mix(in srgb, var(--ws-panel) 80%, var(--avatar-accent, var(--ws-brass))); }
+.worker-avatar-mascot {
+  width: 38px;
+  max-height: 44px;
+  transform: translateY(3px);
+}
 .worker-status-dot { position: absolute; bottom: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--ws-panel); }
 .worker-forge {
   width: 36px; height: 36px;
@@ -4703,12 +4724,16 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 58px;
+  height: 62px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--avatar-accent, var(--accent)) 20%, var(--ws-panel));
   color: var(--avatar-accent, var(--accent));
   flex-shrink: 0;
+  overflow: visible;
+}
+.wi-avatar-mascot {
+  width: 54px;
 }
 .wi-identity-meta { flex: 1; min-width: 0; }
 

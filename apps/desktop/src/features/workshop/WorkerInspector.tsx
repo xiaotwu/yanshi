@@ -1,26 +1,29 @@
 import { useState } from "react";
-import { BrainCircuit, ScrollText, SlidersHorizontal, Wrench, Bot } from "lucide-react";
+import { BrainCircuit, ScrollText, SlidersHorizontal, Wrench } from "lucide-react";
 import type { AgentProfileSummary } from "@yanshi/shared";
 
 import { useT } from "../../i18n";
-import { ROLE_ICONS } from "./WorkerRail";
 import { IdentitySection } from "./sections/IdentitySection";
 import { TemperamentSection } from "./sections/TemperamentSection";
 import { MindSection } from "./sections/MindSection";
 import { AbilitiesSection } from "./sections/AbilitiesSection";
 import { IncantationSection } from "./sections/IncantationSection";
+import { MascotSkin } from "./mascots/skins";
+import { fallbackMascotViewModel } from "./mascots/viewModel";
+import type { MascotViewModel } from "./mascots/viewModel";
 
 type InspectorTab = "temperament" | "mind" | "abilities" | "incantation";
 
 export interface WorkerInspectorProps {
   profile: AgentProfileSummary;
+  mascotViewModel?: MascotViewModel;
 }
 
-export function WorkerInspector({ profile }: WorkerInspectorProps) {
+export function WorkerInspector({ profile, mascotViewModel }: WorkerInspectorProps) {
   const { t } = useT();
   const [activeTab, setActiveTab] = useState<InspectorTab>("temperament");
 
-  const Icon = ROLE_ICONS[profile.station] ?? Bot;
+  const mascot = mascotViewModel ?? fallbackMascotViewModel(profile, t);
 
   const tabs: Array<{ id: InspectorTab; icon: React.ReactNode; labelKey: string }> = [
     { id: "temperament", icon: <SlidersHorizontal size={18} />, labelKey: "workshop.temperament" },
@@ -34,7 +37,15 @@ export function WorkerInspector({ profile }: WorkerInspectorProps) {
       {/* Identity header */}
       <header className="wi-identity-header">
         <span className="wi-avatar" style={{ "--avatar-accent": profile.accent } as React.CSSProperties}>
-          <Icon size={22} />
+          <MascotSkin
+            role={mascot.role}
+            accessibleName={mascot.accessibleName}
+            statusText={mascot.statusText}
+            expression={mascot.expression}
+            size="stage"
+            reducedMotion={mascot.reducedMotion}
+            className="wi-avatar-mascot"
+          />
         </span>
         <div className="wi-identity-meta">
           <IdentitySection profile={profile} />

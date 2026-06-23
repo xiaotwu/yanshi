@@ -16,6 +16,9 @@ import {
 import { STATION_OPTIONS } from "../../lib/shared";
 import { useRuntimeStore } from "../../stores/runtimeStore";
 import { AtelierStage } from "../live-office";
+import { MascotSkin, mascotRoleFromStation } from "./mascots/skins";
+import { stationMascotViewModel } from "./mascots/viewModel";
+import type { MascotViewModelsByStation } from "./mascots/viewModel";
 
 const FURNITURE_TYPES = ["desk", "plant", "shelf", "couch", "table", "lamp"] as const;
 const CAMERA_MODES = ["rear", "iso"] as const;
@@ -28,9 +31,11 @@ interface AtelierPreviewProps {
   officeState: LiveOfficeStateSummary | null;
   activeProjectId: string | null;
   selectedId: string | null;
+  mascotViewModels?: MascotViewModelsByStation;
+  reducedMotion?: boolean;
 }
 
-export function AtelierPreview({ officeState, activeProjectId, selectedId }: AtelierPreviewProps) {
+export function AtelierPreview({ officeState, activeProjectId, selectedId, mascotViewModels, reducedMotion = false }: AtelierPreviewProps) {
   const { t } = useT();
   const { saveOfficeState } = useRuntimeStore();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -110,7 +115,7 @@ export function AtelierPreview({ officeState, activeProjectId, selectedId }: Ate
     <div className="atelier-preview">
       {/* Backdrop: the 3D live scene */}
       <div className="atelier-preview-stage">
-        <AtelierStage compact={false} />
+        <AtelierStage compact={false} showWorkers={false} />
       </div>
 
       {/* Editable SVG overlay */}
@@ -142,6 +147,8 @@ export function AtelierPreview({ officeState, activeProjectId, selectedId }: Ate
           const [cx, cy] = worldToSvg(pos[0], pos[1]);
           const isSelected = station === selectedId;
           const isDragging = dragging === station;
+          const role = mascotRoleFromStation(station);
+          const mascot = mascotViewModels?.[role] ?? stationMascotViewModel(station, t, reducedMotion);
           return (
             <g
               key={station}
@@ -155,11 +162,31 @@ export function AtelierPreview({ officeState, activeProjectId, selectedId }: Ate
               }}
             >
               <circle
-                r={isSelected ? 22 : 18}
-                fill={STATION_COLORS[station] ?? "#888"}
+                className="office-station-ring"
+                r={isSelected ? 28 : 24}
+                fill={STATION_COLORS[station] ?? "var(--ws-brass)"}
                 stroke={isSelected ? "var(--ws-brass)" : "transparent"}
                 strokeWidth={isSelected ? 3 : 0}
               />
+              <foreignObject
+                x={-28}
+                y={-52}
+                width={56}
+                height={76}
+                className="office-station-mascot"
+                pointerEvents="none"
+              >
+                <div className="office-station-mascot-frame">
+                  <MascotSkin
+                    role={mascot.role}
+                    accessibleName={mascot.accessibleName}
+                    statusText={mascot.statusText}
+                    expression={mascot.expression}
+                    size="rail"
+                    reducedMotion={mascot.reducedMotion}
+                  />
+                </div>
+              </foreignObject>
               <text y={32} className="office-station-label">
                 {station}
               </text>

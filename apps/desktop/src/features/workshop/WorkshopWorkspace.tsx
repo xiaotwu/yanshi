@@ -1,5 +1,5 @@
 import { Share2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n";
 import { useRuntimeStore } from "../../stores/runtimeStore";
@@ -9,10 +9,55 @@ import { ForgeWorkerFlow } from "./ForgeWorkerFlow";
 import { SharePanel } from "./SharePanel";
 import { WorkerInspector } from "./WorkerInspector";
 import { WorkerRail } from "./WorkerRail";
+import { buildMascotViewModels } from "./mascots/viewModel";
+
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setPrefersReducedMotion(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function useDocumentVisible(): boolean {
+  const [visible, setVisible] = useState(() => (typeof document === "undefined" ? true : document.visibilityState !== "hidden"));
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const update = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
+  return visible;
+}
 
 export function WorkshopWorkspace() {
   const { t } = useT();
-  const { agentProfiles, liveAgents, activeProjectId, officeState, loadAgentProfiles, loadOfficeState, createAgentProfile } = useRuntimeStore();
+  const {
+    agentProfiles,
+    liveAgents,
+    activeProjectId,
+    activeRunId,
+    officeState,
+    runs,
+    approvals,
+    events,
+    providerHealth,
+    loadAgentProfiles,
+    loadOfficeState,
+    createAgentProfile,
+  } = useRuntimeStore();
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const documentVisible = useDocumentVisible();
+  const mascotReducedMotion = prefersReducedMotion || !documentVisible;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [forgeOpen, setForgeOpen] = useState(false);
@@ -56,6 +101,22 @@ export function WorkshopWorkspace() {
   // Resolve selectedId to the station of the selected agent profile.
   const selectedProfile = agentProfiles.find((p) => p.id === selectedId);
   const selectedStation = selectedProfile?.station ?? null;
+  const mascotViewModels = useMemo(
+    () =>
+      buildMascotViewModels(
+        agentProfiles,
+        {
+          activeRunId,
+          runs,
+          approvals,
+          events,
+          providerHealth,
+          reducedMotion: mascotReducedMotion,
+        },
+        t,
+      ),
+    [activeRunId, agentProfiles, approvals, events, mascotReducedMotion, providerHealth, runs, t],
+  );
 
   return (
     <div className="zaowutai" aria-label={t("nav.workshop")}>
@@ -75,6 +136,7 @@ export function WorkshopWorkspace() {
         <WorkerRail
           profiles={agentProfiles}
           liveAgents={liveAgents}
+          mascotViewModels={mascotViewModels.byProfileId}
           selectedId={selectedId}
           onSelect={handleSelect}
           onForge={handleForge}
@@ -91,6 +153,8 @@ export function WorkshopWorkspace() {
           officeState={officeState}
           activeProjectId={activeProjectId}
           selectedId={selectedStation}
+          mascotViewModels={mascotViewModels.byStation}
+          reducedMotion={mascotReducedMotion}
         />
       </div>
       <aside
@@ -108,7 +172,7 @@ export function WorkshopWorkspace() {
           <X size={14} />
         </button>
         {selectedProfile ? (
-          <WorkerInspector profile={selectedProfile} />
+          <WorkerInspector profile={selectedProfile} mascotViewModel={mascotViewModels.byProfileId[selectedProfile.id]} />
         ) : (
           <WorkshopInstalled />
         )}

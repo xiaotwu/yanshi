@@ -1,9 +1,9 @@
 # Workshop Character Mascot System Implementation Plan
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
-> Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. The owner picked
-> Concept A and visually signed off the seven-expression rig preview; Increment 4 role skins are the
-> active TDD step.
+> Increment 1 sign-off is complete, Direction 2A superseded the visual art direction, and the owner
+> picked Concept A / visually signed off the seven-expression rig preview. Increments 2-6 are now
+> implemented through Workshop integration and polish.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -191,16 +191,17 @@ Concept A seven-expression rig preview.
 - Modify `apps/desktop/src/i18n/zh.ts`
 
 **TDD steps:**
-- [ ] Extend `AtelierPreview.test.tsx` to expect mascot stage markers instead of plain circles while
+- [x] Extend `AtelierPreview.test.tsx` to expect mascot stage markers instead of plain circles while
   preserving pointer/drag behavior.
-- [ ] Extend `WorkerRail.test.tsx` for accessible mascot avatar names and selected state.
-- [ ] Extend `WorkerInspector.test.tsx` for the large selected mascot and localized status text.
-- [ ] Confirm tests fail.
-- [ ] Replace station circles with `MascotMarker` groups using `worldToSvg` positions and existing
+- [x] Extend `WorkerRail.test.tsx` for accessible mascot avatar names and selected state.
+- [x] Extend `WorkerInspector.test.tsx` for the large selected mascot and localized status text.
+- [x] Confirm tests fail.
+- [x] Replace station circles with mascot groups using `worldToSvg` positions and existing
   pointer handlers.
-- [ ] Add rail/inspector mascot instances with localized status.
-- [ ] Ensure the Workshop does not show duplicate 3D standee workers behind the DOM/SVG mascot layer.
-- [ ] Commit: `feat(workshop): host honest mascots in the workshop`
+- [x] Add rail/inspector mascot instances with localized status.
+- [x] Ensure the Workshop does not show duplicate 3D standee workers behind the DOM/SVG mascot layer
+  by running `AtelierStage` as a room/furniture backdrop only in Workshop preview.
+- [x] Commit: `feat(workshop): host honest mascots in the workshop`
 
 ## Increment 6 — Animation polish, a11y, performance, docs
 
@@ -210,12 +211,12 @@ Concept A seven-expression rig preview.
 - Update continuation docs.
 
 **TDD / verification steps:**
-- [ ] Add tests for failure not celebrating, cancelled not celebrating, and no-provider offline state.
-- [ ] Add or update tests for zh/en i18n key parity.
-- [ ] Confirm animations use transform/opacity only; no layout-thrashing animated properties.
-- [ ] Confirm off-screen/window-hidden behavior is either paused or limited to static state.
-- [ ] Run all requested gates.
-- [ ] Commit: `polish(workshop): finalize mascot motion and docs`
+- [x] Add tests for failure not celebrating, cancelled not celebrating, and no-provider offline state.
+- [x] Add or update tests for zh/en i18n key parity.
+- [x] Confirm animations use transform/opacity only; no layout-thrashing animated properties.
+- [x] Confirm off-screen/window-hidden behavior is either paused or limited to static state.
+- [x] Run all requested gates.
+- [x] Commit: `polish(workshop): finalize mascot motion and docs`
 
 ## Done definition
 
