@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
 > Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. The owner picked
-> Concept A and visually signed off the seven-expression rig preview; Increment 3 is the active TDD step.
+> Concept A and visually signed off the seven-expression rig preview; Increment 4 role skins are the
+> active TDD step.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -166,17 +167,18 @@ Concept A seven-expression rig preview.
 - Modify `MascotRig.tsx`
 
 **TDD steps:**
-- [ ] Write failing tests for all six roles: manager, browser, computer, file, reviewer, terminal.
-- [ ] Assert every skin uses the shared rig, exposes a role-specific prop/crest, and binds role accent
+- [x] Write failing tests for all six roles: manager, browser, computer, file, reviewer, terminal.
+- [x] Assert every skin uses the shared rig, exposes a role-specific prop/crest, and binds role accent
   through CSS variables rather than literals.
-- [ ] Implement signed-off role skins:
+- [x] Implement signed-off role skins:
   - manager command fin + talisman board
   - browser compass notch + compass charm
   - computer cursor visor + cursor tablet
   - file folder clasp + document stack
   - reviewer seal stamp crest + approval stamp
   - terminal abacus-console hood + command charm
-- [ ] Commit: `feat(workshop): add original role skins for yanshi mascots`
+- [x] Run the requested gates.
+- [x] Commit: `feat(workshop): add original role skins for yanshi mascots`
 
 ## Increment 5 — Workshop integration
 

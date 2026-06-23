@@ -38,8 +38,10 @@ _Last updated: 2026-06-23._
 - [x] Increment 3 focused TDD: `deriveMascotState` maps real run/event/approval/provider/partial-answer
   inputs to mascot state, expression, motion, busy, and celebration flags.
 - [x] Finish Increment 3 full gates and commit.
-- [ ] After Increment 3 is committed, continue with role skins, Workshop integration, reduced-motion,
-  zh/en a11y, and full gates.
+- [x] Increment 4 focused TDD: add six shared-rig role skins with tokenized role props.
+- [x] Finish Increment 4 full gates and commit.
+- [ ] After Increment 4 is committed, continue with Workshop integration, reduced-motion, zh/en a11y,
+  and full gates.
 
 ## Optional / deferred (nice-to-have, not blocking)
 

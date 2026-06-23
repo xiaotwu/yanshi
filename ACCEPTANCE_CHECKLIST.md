@@ -45,7 +45,7 @@
 - [x] Reduced-motion-safe hooks are present.
 - [x] Focused TDD test went red, then green.
 - [x] Requested desktop and runtime gates pass for this increment.
-- [ ] Visual sign-off received before role skins are built.
+- [x] Visual sign-off received before role skins are built.
 
 ## Workshop Character Mascot Redesign — Direction 2A Concept Preview
 
@@ -83,6 +83,18 @@
 - [x] Pending approval maps to awaiting approval and never success.
 - [x] Completed, failed/model-not-configured, and cancelled map to success, error, and stopped honestly.
 - [x] Reduced motion disables loop motion while preserving state/expression.
+- [x] Requested desktop and runtime gates pass for this increment.
+- [x] Commit created on `main` with the required co-author trailer.
+
+## Workshop Character Mascot Redesign — Increment 4 Role Skins
+
+- [x] Focused TDD test went red on missing role skins, then green.
+- [x] Role set covers manager, browser, computer, file, reviewer, and terminal.
+- [x] Every role skin renders through the shared Concept A `MascotRig`.
+- [x] Every role exposes a role-specific prop/crest layer.
+- [x] Role props and accents are token-driven; no hard-coded SVG fill/stroke colors are added.
+- [x] Unknown/custom stations fall back to the manager skin rather than inventing a new role.
+- [x] Workshop surfaces are not integrated in this increment.
 - [x] Requested desktop and runtime gates pass for this increment.
 - [x] Commit created on `main` with the required co-author trailer.
 

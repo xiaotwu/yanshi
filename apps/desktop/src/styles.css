@@ -4822,6 +4822,8 @@ textarea:focus-visible {
 .yanshi-mascot {
   --ym-local-accent: var(--ym-accent);
   --ym-local-state: var(--ym-state);
+  --ym-role-accent: var(--ym-local-accent);
+  --ym-role-paper: color-mix(in srgb, var(--surface-elevated) 78%, var(--ws-parchment));
   display: block;
   width: 72px;
   height: auto;
@@ -4831,6 +4833,24 @@ textarea:focus-visible {
 .yanshi-mascot--rail { width: 40px; }
 .yanshi-mascot--stage { width: 84px; }
 .yanshi-mascot--hero { width: 156px; }
+.yanshi-mascot--role-manager {
+  --ym-role-accent: var(--ym-warning);
+}
+.yanshi-mascot--role-browser {
+  --ym-role-accent: var(--ym-accent);
+}
+.yanshi-mascot--role-computer {
+  --ym-role-accent: color-mix(in srgb, var(--ym-accent) 58%, var(--text-secondary));
+}
+.yanshi-mascot--role-file {
+  --ym-role-accent: var(--ym-success);
+}
+.yanshi-mascot--role-reviewer {
+  --ym-role-accent: color-mix(in srgb, var(--ym-warning) 70%, var(--ym-danger));
+}
+.yanshi-mascot--role-terminal {
+  --ym-role-accent: color-mix(in srgb, var(--ym-muted) 74%, var(--ym-accent));
+}
 
 .yanshi-mascot__layer,
 .yanshi-mascot__expression,
@@ -5006,6 +5026,35 @@ textarea:focus-visible {
 .yanshi-mascot__state-accents path {
   stroke: var(--ym-local-state);
 }
+.yanshi-mascot__role-prop {
+  transform-origin: center;
+}
+.yanshi-mascot__role-paper,
+.yanshi-mascot__role-accent-fill {
+  stroke: var(--ym-outline);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot__role-paper {
+  fill: var(--ym-role-paper);
+}
+.yanshi-mascot__role-paper--back {
+  fill: color-mix(in srgb, var(--ym-role-paper) 70%, var(--ym-role-accent));
+}
+.yanshi-mascot__role-accent-fill {
+  fill: var(--ym-role-accent);
+}
+.yanshi-mascot__role-line {
+  fill: none;
+  stroke: var(--ym-outline);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.yanshi-mascot--animated .yanshi-mascot__role-prop {
+  animation: yanshi-mascot-prop-float 3s ease-in-out infinite;
+}
 
 .yanshi-mascot--expr-thinking {
   --ym-local-state: var(--ym-warning);
@@ -5051,6 +5100,11 @@ textarea:focus-visible {
 @keyframes yanshi-mascot-accent-drift {
   0%, 100% { opacity: 0.64; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-4px); }
+}
+
+@keyframes yanshi-mascot-prop-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

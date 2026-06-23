@@ -1,5 +1,43 @@
 # Yanshi Implementation Log
 
+## 2026-06-23 — Workshop Character Mascot Redesign Increment 4
+
+Phase: six role skins on the signed-off Concept A shared rig.
+
+Files changed:
+- `apps/desktop/src/features/workshop/mascots/types.ts`
+- `apps/desktop/src/features/workshop/mascots/skins.tsx`
+- `apps/desktop/src/features/workshop/mascots/skins.test.tsx`
+- `apps/desktop/src/features/workshop/mascots/MascotRig.tsx`
+- `apps/desktop/src/styles.css`
+- `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`
+- `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`
+- `IMPLEMENTATION_PLAN.md`
+- `IMPLEMENTATION_LOG.md`
+- `CURRENT_STATUS.md`
+- `NEXT_STEPS.md`
+- `ACCEPTANCE_CHECKLIST.md`
+
+Commands run:
+- `pnpm --filter @yanshi/desktop exec vitest run src/features/workshop/mascots/skins.test.tsx`
+  - Red: failed to resolve `./skins` before implementation.
+  - Green: `3 passed`.
+- `pnpm --filter @yanshi/desktop test` -> `24 passed`, `111 tests passed`
+- `cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings` -> `166 passed`
+- `pnpm --filter @yanshi/desktop typecheck` -> passed
+- `pnpm --filter @yanshi/desktop build` -> passed with existing Vite dynamic-import/chunk-size warnings
+
+Results:
+- Added `MascotSkin` and `mascotRoleFromStation`, with the six signed-off roles:
+  manager, browser, computer, file, reviewer, terminal.
+- Extended `MascotRig` with an optional `skin` prop and role-specific prop/crest layers while preserving
+  the shared rig, seven-expression system, accessible SVG semantics, and reduced-motion hooks.
+- Added tokenized CSS role accents and prop styling. No hard-coded SVG fill/stroke colors were added.
+- Did not integrate mascots into WorkerRail, WorkerInspector, or AtelierPreview.
+
+Next action:
+- Move to Workshop integration in Increment 5 after this commit.
+
 ## 2026-06-23 — Workshop Character Mascot Redesign Increment 3
 
 Phase: honest mascot state selector and reduced-motion state output.

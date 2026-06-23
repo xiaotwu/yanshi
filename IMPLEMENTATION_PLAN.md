@@ -2,13 +2,12 @@
 
 ## Current Milestone
 
-Workshop character mascot redesign — Increment 3 honest mascot state selector checkpoint.
+Workshop character mascot redesign — Increment 4 role skins checkpoint.
 
 Scope: the owner picked Concept A (Paper-Lantern Dragon Apprentice) and visually signed off the selected
-seven-expression rig preview. The current task is to add the pure `deriveMascotState` selector so mascot
-state and motion derive only from real runtime/store signals.
-Do **not** build the six role skins or integrate mascots into Workshop surfaces until this selector
-increment is committed and green.
+seven-expression rig preview. Increment 3 added the pure `deriveMascotState` selector. The current task
+is to add the six role skins as shared-rig variants only.
+Do **not** integrate mascots into Workshop surfaces until Increment 5.
 
 ## Completed Milestones
 
@@ -30,21 +29,22 @@ increment is committed and green.
   Apprentice without changing the public component API or honesty contract.
 - Owner visually signed off the selected Concept A seven-expression rig preview.
 - Added the Increment 3 TDD tests and implementation for `deriveMascotState`.
+- Added Increment 4 focused TDD for six role skins, each using the shared rig with a role-specific
+  tokenized prop/crest.
 
 ## Pending Milestones
 
 - Optional defense-in-depth: evaluate approval/policy checks on provider-assigned sub-actions, not only on the top-level task.
 - Owner-only credentialed release execution: add Apple Developer ID secrets, updater key/feed, crash DSN, then run the signed workflow and verify Gatekeeper/staple on a second Mac.
 - Owner-only push/PR creation after reviewing `PR_DESCRIPTION.md`.
-- Workshop mascot redesign Increment 4+: after the selector increment is green/committed, continue with
-  role skins, Workshop integration, and motion/a11y polish through TDD.
+- Workshop mascot redesign Increment 5+: after role skins are green/committed, continue with Workshop
+  integration and motion/a11y polish through TDD.
 - Broader product acceptance remains tracked by the feature checklist and release docs.
 
 ## Acceptance Criteria For This Milestone
 
-- `deriveMascotState` maps idle, thinking, between-act decide thinking, worker working, partial-answer
-  talking, approval, completed, failed/model-not-configured, cancelled, and offline provider states from
-  real store-shaped inputs.
-- Reduced motion preserves expression/state while disabling loop motion.
-- No role skins or Workshop integration is started in this increment.
+- Six role skins render through the shared Concept A `MascotRig`.
+- Every skin exposes a role-specific prop/crest without hard-coded SVG colors.
+- Role skin lookup falls back to manager for unknown/custom stations instead of inventing a new skin.
+- No Workshop integration is started in this increment.
 - Requested desktop and runtime gates pass.

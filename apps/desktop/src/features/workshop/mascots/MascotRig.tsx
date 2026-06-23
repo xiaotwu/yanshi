@@ -1,6 +1,6 @@
-import type { MascotExpression, MascotRigProps } from "./types";
-export { MASCOT_EXPRESSIONS } from "./types";
-export type { MascotExpression, MascotRigProps, MascotSize } from "./types";
+import type { MascotExpression, MascotRigProps, MascotRole } from "./types";
+export { MASCOT_EXPRESSIONS, MASCOT_ROLES } from "./types";
+export type { MascotExpression, MascotRigProps, MascotRole, MascotSize } from "./types";
 
 function expressionLayer(expression: MascotExpression) {
   switch (expression) {
@@ -82,11 +82,72 @@ function expressionLayer(expression: MascotExpression) {
   }
 }
 
+function rolePropLayer(skin: MascotRole | undefined) {
+  switch (skin) {
+    case "manager":
+      return (
+        <g data-testid="mascot-role-prop-manager" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--manager">
+          <path className="yanshi-mascot__role-paper" d="M151 151 H178 L176 191 H149 Z" />
+          <path className="yanshi-mascot__role-line" d="M157 162 H170 M156 172 H171 M156 182 H166" />
+          <path className="yanshi-mascot__role-accent-fill" d="M137 78 L150 66 L157 83 L146 91 Z" />
+        </g>
+      );
+    case "browser":
+      return (
+        <g data-testid="mascot-role-prop-browser" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--browser">
+          <circle className="yanshi-mascot__role-paper" cx="163" cy="172" r="17" />
+          <path className="yanshi-mascot__role-line" d="M163 158 V186 M149 172 H177" />
+          <path className="yanshi-mascot__role-accent-fill" d="M164 164 L171 178 L156 175 Z" />
+        </g>
+      );
+    case "computer":
+      return (
+        <g data-testid="mascot-role-prop-computer" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--computer">
+          <rect className="yanshi-mascot__role-paper" x="148" y="154" width="33" height="26" rx="5" />
+          <path className="yanshi-mascot__role-line" d="M155 185 H174" />
+          <path className="yanshi-mascot__role-accent-fill" d="M158 160 L174 169 L166 172 L162 180 Z" />
+        </g>
+      );
+    case "file":
+      return (
+        <g data-testid="mascot-role-prop-file" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--file">
+          <path className="yanshi-mascot__role-paper" d="M149 158 H171 L178 166 V194 H149 Z" />
+          <path className="yanshi-mascot__role-paper yanshi-mascot__role-paper--back" d="M142 164 H165 L172 172 V198 H142 Z" />
+          <path className="yanshi-mascot__role-line" d="M153 176 H168 M153 185 H164" />
+        </g>
+      );
+    case "reviewer":
+      return (
+        <g data-testid="mascot-role-prop-reviewer" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--reviewer">
+          <path className="yanshi-mascot__role-paper" d="M150 173 H178 V196 H150 Z" />
+          <path className="yanshi-mascot__role-accent-fill" d="M158 154 H171 L168 173 H161 Z" />
+          <path className="yanshi-mascot__role-line" d="M156 184 L162 190 L173 178" />
+        </g>
+      );
+    case "terminal":
+      return (
+        <g data-testid="mascot-role-prop-terminal" className="yanshi-mascot__layer yanshi-mascot__role-prop yanshi-mascot__role-prop--terminal">
+          <rect className="yanshi-mascot__role-paper" x="148" y="155" width="34" height="28" rx="6" />
+          <path className="yanshi-mascot__role-line" d="M156 164 L164 170 L156 176 M167 176 H176" />
+          <path className="yanshi-mascot__role-accent-fill" d="M139 83 H158 V93 H139 Z" />
+        </g>
+      );
+    default:
+      return (
+        <g data-testid="mascot-layer-prop-slot" className="yanshi-mascot__layer yanshi-mascot__prop-slot">
+          <rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)" />
+          <path d="M160 164 L168 164 M160 172 L166 172" />
+        </g>
+      );
+  }
+}
+
 export function MascotRig({
   accessibleName,
   expression,
   statusText,
   size = "stage",
+  skin,
   reducedMotion = false,
   className,
 }: MascotRigProps) {
@@ -94,6 +155,7 @@ export function MascotRig({
     "yanshi-mascot",
     `yanshi-mascot--${size}`,
     `yanshi-mascot--expr-${expression}`,
+    skin ? `yanshi-mascot--role-${skin}` : undefined,
     reducedMotion ? "yanshi-mascot--reduced-motion" : "yanshi-mascot--animated",
     className,
   ]
@@ -109,6 +171,7 @@ export function MascotRig({
       xmlns="http://www.w3.org/2000/svg"
       data-expression={expression}
       data-size={size}
+      data-mascot-role={skin ?? "base"}
     >
       <title>{accessibleName}</title>
       <desc>{statusText}</desc>
@@ -170,10 +233,7 @@ export function MascotRig({
         <path d="M122 196 L132 202" />
       </g>
 
-      <g data-testid="mascot-layer-prop-slot" className="yanshi-mascot__layer yanshi-mascot__prop-slot">
-        <rect x="155" y="154" width="17" height="27" rx="4" fill="var(--ym-accent)" stroke="var(--ym-outline)" />
-        <path d="M160 164 L168 164 M160 172 L166 172" />
-      </g>
+      {rolePropLayer(skin)}
 
       <g
         data-testid="mascot-state-accents"

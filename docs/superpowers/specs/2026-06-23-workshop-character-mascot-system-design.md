@@ -201,6 +201,5 @@ The user signed off the following on 2026-06-23, before rejecting the seal-fin v
 - Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
 Direction 2A's second visual sign-off gate is resolved: Concept A is selected and the product rig has
-been reskinned/rendered in all seven expressions. Increment 3 may implement the honest state selector.
-Do not build the six role skins or replace Workshop surfaces until the selector increment is committed
-and green.
+been reskinned/rendered in all seven expressions. Increment 3 committed the honest state selector.
+Increment 4 may add the six role skins, but Workshop surfaces must not be replaced until Increment 5.
