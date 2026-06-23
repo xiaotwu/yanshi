@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED FLOW: brainstorming → spec → plan → TDD in task-sized commits.
 > Increment 1 sign-off is complete, but Direction 2A supersedes the visual art direction. The owner picked
-> Concept A; stop at the seven-expression selected-rig preview until the owner visually signs off.
+> Concept A and visually signed off the seven-expression rig preview; Increment 3 is the active TDD step.
 
 **Goal:** Replace Workshop placeholder/circle character markers with original tokenized chibi 偃师
 mascots whose expressions and animations are driven only by real runtime/agent state.
@@ -129,8 +129,8 @@ rig, build role skins, or integrate mascots until the owner picks.
 - [x] Run the requested gates.
 - [x] Commit this selected rig preview increment with the required trailer.
 
-**Stop condition after this increment:** owner visually signs off the selected Concept A seven-expression
-rig preview. Do not build role skins or integrate mascots into Workshop surfaces until that sign-off.
+**Stop condition after this increment:** resolved on 2026-06-23. Owner visually signed off the selected
+Concept A seven-expression rig preview.
 
 ## Increment 3 — Honest mascot state selector + reduced motion
 
@@ -140,7 +140,7 @@ rig preview. Do not build role skins or integrate mascots into Workshop surfaces
 - Modify `MascotRig.tsx` / CSS as needed.
 
 **TDD steps:**
-- [ ] Write failing table tests for `deriveMascotState`:
+- [x] Write failing table tests for `deriveMascotState`:
   - no active run -> `idle`
   - run started before assignment -> Manager `thinking`, others `idle`
   - each ReAct decide phase between act steps -> Manager `thinking`
@@ -151,11 +151,12 @@ rig preview. Do not build role skins or integrate mascots into Workshop surfaces
   - failed/tool failed/model not configured -> `error` / `failed`
   - cancelled -> `blocked` / `stopped`
   - provider not configured with no active run -> `offline` / `sleeping`
-- [ ] Confirm tests fail.
-- [ ] Implement the selector from store-shaped inputs without timers or random state.
-- [ ] Add reduced-motion mode: loop classes disabled, static expression/ring preserved.
-- [ ] Test reduced-motion output with an explicit prop or mocked media query.
-- [ ] Commit: `feat(workshop): derive mascot animation state from runtime events`
+- [x] Confirm tests fail.
+- [x] Implement the selector from store-shaped inputs without timers or random state.
+- [x] Add reduced-motion mode: loop classes disabled, static expression/ring preserved.
+- [x] Test reduced-motion output with an explicit prop.
+- [x] Run the requested gates.
+- [x] Commit: `feat(workshop): derive mascot animation state from runtime events`
 
 ## Increment 4 — Role skins
 

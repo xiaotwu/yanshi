@@ -4,7 +4,7 @@
 - Status: original key decisions were signed off by the user on 2026-06-23, with two amendments:
   Manager thinking covers every ReAct decide phase, and increment 2 stops for visual sign-off before role
   skins. Direction 2A supersedes the prior art direction; the owner picked Concept A, and the selected
-  rig reskin is pending visual sign-off before role skins.
+  rig reskin was visually signed off before Increment 3.
 - Brief: `docs/superpowers/plans/2026-06-23-workshop-character-redesign-brief.md`
 - Brainstorm: `docs/superpowers/notes/2026-06-23-workshop-character-redesign-brainstorm.md`
 - Direction 2A brainstorm:
@@ -200,6 +200,7 @@ The user signed off the following on 2026-06-23, before rejecting the seal-fin v
 - Honesty contract: derive state from real runtime/store signals only.
 - Amendment: Manager also shows `thinking` during each ReAct decide phase between act/tool steps.
 
-Direction 2A has reached the second visual sign-off gate: Concept A is selected and the product rig has
-been reskinned/rendered in all seven expressions. Do not build the six role skins or replace Workshop
-surfaces before the owner signs off this selected rig preview.
+Direction 2A's second visual sign-off gate is resolved: Concept A is selected and the product rig has
+been reskinned/rendered in all seven expressions. Increment 3 may implement the honest state selector.
+Do not build the six role skins or replace Workshop surfaces until the selector increment is committed
+and green.

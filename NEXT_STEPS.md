@@ -32,11 +32,14 @@ _Last updated: 2026-06-23._
   girl concepts while keeping rig engineering and the honest state contract.
 - [x] Owner picked Concept A (Paper-Lantern Dragon Apprentice).
 - [x] Reskin the existing rig to Concept A and render all seven expressions.
-- [ ] Owner visual sign-off required on
+- [x] Owner visually signed off
   `docs/superpowers/previews/2026-06-23-workshop-character-direction-2-dragon-girl/concept-a-selected-rig-seven-expressions.png`
   before role skins.
-- [ ] After the second visual sign-off, continue with honest runtime-derived mascot state, role skins,
-  Workshop integration, reduced-motion, zh/en a11y, and full gates.
+- [x] Increment 3 focused TDD: `deriveMascotState` maps real run/event/approval/provider/partial-answer
+  inputs to mascot state, expression, motion, busy, and celebration flags.
+- [x] Finish Increment 3 full gates and commit.
+- [ ] After Increment 3 is committed, continue with role skins, Workshop integration, reduced-motion,
+  zh/en a11y, and full gates.
 
 ## Optional / deferred (nice-to-have, not blocking)
 

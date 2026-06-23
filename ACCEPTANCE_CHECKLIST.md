@@ -70,7 +70,21 @@
 - [x] Concept A selected rig preview renders all seven expressions from the React component.
 - [x] Requested desktop and runtime gates pass for this selected rig increment.
 - [x] Commit created on `main` with the required co-author trailer.
-- [ ] Owner visually signs off selected rig before role skins or Workshop integration.
+- [x] Owner visually signs off selected rig before role skins or Workshop integration.
+
+## Workshop Character Mascot Redesign — Increment 3 State Selector
+
+- [x] Focused TDD test went red on missing `deriveMascotState`, then green.
+- [x] No active run maps to idle; provider not configured with no active run maps to offline/sleeping.
+- [x] Manager shows thinking after a real run starts before assignment/action.
+- [x] Manager shows thinking between ReAct act steps after real completion/observation events.
+- [x] Workers show working only after real start/action/tool events for that worker.
+- [x] Partial answer text maps Manager to talking only while real partial text exists.
+- [x] Pending approval maps to awaiting approval and never success.
+- [x] Completed, failed/model-not-configured, and cancelled map to success, error, and stopped honestly.
+- [x] Reduced motion disables loop motion while preserving state/expression.
+- [x] Requested desktop and runtime gates pass for this increment.
+- [x] Commit created on `main` with the required co-author trailer.
 
 ## Product-Wide Acceptance Still Pending Outside This Task
 

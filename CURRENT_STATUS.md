@@ -4,11 +4,11 @@ _Last updated: 2026-06-23._
 
 ## What Works
 
-- **Workshop character redesign Direction 2B**: the owner selected Concept A (Paper-Lantern Dragon
-  Apprentice). The existing tokenized `MascotRig` is reskinned to the selected original dragon-horn chibi
-  girl direction, with seven expressions, token theming, reduced-motion/a11y hooks, and the honest
-  runtime-derived state contract preserved. Role skins and Workshop integration are paused for selected
-  rig visual sign-off.
+- **Workshop character redesign Increment 3**: the owner selected and visually signed off Concept A
+  (Paper-Lantern Dragon Apprentice). The existing tokenized `MascotRig` is reskinned to that original
+  dragon-horn chibi direction, and the pure `deriveMascotState` selector maps real runtime/store signals
+  to mascot state, expression, motion, busy, and celebration flags. Role skins and Workshop integration
+  remain out of scope for this selector increment.
 - **Bounded ReAct loop** (`graph/runtime_graph.py`): provider decides one `answer` or one tool `assign`; tool observations feed the next decide step; finalizer handles answer / budget-exhaustion / failure / cancel.
 - **Validated live** against a real Ollama provider (not just fakes): eval harness 3/3, multi-step observation feed-back, honest no-provider / tool-disabled / budget-exhaustion failures. See `docs/superpowers/notes/2026-06-22-loop-live-validation-results.md`. Two real robustness bugs found and fixed along the way (scalar-answer coercion `cc61c9d`; raw-response capture `fab6347`).
 - **No-provider shortcuts removed**; missing provider surfaces `model_not_configured`. Disabled tools, worker-whitelist blocks, and invalid Docker settings fail runs honestly with structured observations (hard-gate `tool_failed`).
@@ -21,7 +21,7 @@ _Last updated: 2026-06-23._
 ## Test Status (green)
 
 - Runtime Python: `166 passed` (`cd runtime/python && .venv/bin/python -m pytest -p no:cacheprovider -p no:warnings`).
-- Desktop: `pnpm --filter @yanshi/desktop test` -> 22 files / 99 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
+- Desktop: `pnpm --filter @yanshi/desktop test` -> 23 files / 108 tests passed; `typecheck` -> pass; `build` -> pass (existing Vite dynamic-import/chunk-size warnings).
 - Release config: `node --test scripts/write-tauri-release-config.test.mjs` -> 4 passed; dry-run generated-config smoke -> pass; `release.yml` YAML parse -> pass.
 - Tauri Rust: `cargo check` -> pass; `cargo test` -> 12 passed.
 
@@ -39,6 +39,5 @@ _Last updated: 2026-06-23._
 
 ## Current Blockers
 
-- Workshop mascot role-skin and integration work is intentionally blocked on owner visual sign-off of the
-  selected Concept A seven-expression rig preview.
+- Workshop mascot role-skin and integration work is intentionally blocked until Increment 3 is committed.
 - Remaining release work is owner-credentialed (above).
