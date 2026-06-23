@@ -4,6 +4,8 @@ _Last updated: 2026-06-23._
 
 ## What Works
 
+- **Workshop character redesign increment 1**: brainstorm/spec/plan artifacts now define an original
+  tokenized chibi 偃师 mascot direction and stop before mass-producing role variants pending user sign-off.
 - **Bounded ReAct loop** (`graph/runtime_graph.py`): provider decides one `answer` or one tool `assign`; tool observations feed the next decide step; finalizer handles answer / budget-exhaustion / failure / cancel.
 - **Validated live** against a real Ollama provider (not just fakes): eval harness 3/3, multi-step observation feed-back, honest no-provider / tool-disabled / budget-exhaustion failures. See `docs/superpowers/notes/2026-06-22-loop-live-validation-results.md`. Two real robustness bugs found and fixed along the way (scalar-answer coercion `cc61c9d`; raw-response capture `fab6347`).
 - **No-provider shortcuts removed**; missing provider surfaces `model_not_configured`. Disabled tools, worker-whitelist blocks, and invalid Docker settings fail runs honestly with structured observations (hard-gate `tool_failed`).
@@ -34,4 +36,5 @@ _Last updated: 2026-06-23._
 
 ## Current Blockers
 
-- None in code. Remaining work is owner-credentialed (above).
+- Workshop mascot implementation is intentionally blocked on user sign-off of the key spec decisions.
+- Remaining release work is owner-credentialed (above).

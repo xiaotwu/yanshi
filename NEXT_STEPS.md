@@ -22,6 +22,15 @@ _Last updated: 2026-06-23._
 - [ ] Optional smoke before secrets: run GitHub Actions → Release → Run workflow with `dry_run=true`.
 - [ ] Decide when to push the branch to `origin`/open a PR (currently held local per instruction).
 
+## Workshop mascot redesign
+
+- [ ] User sign-off required: approve/edit the key decisions in
+  `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`.
+- [ ] After sign-off, start increment 2 from
+  `docs/superpowers/plans/2026-06-23-workshop-character-mascot-system.md`: tokenized SVG rig + tests.
+- [ ] Continue with honest runtime-derived mascot state, role skins, Workshop integration, reduced-motion,
+  zh/en a11y, and full gates.
+
 ## Optional / deferred (nice-to-have, not blocking)
 
 - [ ] Per-偃师 MCP/ACP tool whitelist (was out of scope for the in-loop v1).

@@ -2,7 +2,11 @@
 
 ## Current Milestone
 
-Handoff D: prepare owner-credentialed release plumbing without handling credentials.
+Workshop character mascot redesign — increment 1 sign-off package.
+
+Scope: produce the superpowers brainstorm, sign-off spec, and TDD implementation plan for original
+theme-token-driven 偃师 mascots. Do **not** mass-produce role variants or replace existing worker art
+until the user signs off the key design decisions.
 
 ## Completed Milestones
 
@@ -19,12 +23,15 @@ Handoff D: prepare owner-credentialed release plumbing without handling credenti
 - Optional defense-in-depth: evaluate approval/policy checks on provider-assigned sub-actions, not only on the top-level task.
 - Owner-only credentialed release execution: add Apple Developer ID secrets, updater key/feed, crash DSN, then run the signed workflow and verify Gatekeeper/staple on a second Mac.
 - Owner-only push/PR creation after reviewing `PR_DESCRIPTION.md`.
+- Workshop mascot redesign increment 2+: after user sign-off, implement the tokenized SVG rig,
+  runtime-derived state selector, role skins, Workshop integration, and motion/a11y polish through TDD.
 - Broader product acceptance remains tracked by the feature checklist and release docs.
 
 ## Acceptance Criteria For This Milestone
 
-- The signed release path still fails loudly before building when Apple secrets are missing.
-- Manual `workflow_dispatch` dry run builds and validates unsigned release config without signing/notarizing.
-- Updater public key/feed and crash DSN are documented as owner-supplied env/config slots.
-- Updater/crash tests prove both features stay inert when unconfigured.
-- Requested runtime, desktop, and Rust gates pass.
+- Brainstorm note documents 2-3 original silhouette/style concepts and the explicit IP boundary.
+- Spec under `docs/superpowers/specs/` captures rendering, layer, rig, state, and asset-pipeline
+  decisions awaiting user sign-off.
+- Plan under `docs/superpowers/plans/` decomposes post-sign-off work into task-sized TDD commits.
+- No Arknights asset, name, or likeness is added to the repo.
+- Requested desktop and runtime gates pass for the docs-only increment.

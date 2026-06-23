@@ -25,6 +25,16 @@
 - [x] PR description is prepared locally; no push/PR opened.
 - [x] Requested runtime, desktop, and Rust gates pass.
 
+## Workshop Character Mascot Redesign — Increment 1
+
+- [x] Brief read and IP boundary captured.
+- [x] Brainstorm note includes 2-3 original Yanshi silhouette/style concepts.
+- [x] Spec under `docs/superpowers/specs/` records key decisions for sign-off.
+- [x] Plan under `docs/superpowers/plans/` decomposes post-sign-off implementation into TDD commits.
+- [x] No Arknights asset, name, or likeness is shipped.
+- [ ] User has signed off the key decisions before role variants are mass-produced.
+- [x] Requested desktop and runtime gates pass for this increment.
+
 ## Product-Wide Acceptance Still Pending Outside This Task
 
 - [ ] App starts end to end.

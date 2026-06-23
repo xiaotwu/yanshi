@@ -3,6 +3,12 @@
 _Created 2026-06-11 (Worker Character Design System pass). Owner doc for everything about the
 little workers in the Atelier. English UI says "Yanshi"; Chinese normal-mode UI says 偃师 / 偃师工坊._
 
+> 2026-06-23 note: the Workshop character redesign is being re-specified before new mascot art is
+> mass-produced. The active sign-off spec is
+> `docs/superpowers/specs/2026-06-23-workshop-character-mascot-system-design.md`. Until approved, the
+> implemented v2 puppet system below is current behavior, not the final target for the new Workshop
+> mascot pass.
+
 ---
 
 ## 2.1 Product role — what workers are
