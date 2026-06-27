@@ -20,7 +20,7 @@ vi.mock("../../../stores/runtimeStore", () => ({
 // Stub the API client so no real network calls are made.
 vi.mock("../../../api/client", () => ({
   runtimeApi: {
-    providerModels: vi.fn().mockResolvedValue({ models: ["gpt-x", "claude-y"] }),
+    providerModels: vi.fn().mockResolvedValue({ models: ["gpt-x", "anthropic-y"] }),
   },
 }));
 
@@ -69,7 +69,7 @@ describe("MindSection", () => {
       const options = datalist!.querySelectorAll("option");
       const values = Array.from(options).map((o) => o.getAttribute("value"));
       expect(values).toContain("gpt-x");
-      expect(values).toContain("claude-y");
+      expect(values).toContain("anthropic-y");
     });
   });
 

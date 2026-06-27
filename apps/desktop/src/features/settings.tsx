@@ -82,7 +82,7 @@ export function SettingsModal({ initialSection = "general", onClose }: { initial
 
   useEffect(() => setSection(initialSection), [initialSection]);
 
-  // Claude-style IA: Personal / Workspace / AI / Tools / System (+ Developer). No About.
+  // Settings IA: Personal / Workspace / AI / Tools / System (+ Developer). No About.
   const groups: Array<{ labelKey: TKey; items: Array<{ id: SettingsSection; key: TKey }> }> = [
     {
       labelKey: "settings.group.personal",

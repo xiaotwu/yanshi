@@ -9,19 +9,19 @@ const path = (value: string) => withBase(value);
     <section class="yanshi-hero" aria-labelledby="yanshi-home-title">
       <div class="yanshi-hero-copy">
         <p class="yanshi-hero-kicker">Yanshi · 偃师</p>
-        <h1 id="yanshi-home-title">A desktop AI agent workspace where real tools and animated workers meet.</h1>
+        <h1 id="yanshi-home-title">A macOS-first AI agent workspace.</h1>
         <p class="yanshi-hero-lede">
-          Yanshi brings project-scoped chats, a real runtime, tool execution, and the Yanshi Atelier
-          into one calm macOS app.
+          Yanshi brings chats, projects, real tools, approvals, files, and animated workers into
+          one local desktop app.
         </p>
         <div class="yanshi-hero-actions" aria-label="Primary documentation actions">
           <a class="yanshi-button primary" :href="path('/getting-started/introduction')">Get Started</a>
-          <a class="yanshi-button secondary" :href="path('/getting-started/installation')">Install on macOS</a>
-          <a class="yanshi-button secondary" :href="path('/concepts/runtime')">Read the Architecture</a>
+          <a class="yanshi-button secondary" :href="path('/usage')">Usage</a>
+          <a class="yanshi-button secondary" :href="path('/important-notes')">Important Notes</a>
         </div>
-        <div class="yanshi-status-strip" aria-label="Current release status">
-          <span class="status-pill available">Available now</span>
-          <span class="status-pill foundation">Runtime foundation implemented</span>
+        <div class="yanshi-status-strip" aria-label="Current status">
+          <span class="status-pill available">Local-first</span>
+          <span class="status-pill foundation">Runtime sidecar</span>
           <span class="status-pill setup">Setup required for external services</span>
         </div>
       </div>
@@ -32,7 +32,7 @@ const path = (value: string) => withBase(value);
             <span class="traffic red"></span>
             <span class="traffic yellow"></span>
             <span class="traffic green"></span>
-            <span class="mock-search">Search docs and chats</span>
+            <span class="mock-search">Search chats and files</span>
           </div>
           <div class="mock-shell">
             <nav class="mock-sidebar" aria-hidden="true">
@@ -52,7 +52,7 @@ const path = (value: string) => withBase(value);
               </div>
               <div class="mock-runtime-card">
                 <span class="runtime-dot"></span>
-                <span>Action → Observation</span>
+                <span>Action -> Observation</span>
                 <strong>SQLite persisted</strong>
               </div>
             </section>
@@ -78,76 +78,53 @@ const path = (value: string) => withBase(value);
     <section class="docs-entry" aria-labelledby="docs-entry-title">
       <div>
         <p class="section-kicker">Documentation</p>
-        <h2 id="docs-entry-title">Start with the product, then go deeper.</h2>
+        <h2 id="docs-entry-title">A short guide to the project.</h2>
       </div>
       <div class="docs-card-grid">
-        <a class="docs-card" :href="path('/getting-started/quickstart')">
+        <a class="docs-card" :href="path('/getting-started/introduction')">
           <span class="card-index">01</span>
-          <strong>Quickstart</strong>
-          <span>Install dependencies, build the app, and launch the local final candidate.</span>
+          <strong>Introduction</strong>
+          <span>What Yanshi is and what it is for.</span>
         </a>
-        <a class="docs-card" :href="path('/concepts/runtime')">
+        <a class="docs-card" :href="path('/getting-started/installation')">
           <span class="card-index">02</span>
-          <strong>Yanshi Runtime</strong>
-          <span>LangGraph orchestration, actions, observations, approvals, tools, and persistence.</span>
+          <strong>Installation</strong>
+          <span>Install dependencies and run the desktop app.</span>
         </a>
-        <a class="docs-card" :href="path('/concepts/atelier')">
+        <a class="docs-card" :href="path('/getting-started/quickstart')">
           <span class="card-index">03</span>
-          <strong>Yanshi Atelier</strong>
-          <span>How the worker world mirrors real agent activity without fake progress.</span>
+          <strong>Quickstart</strong>
+          <span>Build, launch, configure a provider, and start a chat.</span>
         </a>
-        <a class="docs-card" :href="path('/integrations/overview')">
+        <a class="docs-card" :href="path('/usage')">
           <span class="card-index">04</span>
-          <strong>AI Integrations</strong>
-          <span>Providers, ACP, MCP, skills, secrets, and current implementation status.</span>
+          <strong>Usage</strong>
+          <span>Chats, projects, tools, approvals, settings, and files.</span>
         </a>
-        <a class="docs-card" :href="path('/desktop/permissions')">
+        <a class="docs-card" :href="path('/important-notes')">
           <span class="card-index">05</span>
-          <strong>macOS Permissions</strong>
-          <span>Computer Use, Browser Chromium, privacy grants, and setup-required states.</span>
+          <strong>Important Notes</strong>
+          <span>Secrets, permissions, external setup, and release limits.</span>
         </a>
-        <a class="docs-card" :href="path('/release/limitations')">
+        <a class="docs-card" :href="path('/build-and-release')">
           <span class="card-index">06</span>
-          <strong>Known Limitations</strong>
-          <span>What is available now, what is foundational, and what is externally blocked.</span>
+          <strong>Build</strong>
+          <span>Local checks, packaging, and public release requirements.</span>
         </a>
-      </div>
-    </section>
-
-    <section class="public-status" aria-labelledby="status-title">
-      <div>
-        <p class="section-kicker">Public status</p>
-        <h2 id="status-title">Clear about what is real today.</h2>
-        <p>
-          Yanshi is a v0.1 Local Final Candidate: real end-to-end on this machine, not yet a public
-          notarized release. The docs use the same status language as the product.
-        </p>
-      </div>
-      <div class="status-table">
-        <div><span>Desktop app + bundled runtime</span><span class="status-pill available">Available now</span></div>
-        <div><span>Yanshi Runtime / approvals / persistence</span><span class="status-pill available">Available now</span></div>
-        <div><span>OpenAI-compatible providers</span><span class="status-pill available">Available now</span></div>
-        <div><span>ACP external agents</span><span class="status-pill foundation">Foundation implemented</span></div>
-        <div><span>MCP servers</span><span class="status-pill foundation">Foundation implemented</span></div>
-        <div><span>Browser tool Chromium</span><span class="status-pill setup">Setup required</span></div>
-        <div><span>Native provider adapters</span><span class="status-pill planned">Planned</span></div>
-        <div><span>Computer Use permissions</span><span class="status-pill blocked">Blocked until granted</span></div>
-        <div><span>Signing and notarization</span><span class="status-pill blocked">External requirement</span></div>
       </div>
     </section>
 
     <section class="quickstart-band" aria-labelledby="quickstart-title">
       <div>
         <p class="section-kicker">Build locally</p>
-        <h2 id="quickstart-title">From source to packaged macOS app.</h2>
+        <h2 id="quickstart-title">From source to macOS app.</h2>
       </div>
       <pre class="yanshi-code" tabindex="0"><code>pnpm install
-pnpm build
-pnpm desktop:release
-uv run --project runtime/python pytest</code></pre>
+pnpm runtime:dev
+pnpm desktop:dev</code></pre>
       <p>
-        Continue with the <a :href="path('/getting-started/quickstart')">Quickstart</a> or jump to
-        <a :href="path('/release/build')">Build and Release</a> for packaging detail.
+        Use <a :href="path('/build-and-release')">Build and Release</a> for the full local package
+        command and public release notes.
       </p>
     </section>
   </main>

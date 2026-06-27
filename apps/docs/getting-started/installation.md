@@ -1,65 +1,42 @@
 # Installation
 
-Yanshi targets **macOS (Apple Silicon)**. You can build the packaged app from source today;
-a signed public download is [pending notarization](/release/codesign).
+Yanshi targets macOS on Apple Silicon.
 
-## Prerequisites
+## Requirements
 
-- **macOS** on Apple Silicon (aarch64).
-- **Node.js** 20+ and **pnpm** (`corepack enable` or install pnpm directly).
-- **Rust** toolchain (for the Tauri shell) — install via [rustup](https://rustup.rs).
-- **uv** (for the Python runtime) — see [astral.sh/uv](https://docs.astral.sh/uv/).
+- Node.js 20+.
+- pnpm 10+.
+- Rust toolchain.
+- Python 3.12 with `uv`.
+- macOS permissions for Computer Use, when needed.
 
-## Clone and install
+## Install From Source
 
 ```bash
-git clone https://github.com/xiaotwu/yanshi.git
+git clone git@github.com:xiaotwu/yanshi.git
 cd yanshi
 pnpm install
 ```
 
-## Build the packaged app
+## Run In Development
+
+Start the runtime and desktop app:
+
+```bash
+pnpm runtime:dev
+pnpm desktop:dev
+```
+
+## Build A Local App
 
 ```bash
 pnpm desktop:release
 ```
 
-This builds the standalone runtime sidecar (PyInstaller) and then runs the Tauri release build.
-The output lands at:
+The local bundle is created under:
 
-- `apps/desktop/src-tauri/target/release/bundle/macos/Yanshi.app`
-- `apps/desktop/src-tauri/target/release/bundle/dmg/Yanshi_0.1.0_aarch64.dmg`
-
-The bundled `.app` launches the runtime in `mode=bundled-sidecar` — no `uv` or repo checkout
-needed at runtime.
-
-## First launch (unsigned build)
-
-Because the build is not yet notarized, Gatekeeper will warn on first open. Either:
-
-- Right-click `Yanshi.app` → **Open**, then confirm; or
-- Clear the quarantine attribute:
-
-```bash
-xattr -dr com.apple.quarantine Yanshi.app
+```txt
+apps/desktop/src-tauri/target/release/bundle/
 ```
 
-::: tip Status
-The unsigned build is fully functional locally. A second machine will show a Gatekeeper warning
-until [codesign + notarization](/release/codesign) are completed.
-<Badge type="danger" text="Blocked by Apple Developer ID" />
-:::
-
-## Develop without packaging
-
-For UI iteration you can run the dev shell and runtime directly:
-
-```bash
-# Terminal 1 — runtime
-pnpm runtime:dev
-
-# Terminal 2 — desktop app (Tauri dev)
-pnpm desktop:dev
-```
-
-Continue to the [Quickstart](/getting-started/quickstart).
+Unsigned local builds may require a manual first-open approval in macOS.

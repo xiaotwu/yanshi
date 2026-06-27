@@ -65,7 +65,7 @@
   --ym-apron: color-mix(in srgb, var(--ym-accent) 74%, var(--ym-body-light));
 
   /* Type system: a clean sans for the UI, an elegant serif (with CJK serif fallbacks) reserved
-     for the hero/wordmark — a touch of Claude-Desktop refinement without a webfont dependency. */
+     for the hero/wordmark without a webfont dependency. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   --font-display: ui-serif, "New York", "Iowan Old Style", Georgia, "Songti SC", "STSong",
     "Noto Serif CJK SC", serif;
@@ -2536,7 +2536,7 @@ button.list-row {
 .context-option small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
 /* ============================================================
-   Codex QA fixes — tab overflow + menu/modal containment
+   Layout fixes — tab overflow + menu/modal containment
    ============================================================ */
 
 /* V4: project/workshop tabs scroll horizontally instead of wrapping to a 2nd row */
@@ -2606,7 +2606,7 @@ button.list-row {
 }
 
 .modal-overlay { animation: overlay-fade 0.16s ease; }
-/* Frosted glass behind floating surfaces — a touch of depth like Claude Desktop. */
+/* Frosted glass behind floating surfaces. */
 [data-fx="rich"] .modal-overlay { backdrop-filter: blur(10px) saturate(1.05); }
 .modal-surface { animation: modal-pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.15); }
 /* Layered elevation: a soft ambient shadow + a tight contact shadow + a hairline ring. */
@@ -3045,7 +3045,7 @@ button:active:not(:disabled) { transform: scale(0.98); }
   .project-home { gap: 12px; padding-top: 16px; }
 }
 
-/* Codex UX review fixes: visible Settings close button (top-right inside the modal surface). */
+/* Visible Settings close button (top-right inside the modal surface). */
 .settings-modal { position: relative; }
 .settings-close { position: absolute; top: 12px; right: 12px; z-index: 2; }
 
@@ -3176,7 +3176,7 @@ textarea:focus-visible {
 }
 .atelier-simplified { height: 100%; overflow-y: auto; padding: 16px 20px; }
 
-/* ── Chat view (Claude-style conversation) ─────────────────────────────────────── */
+/* ── Chat view ────────────────────────────────────────────────────────────────── */
 .chat-view {
   position: relative;
   display: flex;
@@ -3967,7 +3967,7 @@ textarea:focus-visible {
 .search-modal:focus-within .search-modal-head { border-bottom-color: var(--accent); }
 [data-fx="rich"] .search-modal:focus-within .search-modal-head { box-shadow: 0 6px 18px -12px var(--accent-glow); }
 
-/* ── Settings: calm Claude-style content column ────────────────────────────────── */
+/* ── Settings: calm content column ─────────────────────────────────────────────── */
 .settings-modal .settings-content { padding: 26px 32px; }
 .settings-modal .settings-panel {
   border: 0;
@@ -4245,7 +4245,7 @@ textarea:focus-visible {
   to { opacity: 1; transform: none; }
 }
 
-/* Tactile hover lift for card- and chip-like surfaces (Claude-Desktop-style micro-feedback). */
+/* Tactile hover lift for card- and chip-like surfaces. */
 .example-chip,
 .model-chip,
 .chat-output-card,
@@ -4288,7 +4288,7 @@ textarea:focus-visible {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* Assistant identity: a small Yanshi mark beside the author label, like Claude's avatar. */
+/* Assistant identity: a small Yanshi mark beside the author label. */
 .chat-author-row { display: flex; align-items: center; gap: 7px; margin-bottom: 1px; }
 .yanshi-avatar {
   width: 19px;

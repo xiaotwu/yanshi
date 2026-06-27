@@ -1,46 +1,24 @@
 # Introduction
 
-**Yanshi** is a macOS-first desktop AI agent workspace. You describe a task in plain language, and
-a team of agents plans, executes real tools, and shows its work inside an animated workshop — the
-**Yanshi Atelier (偃师工坊)**.
+**Yanshi** is a macOS-first AI agent workspace. It combines a desktop chat interface, project
+organization, real tool execution, approvals, persistent files, and animated workers in the
+Yanshi Atelier.
 
-> Yanshi (偃师) means a craftsman of animated mechanisms. The app brings that idea into a desktop
-> AI workspace: agents work, wait, review, and create inside a project-scoped atelier.
+The app is local-first: the Tauri desktop shell launches a bundled Python runtime sidecar, and the
+frontend connects to it through local REST and WebSocket APIs.
 
-## What Yanshi is
+## What It Does
 
-- A **Tauri** desktop shell hosting a React UI, with a **bundled Python runtime sidecar** — the
-  packaged app launches the runtime with no separate Python install.
-- A **LangGraph**-orchestrated runtime with an explicit action / observation model, real tools
-  (File, Browser, Computer, Terminal/Docker), and SQLite persistence.
-- A **chat-first** workspace: you talk to Yanshi; runs and tasks stay an internal concept.
-- **Project-scoped**: each project has its own chats, files, agent team, and atelier office state.
+- Creates standalone or project-scoped chats.
+- Runs work through the Yanshi Runtime.
+- Uses real tools when they are configured and permitted.
+- Pauses for approval before risky actions.
+- Persists chats, projects, settings, files, and runtime events.
+- Shows worker state in the Yanshi Atelier without pretending progress happened.
 
-## What Yanshi is not
+## What To Read Next
 
-Yanshi never fakes work. If an external dependency, API key, OS permission, or Docker daemon is
-missing, the app shows an honest *not-configured* or *permission-required* state instead of a
-fake success. This is enforced as a hard [no-mock policy](/reference/no-mock).
-
-## Honest status at a glance
-
-Yanshi is a **v0.1 Local Final Candidate** — feature-complete and real end-to-end for local use,
-with automated checks passing. Some areas are available now, while others are foundations or
-depend on external steps:
-
-- **Available now** — desktop app, bundled runtime, OpenAI-compatible provider path, projects,
-  Library, Yanshi Atelier, approvals, persistence, and file/terminal tools.
-- **Foundation implemented** — ACP launch + handshake; MCP configuration persistence.
-- **Setup required** — provider API key, Browser Chromium, Docker daemon when using Docker.
-- **Blocked by external requirements** — Computer Use privacy grants and public Apple signing /
-  notarization.
-- **Planned** — ACP prompt routing, MCP runtime client, native Anthropic/Gemini adapters.
-
-See [Known Limitations](/release/limitations) for the full picture.
-
-## Next steps
-
-- [Installation](/getting-started/installation) — build and run the app.
-- [Quickstart](/getting-started/quickstart) — your first build and launch.
-- [First Chat](/getting-started/first-chat) — run something real.
-- [Yanshi Runtime](/concepts/runtime) — how it all works underneath.
+- [Installation](/getting-started/installation)
+- [Quickstart](/getting-started/quickstart)
+- [Usage](/usage)
+- [Important Notes](/important-notes)

@@ -1535,7 +1535,7 @@ def test_ai_integrations_config_persists_with_honest_statuses(tmp_path: Path) ->
         "/settings/integrations",
         json={
             "externalAgents": [
-                {"id": "ea_1", "name": "Claude Code", "protocol": "acp", "command": "claude-code-acp", "enabled": True},
+                {"id": "ea_1", "name": "Local ACP Agent", "protocol": "acp", "command": "local-acp-agent", "enabled": True},
                 {"id": "ea_2", "name": "Unset agent", "protocol": "acp", "enabled": False},
             ],
             "mcpServers": [
@@ -3535,7 +3535,7 @@ def test_mcp_http_server_stays_not_implemented(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def FakeAnthropicServer(*, models=("claude-b", "claude-a"), answer="Hello from Claude", stream_text="Hi", status=200):
+def FakeAnthropicServer(*, models=("anthropic-b", "anthropic-a"), answer="Hello from Anthropic", stream_text="Hi", status=200):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # silence
             pass
@@ -3584,7 +3584,7 @@ def FakeAnthropicServer(*, models=("claude-b", "claude-a"), answer="Hello from C
 
 def _anthropic_cfg(base_url: str, *, key: str = "sk-test"):
     from yanshi_runtime.providers.openai_compatible import ProviderConfig
-    return ProviderConfig(base_url=base_url, model="claude-a", api_key=key, provider_type="anthropic")
+    return ProviderConfig(base_url=base_url, model="anthropic-a", api_key=key, provider_type="anthropic")
 
 
 def test_anthropic_chat_completion_translates_and_parses() -> None:
@@ -3607,8 +3607,8 @@ def test_anthropic_stream_yields_text_deltas() -> None:
 
 def test_anthropic_list_models_sorted_and_honest() -> None:
     from yanshi_runtime.providers.anthropic import AnthropicProvider
-    with FakeAnthropicServer(models=("claude-b", "claude-a")) as base:
-        assert AnthropicProvider(_anthropic_cfg(base)).list_models() == ["claude-a", "claude-b"]
+    with FakeAnthropicServer(models=("anthropic-b", "anthropic-a")) as base:
+        assert AnthropicProvider(_anthropic_cfg(base)).list_models() == ["anthropic-a", "anthropic-b"]
     with FakeAnthropicServer(status=500) as base:
         assert AnthropicProvider(_anthropic_cfg(base)).list_models() == []
     from yanshi_runtime.providers.anthropic import AnthropicProvider as AP
@@ -3624,7 +3624,7 @@ def test_anthropic_configured_requires_key() -> None:
 def test_provider_type_persists_and_rebuilds_to_anthropic(tmp_path: Path) -> None:
     client = make_client(tmp_path)  # the existing helper
     # Switch to Anthropic.
-    client.put("/settings/provider", json={"providerType": "anthropic", "baseUrl": "https://api.anthropic.com", "model": "claude-a", "apiKey": "sk-test"})
+    client.put("/settings/provider", json={"providerType": "anthropic", "baseUrl": "https://api.anthropic.com", "model": "anthropic-a", "apiKey": "sk-test"})
     public = client.get("/settings/provider").json()
     assert public["providerType"] == "anthropic"
     # The live provider was rebuilt to the Anthropic implementation.

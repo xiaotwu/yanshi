@@ -1,5 +1,5 @@
 // Viewport-aware placement for the composer "+" menu and its Add-to-Project
-// flyout (Codex QA #10/V2/UX8). Pure geometry so it is unit-testable: the
+// flyout. Pure geometry so it is unit-testable: the
 // resulting bounding box must sit inside the viewport minus COLLISION_PADDING —
 // internal scrolling (maxHeight) is a fallback, not the containment mechanism.
 

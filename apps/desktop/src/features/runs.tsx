@@ -347,7 +347,7 @@ function ChatTurn({
   );
 }
 
-/** Assistant author label with a small Yanshi identity mark (Claude-style). */
+/** Assistant author label with a small Yanshi identity mark. */
 function YanshiAuthor({ label }: { label: string }) {
   return (
     <span className="chat-author-row">

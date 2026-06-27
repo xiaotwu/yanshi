@@ -38,7 +38,7 @@ const fakeProfile: AgentProfileSummary = {
   defaultTools: ["browser"],
   defaultPermissions: [],
   motionPack: "default",
-  model: "claude-3-5-sonnet-20241022",
+  model: "anthropic-test-model",
   createdAt: "2024-01-01T00:00:00Z",
   updatedAt: "2024-01-01T00:00:00Z",
 };
@@ -110,7 +110,7 @@ describe("WorkerInspector", () => {
     fireEvent.click(screen.getByRole("button", { name: "workshop.mind" }));
 
     // An input bound to the model value must exist.
-    const modelInput = screen.getByDisplayValue("claude-3-5-sonnet-20241022");
+    const modelInput = screen.getByDisplayValue("anthropic-test-model");
     expect(modelInput).toBeInTheDocument();
     expect(modelInput.tagName).toBe("INPUT");
 

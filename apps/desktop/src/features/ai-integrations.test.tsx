@@ -165,7 +165,7 @@ describe("ProvidersSection provider type", () => {
     fireEvent.click(configureButtons[2]);
     // The dialog shows a model input — fill it in so the Save button is enabled.
     const modelInput = screen.getByPlaceholderText("providers.modelManual");
-    fireEvent.change(modelInput, { target: { value: "claude-3-5-sonnet-20241022" } });
+    fireEvent.change(modelInput, { target: { value: "anthropic-test-model" } });
     // The dialog shows a Save button rendered as IconAction with label t("common.save") = "common.save".
     const saveBtn = screen.getByRole("button", { name: "common.save" });
     fireEvent.click(saveBtn);

@@ -1,15 +1,21 @@
-# Atelier worker assets
+# Atelier Worker Assets
 
-Future home for rich worker character assets, one directory per role:
+This directory is reserved for richer Yanshi Atelier worker assets.
+
+Expected layout:
 
 ```txt
-manager/  reviewer/  browser/  computer/  file/  terminal/
+manager/
+reviewer/
+browser/
+computer/
+file/
+terminal/
 ```
 
-Supported types (see docs/YANSHI_ATELIER_WORKER_DESIGN.md §2.7): `svg`, `sprite` (PNG sheet),
-`lottie`, `gltf`. Assets are wired through `workerCharacterRegistry` in `src/characters.ts` —
-register a state's `{ source, path }` and the renderer will prefer it over the procedural
-fallback once a loader for that type exists.
+Supported asset types are intended to include SVG, PNG sprite sheets, Lottie, and glTF. Assets are
+registered through `workerCharacterRegistry` in `src/characters.ts`; when an asset is available,
+the renderer can prefer it over the procedural fallback.
 
-**Currently empty by design.** Every role renders through the procedural chibi system
-(`assetType: "procedural"`); nothing here is mocked or pre-claimed.
+The directory is currently empty by design. Worker roles render through the procedural character
+system unless a real asset is registered.
